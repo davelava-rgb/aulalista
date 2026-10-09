@@ -69,11 +69,14 @@ class Resultado:
     revisados: list[str] = field(default_factory=list)
     descartados: int = 0
 
-    def guardar(self, bloques: list[Bloque]) -> dict:
-        """Lo que se conserva para la próxima vuelta: solo los bloques sin defectos."""
+    def guardar(self, bloques: list[Bloque], anteriores: dict | None = None) -> dict:
+        """Lo que se conserva para la próxima vuelta: los bloques sin defectos. También se recuerda que la
+        lectura ya tuvo su primera revisión completa, para que las siguientes usen menos razonamiento."""
         con_defecto = {d["bloque"] for d in self.defectos}
-        return {b.nombre: {"huella": b.huella, "respuestas": self.respuestas[b.nombre]}
-                for b in bloques if b.nombre in self.respuestas and b.nombre not in con_defecto}
+        guardado = {b.nombre: {"huella": b.huella, "respuestas": self.respuestas[b.nombre]}
+                    for b in bloques if b.nombre in self.respuestas and b.nombre not in con_defecto}
+        guardado["_revisada"] = {"huella": "", "respuestas": {}}
+        return guardado
 
     def filas_excel(self, bloques: list[Bloque]) -> list[list[str]]:
         return [[b.nombre, *[self.respuestas.get(b.nombre, {}).get(c, "") for c in CAMPOS]] for b in bloques]
@@ -135,8 +138,13 @@ def _existe(oracion: str, bloques: list[Bloque]) -> bool:
 
 
 async def ejecutar(bloques: list[Bloque], *, anteriores: dict, contexto_fijo: str, curso: str, sesion: int,
-                   material: str, consulta=agente.query) -> Resultado:
+                   material: str, consulta=agente.query, omitir: bool = False) -> Resultado:
+    """omitir=True después del cierre por programa: solo se quitaron oraciones, no hay texto nuevo que revisar."""
     resultado = Resultado()
+    if omitir:
+        resultado.respuestas = {b.nombre: (anteriores.get(b.nombre) or {}).get("respuestas") or
+                                {c: "Revisado antes del cierre por programa." for c in CAMPOS} for b in bloques}
+        return resultado
     a_revisar = []
     for b in bloques:
         guardado = anteriores.get(b.nombre)
@@ -149,7 +157,8 @@ async def ejecutar(bloques: list[Bloque], *, anteriores: dict, contexto_fijo: st
 
     respuesta = await agente.consultar(
         _pedido(bloques, a_revisar, contexto_fijo, posibles_inconsistencias(bloques), material),
-        tarea="pasada2", esquema=ESQUEMA, curso=curso, etapa="segunda pasada", sesion=f"S{sesion}",
+        # Primera revisión de la lectura completa: razonamiento alto. Revisiones de bloques cambiados: medio.
+        tarea="pasada2" if not anteriores else "pasada2_cambios", esquema=ESQUEMA, curso=curso, etapa="segunda pasada", sesion=f"S{sesion}",
         material=material.lower(), consulta=consulta)
 
     nombres = {b.nombre for b in a_revisar}

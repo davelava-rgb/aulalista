@@ -39,6 +39,8 @@ class Aplicalo(BaseModel):
 
 
 class Pasaje(BaseModel):
+    """Ancla de una oración: el pasaje de la fuente que la sostiene, copiado tal cual."""
+    oracion: str = ""
     fuente: str
     ubicacion: str
     texto: str
@@ -77,7 +79,8 @@ ESQUEMA_LECTURA = _objeto({
     "aplicalo": _objeto({"parrafos": TEXTOS, "plantilla": TEXTOS}),
     "cuidado": TEXTOS,
     "pasajes": {"type": "array", "items": _objeto({
-        "fuente": {"type": "string"}, "ubicacion": {"type": "string"}, "texto": {"type": "string"}})},
+        "oracion": {"type": "string"}, "fuente": {"type": "string"},
+        "ubicacion": {"type": "string"}, "texto": {"type": "string"}})},
     "decisiones": TEXTOS,
     "agrupacion": {"type": "string"},
 })

@@ -28,8 +28,12 @@
   </ul>
   {% endif %}
 
+  {% if lectura.eliminadas_por_el_programa %}
+  <h3>Oraciones que eliminó el programa al llegar al tope de vueltas</h3>
+  <ul>{% for o in lectura.eliminadas_por_el_programa %}<li>{{ o }}</li>{% endfor %}</ul>
+  {% endif %}
   {% if lectura.problemas %}
-  <h3>Problemas abiertos</h3>
+  <h3>Decisiones pendientes</h3>
   <ul>{% for p in lectura.problemas %}<li>{{ p }}</li>{% endfor %}</ul>
   {% endif %}
   {% if lectura.avisos_de_diseno %}

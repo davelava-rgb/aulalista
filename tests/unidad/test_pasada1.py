@@ -243,3 +243,21 @@ def test_una_norma_sin_su_comparacion_no_queda_aprobada():
     del sin_comparacion["comparacion"]
     resultado, _ = correr([o], {"oraciones": [sin_comparacion]})
     assert resultado.filas[o["huella"]]["veredicto"] == "no coincide"
+
+
+def test_el_pasaje_del_redactor_es_el_primer_candidato():
+    o = oracion(1, "Los artefactos se inspeccionan con frecuencia, como pide la guía.")
+    anclas = [{"oracion": "Los artefactos se inspeccionan con frecuencia, como pide la guía.", "fuente": "guia",
+               "ubicacion": "?", "texto": "deben inspeccionarse con frecuencia"}]
+    consulta = consulta_en_secuencia(pasada())
+    asyncio.run(pasada1.ejecutar([o], titulos=set(), corpus=Corpus([NORMA, FICHA]), anteriores={}, curso="_sistema",
+                                 sesion=1, material="lectura", anclas=anclas, consulta=consulta))
+    candidatos = consulta.llamadas[0]["prompt"].split("Candidatos:")[1]
+    primero = candidatos.strip().splitlines()[0]
+    assert primero == "- (guia.pdf · página 37 · número impreso 56) deben inspeccionarse con frecuencia"
+
+
+def test_un_pasaje_del_redactor_que_no_existe_no_se_usa():
+    o = oracion(1, "Los artefactos se inspeccionan cada hora.")
+    anclas = [{"oracion": o["texto"], "fuente": "guia.pdf", "ubicacion": "?", "texto": "se inspeccionan cada hora"}]
+    assert pasada1._candidato_de_ancla(o, anclas, Corpus([NORMA])) is None

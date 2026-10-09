@@ -381,6 +381,8 @@ def test_un_defecto_de_la_segunda_pasada_se_corrige_y_llena_su_hoja(sesion):
     assert material["correcciones"]["segunda pasada"] == 1
     assert "SEGUNDA PASADA · relleno · «Los pilares de Scrum son tres.»" in consulta.llamadas[3]["prompt"]
     assert consulta.llamadas[5]["prompt"].rstrip().endswith("BLOQUES A REVISAR: [Pilares de Scrum]")  # solo el bloque que cambió
+    assert consulta.llamadas[2]["options"].effort == "high"     # primera revisión de la lectura completa
+    assert consulta.llamadas[5]["options"].effort == "medium"   # revisión de un bloque cambiado
     libro = openpyxl.load_workbook(lectura.archivos(sesion, 1)["excel"])
     filas = list(libro["Segunda pasada"].iter_rows(min_row=2, values_only=True))
     assert [f[0] for f in filas] == ["Idea central", "El Manifiesto Ágil", "Pilares de Scrum", "Aplícalo así", "Cuidado con"]
@@ -422,3 +424,30 @@ def test_desde_la_tercera_vuelta_la_veracidad_pide_copiar_o_eliminar(sesion):
     assert lectura.ULTIMO_INTENTO not in consulta.llamadas[3]["prompt"]
     assert lectura.ULTIMO_INTENTO in consulta.llamadas[7]["prompt"]
     assert material["estado"] == "verificada"
+
+
+def test_al_llegar_al_tope_el_programa_elimina_lo_que_sigue_sin_coincidir(sesion):
+    mala = "El Manifiesto Ágil tiene cinco aspectos."
+    falla = pasada({mala: {"tipo": "norma", "veredicto": "sin fuente", "pasaje": ""}})
+    secuencia = [con_error(mala), falla, segunda()]
+    for _ in range(lectura.MAX_CORRECCIONES):
+        secuencia += [cambios(), falla]
+    material, consulta = generar(sesion, *secuencia)
+    assert len(consulta.llamadas) == len(secuencia)   # después del cierre no hay otra segunda pasada
+    assert material["estado"] == "verificada"
+    assert material["eliminadas_por_el_programa"] == [mala]
+    assert mala not in lectura.archivos(sesion, 1)["contenido"].read_text(encoding="utf-8")
+    hoja = openpyxl.load_workbook(lectura.archivos(sesion, 1)["excel"])["Hallazgos"]
+    assert "cierre por programa" in [f[3] for f in hoja.iter_rows(min_row=2, values_only=True)]
+
+
+def test_un_vacio_al_llegar_al_tope_queda_como_decision_pendiente(sesion):
+    vacio = {"tipo": "vacío", "bloque": "Pilares de Scrum", "oracion": "Los pilares de Scrum son tres.",
+             "detalle": "No dice cuáles son."}
+    secuencia = [LIMPIA, pasada(), segunda(defectos=[vacio])]
+    for _ in range(lectura.MAX_CORRECCIONES):
+        secuencia += [cambios(), segunda(defectos=[vacio])]
+    material, _ = generar(sesion, *secuencia)
+    assert material["estado"] == "con fallas"
+    assert material["problemas"] == ["SEGUNDA PASADA · vacío · «Los pilares de Scrum son tres.»: No dice cuáles son."]
+    assert material["eliminadas_por_el_programa"] == []

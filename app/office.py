@@ -31,7 +31,8 @@ def procesos(ejecutable: str) -> set[int]:
     """Números de proceso (PID) de un programa en ejecución."""
     salida = subprocess.run(
         ["tasklist", "/FI", f"IMAGENAME eq {ejecutable}", "/FO", "CSV", "/NH"],
-        capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW,
+        # tasklist escribe en la codificación de la consola de Windows, no en UTF-8.
+        capture_output=True, text=True, encoding="oem", errors="replace", creationflags=subprocess.CREATE_NO_WINDOW,
     ).stdout
     return {
         int(linea.split('","')[1])

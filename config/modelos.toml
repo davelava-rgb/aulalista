@@ -55,3 +55,10 @@ modelo = "claude-sonnet-5-5"
 tope_usd = 0.40
 max_turns = 3
 esfuerzo = "high"
+
+# Segunda pasada sobre los bloques que cambiaron después de una corrección.
+[pasada2_cambios]
+modelo = "claude-sonnet-5-5"
+tope_usd = 0.30
+max_turns = 3
+esfuerzo = "medium"

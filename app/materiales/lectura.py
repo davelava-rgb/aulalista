@@ -131,7 +131,9 @@ CÓMO ENTREGAR LA LECTURA
   Usa «tabla» solo si ayuda a entender; si no, déjala en null. Máximo 4 columnas.
 - aplicalo.plantilla: la técnica o plantilla lista para copiar, una línea por elemento, sin espacios por llenar.
 - cuidado: de 1 a 3 riesgos de una línea cada uno.
-- pasajes: cada pasaje que copiaste de una fuente, tal cual, con su fuente y su ubicación.
+- pasajes: una entrada por cada oración que afirma algo de una norma o de una fuente: «oracion» copiada
+  tal cual de la lectura, la fuente, la ubicación y en «texto» el pasaje que la sostiene, copiado tal cual,
+  de 40 palabras como máximo. Escribe cada una de esas oraciones a partir de su pasaje, sin cambiar sus términos.
 - decisiones: cada dato o decisión que las fichas no definían.
 - agrupacion: si hubo más temas que bloques, cómo los agrupaste. Si no, texto vacío.
 - Unas {PALABRAS_MAX} palabras como máximo en total, para no pasar de seis páginas con portada.
@@ -384,7 +386,10 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
     medida = {}
     datos_agregados: list[str] = []
     resultado, problemas = None, []
-    for vuelta in range(1, MAX_CORRECCIONES + 2):
+    cierre_hecho, eliminadas = False, []
+    # Una vuelta más que las correcciones, y otra para validar el cierre por programa.
+    for vuelta in range(1, MAX_CORRECCIONES + 3):
+        borrables: list[str] = []   # oraciones que el programa puede eliminar si se llega al tope
         contenido, problemas = _validar(datos)
         completa = bool(problemas)            # la estructura solo se arregla con una corrección completa
         _guardar_json(rutas["contenido"], datos)
@@ -408,10 +413,11 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
                     pasada1.ejecutar(
                         oraciones, titulos=_titulos(contenido), corpus=Corpus.del_curso(carpeta_curso, sesion),
                         anteriores=anteriores, curso=curso, sesion=sesion, material=CLAVE,
+                        anclas=[p.model_dump() for p in contenido.pasajes],
                         instruccion_sin_ejecucion=INSTRUCCION_SIN_EJECUCION, consulta=consulta),
                     pasada2.ejecutar(
                         bloques, anteriores=anteriores2, contexto_fijo=_contexto(carpeta_curso, sesion),
-                        curso=curso, sesion=sesion, material=MATERIAL, consulta=consulta),
+                        curso=curso, sesion=sesion, material=MATERIAL, consulta=consulta, omitir=cierre_hecho),
                 )
                 anteriores = {h: f for h, f in pasada.filas.items() if f["veredicto"] == "coincide"}
                 _guardar_json(rutas["pasada1"], anteriores)
@@ -437,6 +443,8 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
                 correcciones["primera pasada"] += len(veraces)
                 correcciones["verificador"] += len(avisos)
                 correcciones["segunda pasada"] += len(valor)
+                borrables = [v["texto"] for v in veraces] + [d["oracion"] for d in segunda.defectos
+                                                              if d["tipo"] in ("relleno", "ambigüedad")]
                 if pasada.enviadas_a_la_ia or pasada.aprobadas_por_programa:
                     medida = {"enviadas": pasada.enviadas_a_la_ia, "fuera_de_candidatos": pasada.pasajes_fuera_de_candidatos,
                               "busquedas": pasada.busquedas, "aprobadas_por_programa": pasada.aprobadas_por_programa}
@@ -448,7 +456,15 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
         if not problemas:
             break
         if vuelta > MAX_CORRECCIONES:
-            _avance(carpeta_curso, sesion, f"Quedan {len(problemas)} problemas después de {MAX_CORRECCIONES} correcciones.")
+            if not cierre_hecho and borrables:
+                # Cierre por programa (SKILL.md: «Sin fuente: elimina la oración»). Sin IA y sin costo.
+                datos, _ = aplicar_cambios(datos, [{"oracion": o, "nueva": ""} for o in borrables])
+                cierre_hecho, eliminadas = True, borrables
+                _avance(carpeta_curso, sesion, f"Tope de vueltas: el programa eliminó {len(borrables)} oraciones "
+                        "que seguían sin coincidir o eran relleno o ambiguas. Se valida de nuevo.")
+                continue
+            _avance(carpeta_curso, sesion, f"Quedan {len(problemas)} problemas después de {MAX_CORRECCIONES} correcciones. "
+                    "Quedan como decisiones pendientes.")
             break
         if vuelta >= VUELTA_DE_ULTIMO_INTENTO:
             # Una oración que sigue sin coincidir después de varias correcciones no se vuelve a reescribir libremente.
@@ -478,6 +494,9 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
             _avance(carpeta_curso, sesion, f"Datos nuevos del caso agregados a la ficha del curso: {len(nuevos)}.")
 
     terminado = not problemas
+    historial += [{"nivel": "FALLA", "seccion": rutas["word"].name, "oracion": o, "regla": "cierre por programa",
+                   "detalle": "Seguía sin coincidir con su fuente, o era relleno o ambigua, al llegar al tope de vueltas.",
+                   "vuelta": MAX_CORRECCIONES + 1} for o in eliminadas]
     if resultado is not None and respuestas2 and bloques:
         excel.llenar_segunda_pasada(rutas["excel"], [[b.nombre, *[respuestas2.get(b.nombre, {}).get(c, "") for c in pasada2.CAMPOS]]
                                                      for b in bloques])
@@ -491,6 +510,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
         estado="verificada" if terminado else "con fallas",
         resumen=resultado.resumen() if resultado else "",
         problemas=problemas,
+        eliminadas_por_el_programa=eliminadas,
         correcciones=correcciones,
         medida_del_buscador=medida,
         datos_agregados=datos_agregados,

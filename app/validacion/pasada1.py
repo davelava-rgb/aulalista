@@ -166,9 +166,26 @@ def aprobar_sin_ia(o: dict, corpus: Corpus) -> dict | None:
             "motivo": "Está escrita tal cual en la fuente; lo comprobó el programa."}
 
 
+def _candidato_de_ancla(o: dict, anclas: list[dict], corpus: Corpus) -> dict | None:
+    """El pasaje que el redactor dijo usar para esta oración, si existe tal cual en la fuente."""
+    texto = normal(o["texto"]).strip(" .")
+    for ancla in anclas:
+        propia = normal(ancla.get("oracion", "")).strip(" .")
+        if propia and (propia in texto or texto in propia):
+            ubicacion = corpus.ubicar(ancla["fuente"], ancla["texto"])
+            fuente = ancla["fuente"]
+            if ubicacion is None:
+                encontrada = corpus.ubicar_en_cualquiera(ancla["texto"])
+                if encontrada is None:
+                    continue   # el pasaje que dijo el redactor no existe tal cual: no se usa
+                fuente, ubicacion = encontrada
+            return {"fuente": fuente, "ubicacion": ubicacion, "texto": ancla["texto"], "parecido": 100}
+    return None
+
+
 async def ejecutar(oraciones: list[dict], *, titulos: set[str], corpus: Corpus, anteriores: dict,
                    curso: str, sesion: int, material: str, instruccion_sin_ejecucion: str = "",
-                   consulta=agente.query) -> Resultado:
+                   anclas: list[dict] | None = None, consulta=agente.query) -> Resultado:
     """oraciones: las filas del verificador (con n, huella, sección y texto).
     anteriores: resultados guardados por huella; las oraciones sin cambios no van a la IA."""
     resultado = Resultado()
@@ -190,7 +207,11 @@ async def ejecutar(oraciones: list[dict], *, titulos: set[str], corpus: Corpus, 
     fuentes = list(corpus.fuentes)
     for inicio in range(0, len(pendientes), TAMANO_GRUPO):
         grupo = pendientes[inicio:inicio + TAMANO_GRUPO]
-        candidatos = {o["n"]: corpus.buscar(o["texto"]) for o in grupo}
+        candidatos = {}
+        for o in grupo:
+            buscados = corpus.buscar(o["texto"])
+            ancla = _candidato_de_ancla(o, anclas or [], corpus)
+            candidatos[o["n"]] = ([ancla] + [c for c in buscados if c["texto"] != ancla["texto"]][:2]) if ancla else buscados
         respuesta = await agente.consultar(
             _pedido(grupo, candidatos, fuentes), tarea="pasada1", esquema=ESQUEMA, curso=curso,
             etapa="primera pasada", sesion=f"S{sesion}", material=material,
