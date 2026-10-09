@@ -207,7 +207,8 @@ REGLAS_DE_CORRECCION = """REGLAS DE CORRECCIÓN
 - REVISOR INDEPENDIENTE: corrige cada hallazgo con el menor cambio posible. Si no estás de acuerdo, no cambies
   la oración: agrega en «rechazos» la oración tal cual, el pasaje de una fuente que contradice el hallazgo,
   copiado tal cual, y el nombre de esa fuente. Sin un pasaje que exista tal cual, el rechazo no vale.
-- Cambia solo lo necesario. Puedes buscar en las fuentes con Grep y Read si necesitas un pasaje.
+- Cambia solo lo necesario. No cambies una oración que ningún problema nombra: si ya coincidía con su fuente,
+  el programa rechaza el cambio. Puedes buscar en las fuentes con Grep y Read si necesitas un pasaje.
 """
 
 
@@ -496,6 +497,7 @@ class _Ciclo:
         self.oraciones: list[dict] = []   # filas del verificador sobre el último Word generado
         self.problemas: list[str] = []
         self.eliminadas: list[str] = []
+        self.cambios_rechazados: list[dict] = []   # cambios a oraciones aprobadas que ningún problema nombraba
         self.vuelta = 0
         self.hallazgos_del_revisor: list[revisor.Hallazgo] = []
         self.revisadas: dict[str, int] = {}   # huella de cada oración que vio un revisor → su última ronda
@@ -596,7 +598,13 @@ class _Ciclo:
                                                tarea="correccion_oraciones",
                                                esquema=ESQUEMA_CAMBIOS_REVISOR if con_revisor else ESQUEMA_CAMBIOS,
                                                etapa=f"corrección {vuelta}", **self.comun)
-            self.datos, no_encontradas = aplicar_cambios(self.datos, respuesta["cambios"])
+            permitidos, rechazados = self.proteger_aprobadas(respuesta["cambios"], problemas)
+            respuesta = {**respuesta, "cambios": permitidos}
+            if rechazados:
+                self.cambios_rechazados += rechazados
+                self.avance(f"El programa rechazó {len(rechazados)} cambios a oraciones ya aprobadas "
+                            "que ningún problema nombraba.")
+            self.datos, no_encontradas = aplicar_cambios(self.datos, permitidos)
             if no_encontradas:
                 self.avance(f"{len(no_encontradas)} oraciones a cambiar no se encontraron en la lectura.")
         for e in respuesta["explicaciones"]:
@@ -610,6 +618,25 @@ class _Ciclo:
             self.avance(f"Datos nuevos del caso agregados a la ficha del curso: {len(nuevos)}.")
         if con_revisor:
             self.resolver_hallazgos(respuesta.get("cambios", []), respuesta.get("rechazos", []), enviados=True)
+
+    def proteger_aprobadas(self, cambios: list[dict], problemas: list[str]) -> tuple[list[dict], list[dict]]:
+        """Una oración que ya coincide con su fuente no se cambia si ningún problema la nombra: así una
+        corrección no rompe lo que ya estaba bien. Si algún problema no nombra oraciones (un punto de la lista
+        de verificación), el redactor puede tocar cualquiera. Devuelve (permitidos, rechazados)."""
+        if any("«" not in p for p in problemas):
+            return cambios, []
+        nombradas = _comparable(" ".join(problemas))
+        aprobadas = {_comparable(o["texto"]) for o in self.oraciones if o["huella"] in self.anteriores}
+        aprobadas.discard("")
+        permitidos, rechazados = [], []
+        for cambio in cambios:
+            buscada = _comparable(cambio["oracion"])
+            tocadas = [a for a in aprobadas if buscada and (a == buscada or a in buscada or buscada in a)]
+            if any(a not in nombradas for a in tocadas):
+                rechazados.append(cambio)
+            else:
+                permitidos.append(cambio)
+        return permitidos, rechazados
 
     def borrar_sin_romper(self, oraciones: list[str]) -> tuple[list[str], list[str]]:
         """Elimina las oraciones una por una mientras la lectura siga con su estructura completa.
@@ -823,6 +850,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
         resumen=ciclo.resultado.resumen() if ciclo.resultado else "",
         problemas=ciclo.problemas,
         eliminadas_por_el_programa=ciclo.eliminadas,
+        cambios_rechazados=len(ciclo.cambios_rechazados),
         correcciones=ciclo.correcciones,
         revisor=_resumen_de_rondas(rondas, ciclo.hallazgos_del_revisor),
         aviso_del_revisor=aviso_del_revisor,
@@ -887,6 +915,9 @@ def _entrega(material: dict) -> dict:
             texto += (f" El programa descartó {_cuantos(r['descartados'], 'hallazgo')} más, "
                       "porque su prueba no existe tal cual.")
         valide.append(texto)
+    if material.get("cambios_rechazados"):
+        valide.append(f"El programa rechazó {material['cambios_rechazados']} cambios a oraciones que ya coincidían con "
+                      "su fuente y que ningún problema nombraba.")
     if material["eliminadas_por_el_programa"]:
         valide.append(f"El programa eliminó {len(material['eliminadas_por_el_programa'])} oraciones al llegar al tope de "
                       "vueltas. Están en la hoja Hallazgos con la regla «cierre por programa».")

@@ -33,6 +33,7 @@ Términos usados en este plan:
 | 11 | La lista de verificación de la skill se aplica por material. Cada material recibe solo las preguntas que le corresponden: la lectura recibe 8 de 14. Las preguntas que ya revisa un programa (diseño uniforme; minutos, puntos y porcentajes) no van a la IA. Si la skill agrega una pregunta, el programa se detiene hasta repartirla (aprobado en la etapa 5d) |
 | 12 | Dos jueces con IA, no tres. La primera pasada revisa la veracidad en cada vuelta. El revisor independiente hace también la segunda pasada: las cuatro preguntas por bloque, la lista de verificación y los errores que solo se ven al leer el documento completo. Ya no compara oración por oración con las fuentes. Es una excepción a la skill, que pide una segunda pasada propia y un revisor que compare cada oración con las fuentes (aprobado en la etapa 5d) |
 | 13 | Los avisos de relleno y de palabras imprecisas se mantienen en la hoja Hallazgos, pero son informativos: no obligan a corregir ni a explicar (aprobado en la etapa 5d) |
+| 14 | Oraciones aprobadas protegidas. En una corrección por oraciones, el programa rechaza el cambio a una oración que ya coincide con su fuente si ningún problema la nombra. Si algún problema no nombra oraciones (un punto de la lista de verificación), la protección no se aplica en esa corrección. La corrección completa del documento tampoco se protege. La entrega dice cuántos cambios se rechazaron (aprobado en la etapa 5d) |
 
 ### Contradicciones encontradas
 
@@ -273,7 +274,7 @@ Después de cada cambio:
 1. Se generan los archivos de nuevo.
 2. El verificador corre completo.
 3. La primera pasada revisa solo las oraciones con huella nueva.
-4. Los ejercicios que cambiaron se vuelven a ejecutar. La segunda pasada no corre en cada vuelta: la hace el revisor (decisión 12).
+4. Los ejercicios que cambiaron se vuelven a ejecutar. Una corrección no puede cambiar una oración aprobada que ningún problema nombra (decisión 14). La segunda pasada no corre en cada vuelta: la hace el revisor (decisión 12).
 5. Si la corrección vino de un revisor con tres hallazgos o más, se lanza un revisor nuevo.
 
 El ciclo termina cuando una vuelta completa no cambia ninguna oración: cero fallas, avisos explicados (salvo los informativos), ninguna oración "no coincide" ni "sin fuente" y un revisor con menos de tres hallazgos. Tope: cinco vueltas, y dos por cada ronda del revisor (decisión 9).

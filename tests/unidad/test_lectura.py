@@ -571,3 +571,42 @@ def test_una_oracion_larga_que_sigue_a_su_pasaje_de_norma_se_explica_sola():
     # Una palabra imprecisa no se explica por tener pasaje: solo si la oración es literal.
     imprecisa = verificador.verificar.Hallazgo("AVISO", "x", larga, "palabra imprecisa", "algunas")
     assert lectura._explicar_literales(verificador.verificar.Resultado(hallazgos=[imprecisa]), {}, corpus, anclas) is False
+
+
+# ---------- Protección de oraciones aprobadas ----------
+
+MANIFIESTO = "El Manifiesto Ágil tiene cuatro aspectos."
+
+
+def test_una_correccion_no_puede_cambiar_una_oracion_aprobada_que_nadie_nombra(sesion):
+    mala = "El Manifiesto Ágil tiene cinco aspectos."
+    nueva = "El Manifiesto Ágil tiene cuatro valores."
+    falla = pasada({mala: {"tipo": "norma", "veredicto": "sin fuente", "pasaje": ""}})
+    material, consulta = generar(sesion, con_error(mala), falla,
+                                 cambios((mala, nueva), (MANIFIESTO, "El manifiesto se firmó en 2001.")), pasada())
+    contenido = lectura.archivos(sesion, 1)["contenido"].read_text(encoding="utf-8")
+    assert nueva in contenido and mala not in contenido          # la oración nombrada se corrigió
+    assert MANIFIESTO in contenido and "2001" not in contenido   # la aprobada que nadie nombró no se tocó
+    assert material["estado"] == "verificada"
+    assert material["cambios_rechazados"] == 1
+    assert any("rechazó 1 cambios a oraciones ya aprobadas" in a for a in material["avance"])
+    valide = next(s["lineas"] for s in material["entrega"]["secciones"] if s["clave"] == "valide")
+    assert any(l.startswith("El programa rechazó 1 cambios") for l in valide)
+    assert "No cambies una oración que ningún problema nombra" in consulta.llamadas[2]["prompt"]
+
+
+def test_una_oracion_aprobada_nombrada_por_el_revisor_si_se_corrige(sesion):
+    nueva = "Los pilares sostienen el trabajo del equipo."
+    material, _ = generar(sesion, LIMPIA, pasada(), revision(hallazgo(RELLENO)), correccion((RELLENO, nueva)),
+                          pasada(), revisor=False)
+    assert material["cambios_rechazados"] == 0
+    assert nueva in lectura.archivos(sesion, 1)["contenido"].read_text(encoding="utf-8")
+
+
+def test_con_un_punto_de_la_lista_la_correccion_puede_tocar_cualquier_oracion(sesion):
+    punto = ("¿Hay contenido de sesiones posteriores?", "Habla de los roles.")
+    nueva = "El Manifiesto Ágil tiene cuatro aspectos, todos de esta sesión."
+    material, _ = generar(sesion, LIMPIA, pasada(), revision(lista=[punto]), correccion((MANIFIESTO, nueva)),
+                          pasada(), revisor=False)
+    assert material["cambios_rechazados"] == 0
+    assert nueva in lectura.archivos(sesion, 1)["contenido"].read_text(encoding="utf-8")
