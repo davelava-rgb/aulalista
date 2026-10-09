@@ -1,0 +1,6 @@
+# Modelo y tope de gasto por tarea.
+# tope_usd es el máximo en dólares para una sola llamada al SDK.
+
+[conexion]
+modelo = "claude-haiku-4-5-20251001"
+tope_usd = 0.05

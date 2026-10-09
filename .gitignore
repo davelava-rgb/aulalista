@@ -3,3 +3,5 @@ cursos/
 .venv/
 __pycache__/
 .pytest_cache/
+claudeapi.txt
+*.pdf
