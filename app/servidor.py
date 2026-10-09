@@ -1,10 +1,12 @@
 """Servidor local. Responde solo a esta computadora (127.0.0.1)."""
 
 import asyncio
+import threading
+from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -13,6 +15,7 @@ from app.config import RAIZ, FaltaClave
 from app.fichas import almacen, flujo
 from app.fichas import plantillas as plantillas_fichas
 from app.fuentes import convertir
+from app.materiales import lectura
 
 app = FastAPI(title="AulaLista")
 app.mount("/estaticos", StaticFiles(directory=RAIZ / "web" / "estaticos"), name="estaticos")
@@ -270,3 +273,50 @@ def restaurar_ficha_del_curso(curso: str, version: str = Form(...)):
 @app.post("/cursos/{curso}/sesiones/{sesion}/ficha/restaurar")
 def restaurar_ficha_de_la_sesion(curso: str, sesion: int, version: str = Form(...)):
     return _restaurar(curso, "sesion", sesion, version)
+
+
+# ---------- Sesión y materiales ----------
+
+def _trabajo_en_segundo_plano(funcion, *argumentos) -> threading.Thread:
+    """Corre un material en otro hilo. La página consulta el avance en estado.json."""
+    def correr():
+        try:
+            asyncio.run(funcion(*argumentos))
+        except Exception:
+            pass  # el error queda escrito en estado.json y la página lo muestra
+    hilo = threading.Thread(target=correr, daemon=True)
+    hilo.start()
+    return hilo
+
+
+@app.get("/cursos/{curso}/sesiones/{sesion}")
+def ver_sesion(request: Request, curso: str, sesion: int, mensaje: str = ""):
+    carpeta = _carpeta(curso)
+    _exigir_ficha_del_curso(carpeta, curso)
+    return plantillas.TemplateResponse(request, "sesion.html", {
+        "curso": curso, "nombre": cursos.nombre(curso), "sesion": sesion, "mensaje": mensaje,
+        "puede_empezar": almacen.puede_empezar_material(carpeta, sesion),
+        "lectura": lectura.estado(carpeta, sesion),
+        "gasto": tokens.total(curso),
+    })
+
+
+@app.post("/cursos/{curso}/sesiones/{sesion}/materiales/lectura")
+def generar_lectura(curso: str, sesion: int):
+    carpeta = _carpeta(curso)
+    destino = f"/cursos/{curso}/sesiones/{sesion}"
+    if not almacen.puede_empezar_material(carpeta, sesion):
+        return RedirectResponse(destino + "?mensaje=" + quote("Confirma las dos fichas antes de generar."), status_code=303)
+    if lectura.estado(carpeta, sesion).get("estado") == "trabajando":
+        return RedirectResponse(destino, status_code=303)
+    _trabajo_en_segundo_plano(lectura.generar, carpeta, curso, sesion)
+    return RedirectResponse(destino, status_code=303)
+
+
+@app.get("/cursos/{curso}/sesiones/{sesion}/descargar/{archivo}")
+def descargar(curso: str, sesion: int, archivo: str):
+    carpeta = lectura.carpeta_materiales(_carpeta(curso), sesion)
+    ruta = carpeta / Path(archivo).name
+    if not ruta.is_file():
+        raise HTTPException(404, "Ese archivo no existe.")
+    return FileResponse(ruta, filename=ruta.name)

@@ -54,3 +54,16 @@ def consulta_simulada(texto="Conexión correcta.", **cambios):
 
     consulta.llamadas = llamadas
     return consulta
+
+
+def consulta_en_secuencia(*salidas):
+    """Reemplaza a query() y devuelve una respuesta en JSON distinta en cada llamada."""
+    llamadas = []
+    pendientes = list(salidas)
+
+    async def consulta(*, prompt, options):
+        llamadas.append({"prompt": prompt, "options": options})
+        yield resultado_simulado(structured_output=pendientes.pop(0))
+
+    consulta.llamadas = llamadas
+    return consulta

@@ -14,12 +14,13 @@
 {% if ficha_curso.confirmada %}
   {% if sesiones %}
   <table class="datos">
-    <thead><tr><th scope="col">Sesión</th><th scope="col">Ficha de la sesión</th></tr></thead>
+    <thead><tr><th scope="col">Sesión</th><th scope="col">Ficha de la sesión</th><th scope="col">Materiales</th></tr></thead>
     <tbody>
       {% for s in sesiones %}
       <tr>
         <td>{{ s.numero }}. {{ s.texto }}</td>
         <td><a href="/cursos/{{ curso }}/sesiones/{{ s.numero }}/ficha">{% if s.confirmada %}Confirmada{% elif s.existe %}Sin confirmar{% else %}Llenar{% endif %}</a></td>
+        <td><a href="/cursos/{{ curso }}/sesiones/{{ s.numero }}">Abrir sesión</a></td>
       </tr>
       {% endfor %}
     </tbody>

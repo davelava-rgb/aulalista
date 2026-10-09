@@ -65,6 +65,7 @@ import hashlib
 import html.parser
 import json
 import operator
+import os
 import re
 import sys
 import unicodedata
@@ -439,6 +440,11 @@ def _indice_de_fuente(nombre: str, pasajes: list[dict], referencias: dict) -> di
     return indice
 
 
+def _ruta(carpeta: Path, relativa: str) -> Path:
+    """Ruta sin «..»: en Windows, una ruta de más de 260 caracteres no se puede abrir."""
+    return Path(os.path.normpath(carpeta / relativa))
+
+
 def leer_configuracion(ruta: Path) -> Configuracion:
     try:
         datos = json.loads(ruta.read_text(encoding="utf-8"))
@@ -453,7 +459,7 @@ def leer_configuracion(ruta: Path) -> Configuracion:
     for f in datos.get("fuentes", []):
         if "nombre" not in f or "texto" not in f:
             raise ErrorDeConfiguracion("Cada fuente necesita «nombre» y «texto».")
-        ruta_texto = carpeta / f["texto"]
+        ruta_texto = _ruta(carpeta, f["texto"])
         if not ruta_texto.exists():
             raise ErrorDeConfiguracion(f"No existe el texto de la fuente «{f['nombre']}»: {ruta_texto}.")
         pasajes = [json.loads(l) for l in ruta_texto.read_text(encoding="utf-8").splitlines() if l.strip()]
@@ -469,14 +475,14 @@ def leer_configuracion(ruta: Path) -> Configuracion:
 
     permitidos_texto = []
     for relativa in datos.get("textos_permitidos", []):
-        ruta_permitida = carpeta / relativa
+        ruta_permitida = _ruta(carpeta, relativa)
         if not ruta_permitida.exists():
             raise ErrorDeConfiguracion(f"No existe el texto permitido {ruta_permitida}.")
         permitidos_texto.append(ruta_permitida.read_text(encoding="utf-8"))
 
     listas = datos.get("listas", {})
     def lista(nombre):
-        return _leer_lista(carpeta / listas[nombre] if nombre in listas else CARPETA_LISTAS / f"{nombre}.txt")
+        return _leer_lista(_ruta(carpeta, listas[nombre]) if nombre in listas else CARPETA_LISTAS / f"{nombre}.txt")
 
     for dato in datos.get("datos_fijos", []):
         if not dato.get("etiqueta") or not dato.get("valor"):
@@ -496,7 +502,7 @@ def leer_configuracion(ruta: Path) -> Configuracion:
         vocabulario=datos.get("vocabulario", []),
         nunca_se_incluye=datos.get("nunca_se_incluye", []),
         permitidos=datos.get("permitidos", ["notas del profesor"]),
-        carpeta_practica=(carpeta / practica) if practica else None,
+        carpeta_practica=_ruta(carpeta, practica) if practica else None,
         limites=datos.get("limites", {}),
         oracion_larga=int(datos.get("oracion_larga", 25)),
         cita_min_palabras=int(datos.get("cita_min_palabras", 5)),

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block titulo %}Sesión {{ sesion }} · AulaLista{% endblock %}
+{% block ruta %} › <a href="/cursos/{{ curso }}">{{ nombre }}</a> › Sesión {{ sesion }}{% endblock %}
+
+{% block contenido %}
+<h1>Sesión {{ sesion }}</h1>
+<p><a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">Ficha de la sesión</a>:
+  {{ 'confirmada' if puede_empezar else 'falta confirmar las fichas. Ningún material empieza sin ellas.' }}</p>
+
+<section class="material" id="lectura" data-estado="{{ lectura.estado or '' }}">
+  <h2>1. Lectura</h2>
+  <p class="estado-material">
+    {% if lectura.estado == "trabajando" %}Trabajando…
+    {% elif lectura.estado == "verificada" %}Verificada: el verificador terminó sin fallas.
+    {% elif lectura.estado == "con fallas" %}Con problemas abiertos. No se entrega así.
+    {% elif lectura.estado == "error" %}Se detuvo por un error: {{ lectura.error }}
+    {% else %}Sin generar.{% endif %}
+    {% if lectura.desactualizado %}<strong>Desactualizada: las fichas cambiaron.</strong>{% endif %}
+  </p>
+
+  {% if lectura.resumen %}<p>Verificador: {{ lectura.resumen }}</p>{% endif %}
+
+  {% if lectura.archivos and lectura.estado != "trabajando" %}
+  <ul class="lista">
+    <li><a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/descargar/{{ lectura.archivos.word }}">{{ lectura.archivos.word }}</a>: la lectura.</li>
+    <li><a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/descargar/{{ lectura.archivos.excel }}">{{ lectura.archivos.excel }}</a>: el archivo de verificación.</li>
+  </ul>
+  {% endif %}
+
+  {% if lectura.problemas %}
+  <h3>Problemas abiertos</h3>
+  <ul>{% for p in lectura.problemas %}<li>{{ p }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if lectura.avisos_de_diseno %}
+  <h3>Avisos de diseño</h3>
+  <ul>{% for a in lectura.avisos_de_diseno %}<li>{{ a }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if lectura.decisiones %}
+  <h3>Qué decidió el redactor por su cuenta</h3>
+  <ul>{% for d in lectura.decisiones %}<li>{{ d }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if lectura.agrupacion %}<p>Agrupación de temas: {{ lectura.agrupacion }}</p>{% endif %}
+
+  {% if lectura.avance %}
+  <details {% if lectura.estado == "trabajando" %}open{% endif %}>
+    <summary>Avance</summary>
+    <ol class="avance" aria-live="polite">{% for a in lectura.avance %}<li>{{ a }}</li>{% endfor %}</ol>
+  </details>
+  {% endif %}
+
+  <form method="post" action="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/lectura">
+    <button type="submit" {% if not puede_empezar or lectura.estado == "trabajando" %}disabled{% endif %}>
+      {{ 'Generar de nuevo' if lectura.estado else 'Generar lectura' }}
+    </button>
+    <span class="nota">Gasta tokens. La redacción y las correcciones pueden tardar varios minutos.</span>
+  </form>
+</section>
+
+<p class="nota">Gasto de este curso: {{ gasto.llamadas }} llamadas, {{ "%.4f"|format(gasto.costo_usd) }} USD estimados.</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Mientras se trabaja, la página se actualiza sola cada 5 segundos.
+  if (document.getElementById("lectura").dataset.estado === "trabajando") {
+    setTimeout(() => location.reload(), 5000);
+  }
+</script>
+{% endblock %}

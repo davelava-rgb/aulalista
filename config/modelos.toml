@@ -22,3 +22,15 @@ max_turns = 30
 modelo = "claude-sonnet-5-5"
 tope_usd = 0.30
 max_turns = 3
+
+# Redacción de un material a partir de las fichas y de los pasajes de las fuentes.
+[redaccion]
+modelo = "claude-opus-5-5"
+tope_usd = 3.00
+max_turns = 40
+
+# Corrección de un material después del verificador.
+[correccion]
+modelo = "claude-opus-5-5"
+tope_usd = 1.50
+max_turns = 20
