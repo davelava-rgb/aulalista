@@ -97,3 +97,7 @@ def test_convertir_word_desde_la_pagina_usa_office_en_otro_hilo(entorno, tmp_pat
     r = cliente.post("/cursos/scrum/convertir")
     assert "Fuentes convertidas ahora: 1." in r.text
     assert "Segunda página del sílabo." in cliente.get("/cursos/scrum/fuentes/silabo.docx").text
+
+
+def test_nombre_de_curso_largo_se_acorta_para_windows():
+    assert len(cursos.identificador("Curso de " + "gestión " * 20)) <= 40

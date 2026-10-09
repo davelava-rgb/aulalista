@@ -10,6 +10,8 @@ from fastapi.templating import Jinja2Templates
 
 from app import agente, cursos, tokens
 from app.config import RAIZ, FaltaClave
+from app.fichas import almacen, flujo
+from app.fichas import plantillas as plantillas_fichas
 from app.fuentes import convertir
 
 app = FastAPI(title="AulaLista")
@@ -80,12 +82,21 @@ def ver_curso(request: Request, curso: str, mensaje: str = ""):
     indice = convertir.leer_indice(carpeta)
     archivos = sorted(r.name for r in (carpeta / "fuentes").glob("*") if r.is_file())
     fuentes = [{"archivo": a, **indice.get(a, {"estado": "sin convertir"})} for a in archivos]
+    ficha_curso = almacen.cargar(carpeta, "curso")
+    sesiones = []
+    for s in almacen.sesiones_del_curso(ficha_curso):
+        ficha_sesion = almacen.cargar(carpeta, "sesion", s["numero"])
+        sesiones.append({**s, "confirmada": ficha_sesion["confirmada"],
+                         "existe": almacen.ruta_ficha(carpeta, "sesion", s["numero"]).exists()})
     return plantillas.TemplateResponse(
         request,
         "curso.html",
         {
             "curso": curso,
             "nombre": cursos.nombre(curso),
+            "ficha_curso": ficha_curso,
+            "ficha_curso_existe": almacen.ruta_ficha(carpeta, "curso").exists(),
+            "sesiones": sesiones,
             "fuentes": fuentes,
             "pendientes": sum(1 for f in fuentes if f["estado"] != convertir.CONVERTIDA),
             "gasto": tokens.total(curso),
@@ -151,3 +162,111 @@ def marcar_revisada(curso: str, archivo: str):
     except KeyError as error:
         raise HTTPException(404, "Esa fuente no está convertida.") from error
     return RedirectResponse(f"/cursos/{curso}/fuentes/{quote(archivo)}", status_code=303)
+
+
+# ---------- Fichas ----------
+
+TITULOS_FICHA = {"curso": "Ficha del curso", "sesion": "Ficha de la sesión"}
+
+
+def _url_ficha(curso: str, sesion: int | None) -> str:
+    return f"/cursos/{curso}/ficha" if sesion is None else f"/cursos/{curso}/sesiones/{sesion}/ficha"
+
+
+def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, mensaje: str = "", errores=None):
+    carpeta = _carpeta(curso)
+    ficha = almacen.cargar(carpeta, tipo, sesion)
+    titulo = TITULOS_FICHA[tipo] + (f" {sesion}" if sesion else "")
+    desactualizados = []
+    if sesion is not None:
+        desactualizados = [n for n, m in almacen.cargar_estado(carpeta, sesion)["materiales"].items() if m.get("desactualizado")]
+    return plantillas.TemplateResponse(request, "ficha.html", {
+        "curso": curso, "nombre": cursos.nombre(curso), "titulo": titulo, "ficha": ficha,
+        "secciones": plantillas_fichas.vista(tipo, ficha["campos"]),
+        "preguntas": almacen.preguntas_pendientes(ficha),
+        "errores": errores or [], "mensaje": mensaje,
+        "versiones": almacen.listar_versiones(carpeta, tipo, sesion),
+        "url_restaurar": _url_ficha(curso, sesion) + "/restaurar",
+        "desactualizados": desactualizados,
+    })
+
+
+def _exigir_ficha_del_curso(carpeta, curso):
+    if not almacen.cargar(carpeta, "curso")["confirmada"]:
+        raise HTTPException(409, "Confirma primero la ficha del curso.")
+
+
+async def _accion_ficha(request: Request, curso: str, tipo: str, sesion: int | None):
+    carpeta = _carpeta(curso)
+    formulario = dict(await request.form())
+    accion = formulario.pop("accion", "guardar")
+    ficha = almacen.cargar(carpeta, tipo, sesion)
+    if almacen.aplicar_formulario(ficha, formulario) or not almacen.ruta_ficha(carpeta, tipo, sesion).exists():
+        almacen.guardar(carpeta, tipo, sesion, ficha, "editada por el profesor")
+    mensaje, errores = "Ficha guardada.", []
+    try:
+        if accion == "proponer":
+            resumen = await asyncio.to_thread(
+                lambda: asyncio.run(flujo.proponer(carpeta, curso, tipo, sesion))
+            )
+            if resumen.get("sin_fuentes"):
+                mensaje = "No hay fuentes convertidas que se puedan usar. Llena la ficha a mano o sube fuentes."
+            else:
+                mensaje = (f"Datos tomados de las fuentes: {resumen['de_las_fuentes']}. "
+                           f"Propuestos: {resumen['propuestos']}. Con dos versiones: {resumen['conflictos']}.")
+        elif accion == "confirmar":
+            if tipo == "curso":
+                resultado = flujo.confirmar_curso(carpeta)
+                sesiones = ", ".join(f"S{n}" for n in resultado["desactualizados"])
+                mensaje = "Ficha del curso confirmada." + (
+                    f" Se actualizó la verificación de las sesiones {sesiones}." if sesiones else "")
+            else:
+                await asyncio.to_thread(lambda: asyncio.run(flujo.confirmar_sesion(carpeta, curso, sesion)))
+                mensaje = "Ficha de la sesión confirmada. Se escribió verificacion.json."
+    except almacen.FichaIncompleta as error:
+        mensaje, errores = "La ficha no se confirmó.", error.errores
+    except flujo.FichaDelCursoSinConfirmar as error:
+        mensaje = str(error)
+    except (FaltaClave, agente.ErrorDeAgente) as error:
+        mensaje = str(error)
+    return _pagina_ficha(request, curso, tipo, sesion, mensaje, errores)
+
+
+@app.get("/cursos/{curso}/ficha")
+def ver_ficha_del_curso(request: Request, curso: str):
+    return _pagina_ficha(request, curso, "curso", None)
+
+
+@app.post("/cursos/{curso}/ficha")
+async def accion_ficha_del_curso(request: Request, curso: str):
+    return await _accion_ficha(request, curso, "curso", None)
+
+
+@app.get("/cursos/{curso}/sesiones/{sesion}/ficha")
+def ver_ficha_de_la_sesion(request: Request, curso: str, sesion: int):
+    _exigir_ficha_del_curso(_carpeta(curso), curso)
+    return _pagina_ficha(request, curso, "sesion", sesion)
+
+
+@app.post("/cursos/{curso}/sesiones/{sesion}/ficha")
+async def accion_ficha_de_la_sesion(request: Request, curso: str, sesion: int):
+    _exigir_ficha_del_curso(_carpeta(curso), curso)
+    return await _accion_ficha(request, curso, "sesion", sesion)
+
+
+def _restaurar(curso: str, tipo: str, sesion: int | None, version: str):
+    try:
+        almacen.restaurar(_carpeta(curso), tipo, sesion, version)
+    except FileNotFoundError as error:
+        raise HTTPException(404, "Esa versión no existe.") from error
+    return RedirectResponse(_url_ficha(curso, sesion), status_code=303)
+
+
+@app.post("/cursos/{curso}/ficha/restaurar")
+def restaurar_ficha_del_curso(curso: str, version: str = Form(...)):
+    return _restaurar(curso, "curso", None, version)
+
+
+@app.post("/cursos/{curso}/sesiones/{sesion}/ficha/restaurar")
+def restaurar_ficha_de_la_sesion(curso: str, sesion: int, version: str = Form(...)):
+    return _restaurar(curso, "sesion", sesion, version)

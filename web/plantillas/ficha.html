@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block titulo %}{{ titulo }} · AulaLista{% endblock %}
+{% block ruta %} › <a href="/cursos/{{ curso }}">{{ nombre }}</a> › {{ titulo }}{% endblock %}
+
+{% macro campo(c) %}
+<div class="campo{% if c.estado %} estado-{{ c.estado | replace(' ', '-') }}{% endif %}" id="campo-{{ c.id }}">
+  <label for="{{ c.id }}">{{ c.etiqueta }}</label>
+  <p class="marcas">
+    {% if c.estado == "propuesto" %}<span class="marca">Propuesto</span>{% endif %}
+    {% if c.estado == "falta definir" %}<span class="marca alerta">Falta definir</span>{% endif %}
+    {% if c.estado == "conflicto" %}<span class="marca alerta">Dos versiones</span>{% endif %}
+    {% if c.origen and c.origen != "profesor" %}<span class="origen">Fuente: {{ c.origen }}</span>{% endif %}
+  </p>
+  {% if c.estado == "conflicto" %}
+  <fieldset class="versiones">
+    <legend>Elige la versión que vale</legend>
+    {% for v in c.versiones %}
+    <label class="opcion"><input type="radio" name="elegir.{{ c.id }}" value="{{ loop.index0 }}"> «{{ v.valor }}» <span class="origen">({{ v.origen }})</span></label>
+    {% endfor %}
+  </fieldset>
+  {% endif %}
+  {% if c.multilinea %}
+  <textarea id="{{ c.id }}" name="{{ c.id }}" rows="{{ [3, (c.valor.count('\n') + 2)] | max }}">{{ c.valor }}</textarea>
+  {% else %}
+  <textarea id="{{ c.id }}" name="{{ c.id }}" rows="{{ 1 if c.valor | length < 80 else 3 }}" class="corto">{{ c.valor }}</textarea>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% block contenido %}
+<h1>{{ titulo }}</h1>
+
+<p class="estado-ficha {{ 'confirmada' if ficha.confirmada else 'pendiente' }}">
+  {% if ficha.confirmada %}Confirmada.{% if desactualizados %} Los materiales {{ desactualizados | join(', ') }} quedaron desactualizados.{% endif %}
+  {% else %}Sin confirmar. Ningún material empieza sin las dos fichas confirmadas.{% endif %}
+</p>
+
+{% if errores %}
+<section class="mensaje" role="alert">
+  <h2>Antes de confirmar</h2>
+  <ul>{% for e in errores %}<li>{{ e }}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+
+{% if preguntas %}
+<section class="preguntas">
+  <h2>Responde primero {{ 'esta' if preguntas | length == 1 else 'estas ' ~ (preguntas | length) }}</h2>
+  <ol>
+    {% for p in preguntas %}<li><a href="#campo-{{ p.id }}">{{ p.nombre }}</a>: {{ p.motivo }}</li>{% endfor %}
+  </ol>
+</section>
+{% endif %}
+
+<form method="post" id="form-ficha">
+  {% for s in secciones %}
+  <section class="seccion">
+    <h2>{{ s.titulo }}</h2>
+    {% for e in s.elementos %}
+      {% if e.repetible %}
+        {% if e.encabezado %}<p class="nota">{{ e.encabezado }}</p>{% endif %}
+        {% for b in e.bloques %}
+        <details class="bloque" {% if b.campos | selectattr('valor') | list or b.campos | selectattr('estado') | list or b.numero <= 3 %}open{% endif %}>
+          <summary>{{ 'Ejercicio' if e.nombre == 'ejercicio' else 'Pregunta' }} {{ b.numero }}</summary>
+          {% for c in b.campos %}{{ campo(c) }}{% endfor %}
+        </details>
+        {% endfor %}
+      {% elif e.grupo %}
+        <p class="etiqueta-grupo">{{ e.etiqueta }}</p>
+        <div class="grupo">{% for c in e.campos %}{{ campo(c) }}{% endfor %}</div>
+      {% else %}
+        {{ campo(e) }}
+      {% endif %}
+    {% endfor %}
+  </section>
+  {% endfor %}
+
+  <div class="acciones">
+    <button type="submit" name="accion" value="guardar">Guardar</button>
+    <button type="submit" name="accion" value="proponer" class="secundario">Proponer desde las fuentes</button>
+    <button type="submit" name="accion" value="confirmar" class="secundario">Confirmar ficha</button>
+  </div>
+  <p class="nota">«Proponer desde las fuentes» solo llena campos vacíos y gasta tokens. «Confirmar» guarda primero lo que escribiste.</p>
+</form>
+
+{% if versiones %}
+<section>
+  <h2>Versiones guardadas</h2>
+  <form method="post" action="{{ url_restaurar }}" class="fila">
+    <label for="version">Versión</label>
+    <select id="version" name="version">
+      {% for v in versiones %}<option value="{{ v.archivo }}">{{ v.fecha }} · {{ v.motivo }}</option>{% endfor %}
+    </select>
+    <button type="submit" class="secundario">Recuperar esta versión</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.getElementById("form-ficha").addEventListener("submit", (evento) => {
+    const boton = evento.submitter;
+    if (boton && boton.value !== "guardar") {
+      boton.textContent = boton.value === "proponer" ? "Leyendo las fuentes… puede tardar" : "Revisando…";
+      setTimeout(() => document.querySelectorAll("#form-ficha button").forEach((b) => (b.disabled = true)), 0);
+    }
+  });
+</script>
+{% endblock %}

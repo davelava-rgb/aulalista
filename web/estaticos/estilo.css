@@ -126,3 +126,56 @@ table.datos .ubicacion { white-space: nowrap; font-size: 0.8125rem; }
 @media (max-width: 40rem) {
   table.datos .ubicacion { white-space: normal; }
 }
+
+button.secundario {
+  background: var(--fondo);
+  color: var(--principal);
+  border: 1px solid var(--principal);
+}
+
+textarea, select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--texto);
+  border-radius: 6px;
+  background: var(--fondo);
+  color: var(--texto);
+  font: inherit;
+}
+
+select { width: auto; min-height: 44px; }
+textarea:focus-visible, select:focus-visible { outline: 3px solid var(--principal); outline-offset: 2px; }
+
+.seccion { margin-top: 2rem; }
+.campo { margin: 1rem 0; }
+.campo > label { display: block; font-weight: bold; margin-bottom: 0.25rem; }
+.marcas { margin: 0 0 0.25rem; font-size: 0.8125rem; }
+.marcas:empty { display: none; }
+.marca { margin-right: 0.5rem; padding: 0.1rem 0.5rem; border: 1px solid var(--principal); border-radius: 999px; }
+.marca.alerta { border-color: var(--error); color: var(--error); }
+.origen { opacity: 0.8; }
+.estado-falta-definir textarea, .estado-conflicto textarea { border-color: var(--error); }
+
+.versiones { margin: 0.5rem 0; padding: 0.5rem 0.75rem; border: 1px solid var(--error); border-radius: 6px; }
+.opcion { display: flex; gap: 0.5rem; align-items: center; min-height: 44px; }
+
+.bloque { margin: 0.75rem 0; padding: 0 0.75rem; border: 1px solid var(--suave); border-radius: 6px; }
+.bloque > summary { min-height: 44px; display: flex; align-items: center; font-weight: bold; cursor: pointer; }
+.etiqueta-grupo { font-weight: bold; margin-bottom: 0; }
+.grupo { padding-left: 1rem; }
+
+.preguntas { padding: 0.75rem 1rem; border: 1px solid var(--principal); border-radius: 6px; }
+.preguntas h2 { margin-top: 0; font-size: 1.25rem; }
+.estado-ficha.pendiente { color: var(--error); }
+.estado-ficha.confirmada { color: var(--bien); }
+
+.acciones {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.75rem 0;
+  background: var(--fondo);
+}

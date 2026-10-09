@@ -6,6 +6,31 @@
 {% block contenido %}
 <h1>{{ nombre }}</h1>
 
+<h2>Fichas</h2>
+<p>
+  <a href="/cursos/{{ curso }}/ficha">Ficha del curso</a>:
+  {% if ficha_curso.confirmada %}confirmada{% elif ficha_curso_existe %}sin confirmar{% else %}sin llenar{% endif %}.
+</p>
+{% if ficha_curso.confirmada %}
+  {% if sesiones %}
+  <table class="datos">
+    <thead><tr><th scope="col">Sesión</th><th scope="col">Ficha de la sesión</th></tr></thead>
+    <tbody>
+      {% for s in sesiones %}
+      <tr>
+        <td>{{ s.numero }}. {{ s.texto }}</td>
+        <td><a href="/cursos/{{ curso }}/sesiones/{{ s.numero }}/ficha">{% if s.confirmada %}Confirmada{% elif s.existe %}Sin confirmar{% else %}Llenar{% endif %}</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>La ficha del curso no tiene sesiones. Escribe una por línea en «Sesiones», empezando con su número.</p>
+  {% endif %}
+{% else %}
+<p class="nota">Las fichas de las sesiones se llenan después de confirmar la ficha del curso.</p>
+{% endif %}
+
 <h2>Fuentes del curso</h2>
 <p>Sube sílabos, normas, programas y materiales anteriores. Formatos: PDF, Word, PowerPoint (.pptx), Excel (.xlsx) e imágenes.</p>
 

@@ -10,3 +10,15 @@ tope_usd = 0.05
 modelo = "claude-sonnet-5-5"
 tope_usd = 0.20
 max_turns = 3
+
+# Propuesta de las fichas desde las fuentes del curso (botón «Proponer desde las fuentes»).
+[fichas]
+modelo = "claude-sonnet-5-5"
+tope_usd = 1.00
+max_turns = 30
+
+# Las tres preguntas de cada ejercicio antes de confirmar la ficha de la sesión (SPEC §5).
+[revision_ejercicios]
+modelo = "claude-sonnet-5-5"
+tope_usd = 0.30
+max_turns = 3

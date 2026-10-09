@@ -150,3 +150,34 @@ async def leer_imagen(
     if resultado.is_error or not isinstance(resultado.structured_output, dict):
         raise ErrorDeAgente(_describir_error(resultado))
     return [linea for linea in resultado.structured_output["lineas"] if linea.strip()]
+
+
+async def consultar(
+    pedido: str,
+    *,
+    tarea: str,
+    esquema: dict,
+    curso: str,
+    etapa: str,
+    sesion: str = "-",
+    material: str = "-",
+    cwd=None,
+    herramientas: tuple[str, ...] = (),
+    consulta: Consulta = query,
+) -> dict:
+    """Pedido con respuesta en JSON validado contra `esquema`.
+
+    Con `herramientas`, el agente solo puede usar esas (por ejemplo Read y Grep) y
+    todo lo demás queda denegado sin preguntar.
+    """
+    extra = {"output_format": {"type": "json_schema", "schema": esquema}}
+    if herramientas:
+        extra.update(tools=list(herramientas), allowed_tools=list(herramientas), permission_mode="dontAsk")
+    if cwd is not None:
+        extra["cwd"] = str(cwd)
+    opciones = opciones_base(tarea, leer_clave(), **extra)
+    _, resultado = await ejecutar(pedido, opciones, consulta)
+    tokens.registrar(resultado, curso=curso, sesion=sesion, material=material, etapa=etapa)
+    if resultado.is_error or not isinstance(resultado.structured_output, dict):
+        raise ErrorDeAgente(_describir_error(resultado))
+    return resultado.structured_output

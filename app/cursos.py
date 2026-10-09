@@ -22,7 +22,8 @@ def _base() -> Path:
 def identificador(nombre: str) -> str:
     """Convierte el nombre del curso en un nombre de carpeta: sin tildes, espacios ni signos."""
     sin_tildes = unicodedata.normalize("NFKD", nombre).encode("ascii", "ignore").decode("ascii")
-    texto = re.sub(r"[^a-z0-9]+", "-", sin_tildes.lower()).strip("-")
+    # Máximo 40 letras: Windows no admite rutas de más de 260 caracteres.
+    texto = re.sub(r"[^a-z0-9]+", "-", sin_tildes.lower()).strip("-")[:40].strip("-")
     if not texto:
         raise ErrorDeCurso("Escribe un nombre de curso con letras o números.")
     return texto
