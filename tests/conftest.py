@@ -70,7 +70,7 @@ def consulta_en_secuencia(*salidas):
     return consulta
 
 
-SIN_COMPARAR = {c: "no aplica" for c in ("numero", "termino", "cantidades", "orden", "quien", "obligacion", "generalizacion")}
+SIN_COMPARAR = {c: "no aplica" for c in ("numero", "termino", "cantidades", "obligacion")}
 
 
 def pasada(especiales: dict | None = None):

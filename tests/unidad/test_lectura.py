@@ -484,3 +484,25 @@ def test_un_vacio_que_el_cierre_no_puede_borrar_sigue_pendiente(sesion):
     assert material["eliminadas_por_el_programa"] == [mala]
     assert material["estado"] == "con fallas"
     assert material["problemas"] == ["SEGUNDA PASADA · vacío · «Los pilares de Scrum son tres.»: No dice cuáles."]
+
+
+def test_una_oracion_larga_que_sigue_a_su_pasaje_de_norma_se_explica_sola():
+    from app.validacion.pasajes import Corpus, Fuente
+    from app.validacion import verificador
+    norma = "El Product Owner es responsable de maximizar el valor del producto resultante del trabajo del Scrum Team."
+    larga = ("El Product Owner es responsable de maximizar el valor del producto que resulta del trabajo del "
+             "Scrum Team, y lo hace sin dejar de ser una sola persona dentro del equipo.")
+    corpus = Corpus([Fuente("guia.pdf", [{"texto": norma, "ubicacion": "página 9"}])])
+    hallazgo = verificador.verificar.Hallazgo("AVISO", "S1_Lectura.docx · x", larga, "oración larga", "27 palabras")
+    resultado = verificador.verificar.Resultado(hallazgos=[hallazgo])
+    anclas = [{"oracion": larga, "fuente": "guia.pdf", "ubicacion": "página 9", "texto": norma}]
+    explicaciones = {}
+    assert lectura._explicar_literales(resultado, explicaciones, corpus, anclas) is True
+    assert "Sigue a su pasaje de la norma (guia.pdf, página 9)" in verificador.buscar_explicacion(
+        "oración larga", larga, explicaciones)
+    # Sin un pasaje que exista tal cual, el aviso no se explica solo.
+    inventada = [{**anclas[0], "texto": "El Product Owner decide todo."}]
+    assert lectura._explicar_literales(resultado, {}, corpus, inventada) is False
+    # Una palabra imprecisa no se explica por tener pasaje: solo si la oración es literal.
+    imprecisa = verificador.verificar.Hallazgo("AVISO", "x", larga, "palabra imprecisa", "algunas")
+    assert lectura._explicar_literales(verificador.verificar.Resultado(hallazgos=[imprecisa]), {}, corpus, anclas) is False

@@ -163,7 +163,8 @@ CÓMO ENTREGAR LA LECTURA
 - decisiones: cada dato o decisión que las fichas no definían.
 - agrupacion: si hubo más temas que bloques, cómo los agrupaste. Si no, texto vacío.
 - Unas {PALABRAS_MAX} palabras como máximo en total, para no pasar de seis páginas con portada.
-- Una idea por oración y 25 palabras como máximo por oración.
+- Una idea por oración y 25 palabras como máximo por oración. Excepción: si partir una oración que sigue a su
+  pasaje de una norma cambiaría lo que dice la norma, no la partas y anótala en «pasajes».
 - Usa los nombres del vocabulario de la sesión tal cual y en su orden. No uses sus variantes.
 - Usa comillas solo para copiar texto tal cual de una fuente.
 - Si agrupas, resumes o cambias el orden de lo que dice una norma, escribe «en este curso».
@@ -353,21 +354,45 @@ def bloques_de(contenido: Lectura) -> list[pasada2.Bloque]:
 REGLAS_QUE_EXPLICA_EL_PROGRAMA = ("oración larga", "palabra imprecisa")
 
 
-def _explicar_literales(resultado, explicaciones: dict, corpus: Corpus) -> bool:
+def _pasaje_de_la_oracion(oracion: str, anclas: list[dict], corpus: Corpus) -> tuple[str, str] | None:
+    """La fuente y la ubicación del pasaje que el redactor dijo usar para esta oración, si existe tal cual
+    en una fuente del curso (no en una ficha)."""
+    buscada = _comparable(oracion)
+    for ancla in anclas:
+        propia = _comparable(ancla.get("oracion", ""))
+        if not propia or not (propia in buscada or buscada in propia):
+            continue
+        ubicacion = corpus.ubicar(ancla["fuente"], ancla["texto"])
+        encontrada = (ancla["fuente"], ubicacion) if ubicacion else corpus.ubicar_en_cualquiera(ancla["texto"])
+        if encontrada and encontrada[0] not in pasada1.FICHAS:
+            return encontrada
+    return None
+
+
+def _explicar_literales(resultado, explicaciones: dict, corpus: Corpus, anclas: list[dict] | None = None) -> bool:
     """Un aviso de oración larga o de palabra imprecisa en una oración copiada tal cual de una fuente del
-    curso se explica solo: cambiarla cambiaría lo que dice la fuente (así lo hace el Excel modelo)."""
+    curso se explica solo: cambiarla cambiaría lo que dice la fuente (así lo hace el Excel modelo).
+    Un aviso de oración larga en una oración escrita a partir de su pasaje de una norma también se explica
+    solo: partirla puede cambiar lo que dice la norma (PLAN.md §0, decisión 10)."""
     nuevas = False
     for h in resultado.hallazgos:
         if h.nivel != "AVISO" or h.regla not in REGLAS_QUE_EXPLICA_EL_PROGRAMA or not h.oracion:
             continue
         if verificador.buscar_explicacion(h.regla, h.oracion, explicaciones):
             continue
-        encontrada = corpus.ubicar_en_cualquiera(h.oracion.split(": ", 1)[-1])
+        texto = h.oracion.split(": ", 1)[-1]
+        encontrada = corpus.ubicar_en_cualquiera(texto)
         if encontrada and encontrada[0] not in pasada1.FICHAS:
             fuente, ubicacion = encontrada
             explicaciones[verificador.clave_de_hallazgo(h.regla, h.oracion)] = (
                 f"Es un pasaje literal de la fuente ({fuente}, {ubicacion}). Cambiarlo cambiaría lo que dice. "
                 "Lo comprobó el programa.")
+            nuevas = True
+        elif h.regla == "oración larga" and (anclada := _pasaje_de_la_oracion(texto, anclas or [], corpus)):
+            fuente, ubicacion = anclada
+            explicaciones[verificador.clave_de_hallazgo(h.regla, h.oracion)] = (
+                f"Sigue a su pasaje de la norma ({fuente}, {ubicacion}). Partirla puede cambiar lo que dice la norma. "
+                "El programa comprobó que el pasaje existe; la primera pasada compara la oración con él.")
             nuevas = True
     return nuevas
 
@@ -497,7 +522,7 @@ class _Ciclo:
         self.resultado = verificador.ejecutar(configuracion, [rutas["word"]], rutas["excel"], self.explicaciones,
                                               self.contar_paginas)
         corpus = Corpus.del_curso(self.carpeta_curso, self.sesion)
-        if _explicar_literales(self.resultado, self.explicaciones, corpus):
+        if _explicar_literales(self.resultado, self.explicaciones, corpus, [p.model_dump() for p in contenido.pasajes]):
             _guardar_json(rutas["explicaciones"], self.explicaciones)
             verificador.anotar_explicaciones(rutas["excel"], self.explicaciones)
         self.oraciones = _leer_json(rutas["excel"].with_suffix(".json"))["oraciones"]

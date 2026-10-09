@@ -29,6 +29,7 @@ Términos usados en este plan:
 | 7 | Al llegar al tope de cinco vueltas, el programa elimina las oraciones que siguen sin coincidir con su fuente o que la segunda pasada marcó como relleno o ambiguas, y valida de nuevo. Un vacío, una inconsistencia o un punto de la lista de verificación que siga abierto queda en «Decisiones pendientes» y el material no se entrega (aprobado en la etapa 5c) |
 | 8 | Ahorro aprobado en la etapa 5b: correcciones por oración con Sonnet, pedidos con la parte fija primero, primera pasada en grupos de 40 con esfuerzo bajo, segunda pasada con esfuerzo alto solo en su primera revisión. La lectura se mantiene en 1.500 palabras como máximo (decisión del profesor en la etapa 5c) |
 | 9 | Las pasadas tienen su tope de cinco vueltas. Después, cada ronda del revisor independiente tiene hasta dos vueltas para corregir sus hallazgos y lo que esa corrección rompa. Peor caso: 5 + 3 × 2 = 11 vueltas (aprobado en la etapa 5d) |
+| 10 | Reglas aflojadas en la etapa 5d. Son excepciones a la skill. a) En una norma se comparan cuatro cosas: número, término, cantidades y "debe" o "puede". El orden, quién hace la acción y las palabras que generalizan ya no se comparan una por una; una oración que contradice al pasaje o le agrega una afirmación sigue siendo "no coincide". b) Un resumen de una norma que dice "en este curso" se juzga solo por si contradice o agrega algo. Igual necesita su pasaje copiado tal cual. c) Una oración de más de 25 palabras que sigue a su pasaje de una norma no se parte. Si su pasaje existe tal cual, el programa explica el aviso solo |
 
 ### Contradicciones encontradas
 
@@ -237,7 +238,7 @@ Cada oración recibe una huella para saber cuáles son nuevas o cambiaron.
 1. El programa busca para cada oración los tres pasajes más parecidos en `fuentes_texto` y en las fichas. En las diapositivas busca además en la lectura validada.
 2. La IA recibe grupos de unas 20 oraciones con sus pasajes, no las fuentes completas.
 3. Por cada oración, la IA responde en JSON: tipo, pasaje copiado, ubicación, veredicto y motivo.
-4. En las normas, la IA compara las siete cosas que exige la skill. Son campos obligatorios del JSON.
+4. En las normas, la IA compara cuatro cosas: número, término, cantidades y "debe" o "puede" (decisión 10). Son campos obligatorios del JSON. Un resumen con "en este curso" no se compara punto por punto.
 5. El programa comprueba que el pasaje copiado exista tal cual en esa ubicación. Si no existe, la oración queda "sin fuente".
 6. Comprobaciones sin IA: regla del curso con "en este curso", dato del caso igual a la ficha, cálculo rehecho con los datos del archivo.
 7. Si los candidatos no sirven, la IA usa la herramienta `buscar_en_fuentes`.

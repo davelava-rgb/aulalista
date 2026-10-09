@@ -261,3 +261,46 @@ def test_un_pasaje_del_redactor_que_no_existe_no_se_usa():
     o = oracion(1, "Los artefactos se inspeccionan cada hora.")
     anclas = [{"oracion": o["texto"], "fuente": "guia.pdf", "ubicacion": "?", "texto": "se inspeccionan cada hora"}]
     assert pasada1._candidato_de_ancla(o, anclas, Corpus([NORMA])) is None
+
+
+# ---------- Reglas aflojadas (PLAN.md §0, decisión 10) ----------
+
+def test_la_norma_se_compara_en_cuatro_puntos():
+    assert pasada1.COMPARACIONES == ["numero", "termino", "cantidades", "obligacion"]
+    esquema = pasada1.ESQUEMA["properties"]["oraciones"]["items"]["properties"]["comparacion"]
+    assert esquema["required"] == pasada1.COMPARACIONES
+
+
+def test_el_orden_o_quien_distintos_ya_no_bastan_para_no_coincidir():
+    o = oracion(1, "Inspección, transparencia y adaptación son los tres pilares de Scrum.")
+    resultado, _ = correr([o], {"oraciones": [respuesta(
+        1, "norma", fuente="guia.pdf", pasaje="Scrum tiene tres pilares: transparencia, inspección y adaptación",
+        numero="no aplica", termino="igual", cantidades="igual", obligacion="no aplica", orden="distinto")]})
+    assert resultado.filas[o["huella"]]["veredicto"] == "coincide"
+
+
+def test_un_resumen_con_en_este_curso_no_se_compara_punto_por_punto():
+    o = oracion(1, "En este curso, resumimos la norma: los artefactos se revisan a menudo.")
+    sin_comparacion = respuesta(1, "norma", fuente="guia.pdf", pasaje="Los artefactos deben inspeccionarse con frecuencia",
+                                obligacion="distinto")
+    del sin_comparacion["comparacion"]["numero"]
+    resultado, _ = correr([o], {"oraciones": [sin_comparacion]})
+    assert resultado.filas[o["huella"]]["veredicto"] == "coincide"
+
+
+def test_un_resumen_que_contradice_sigue_sin_coincidir_y_necesita_su_pasaje():
+    contradice = oracion(1, "En este curso, resumimos: los artefactos no se revisan.")
+    inventado = oracion(2, "En este curso, resumimos: Scrum tiene cinco pilares.")
+    resultado, _ = correr([contradice, inventado], {"oraciones": [
+        respuesta(1, "norma", "no coincide", fuente="guia.pdf", pasaje="Los artefactos deben inspeccionarse con frecuencia"),
+        respuesta(2, "norma", fuente="guia.pdf", pasaje="Scrum tiene cinco pilares")]})
+    assert resultado.filas[contradice["huella"]]["veredicto"] == "no coincide"
+    assert resultado.filas[inventado["huella"]]["veredicto"] == "sin fuente"
+
+
+def test_la_ia_recibe_la_regla_de_cuatro_puntos_y_no_la_de_siete():
+    o = oracion(1, "Los artefactos se revisan.")
+    _, consulta = correr([o], {"oraciones": [respuesta(1, "sin afirmación")]})
+    pedido = consulta.llamadas[0]["prompt"]
+    assert pasada1.REGLA_NORMA_DE_AULALISTA in pedido
+    assert "estas siete cosas" not in pedido and "las siete cosas" not in pedido

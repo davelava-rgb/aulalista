@@ -2,7 +2,9 @@
 
 1. El programa elige para cada oración los tres pasajes más parecidos de las fuentes y las fichas.
 2. La IA recibe grupos de unas 20 oraciones con sus pasajes y da a cada una un tipo, el pasaje
-   copiado tal cual, su fuente y un veredicto. En las normas compara siete cosas, una por una.
+   copiado tal cual, su fuente y un veredicto. En las normas compara cuatro cosas, una por una (PLAN.md §0,
+   decisión 10: excepción a la skill, que pide siete). Un resumen de la norma que dice «en este curso» solo
+   se juzga por si contradice o agrega algo.
 3. El programa comprueba que cada pasaje exista tal cual y pone la ubicación real.
    Si no existe, la oración queda «sin fuente».
 4. Sin IA: los títulos son «sin afirmación»; una regla del curso debe decir «en este curso».
@@ -16,7 +18,7 @@ from app.validacion.pasajes import FICHA_DE_LA_SESION, FICHA_DEL_CURSO, Corpus, 
 
 TIPOS = ["norma", "dato del caso", "cálculo", "regla del curso", "instrucción", "sin afirmación"]
 VEREDICTOS = ["coincide", "no coincide", "sin fuente"]
-COMPARACIONES = ["numero", "termino", "cantidades", "orden", "quien", "obligacion", "generalizacion"]
+COMPARACIONES = ["numero", "termino", "cantidades", "obligacion"]
 NO_APLICA = "no aplica"
 FICHAS = (FICHA_DEL_CURSO, FICHA_DE_LA_SESION)
 TAMANO_GRUPO = 40
@@ -55,18 +57,41 @@ Para cada oración devuelve:
   Copia solo el fragmento que sostiene la oración, de 40 palabras como máximo, sin cortar palabras.
 - veredicto: coincide, no coincide o sin fuente.
 - motivo: 12 palabras como máximo.
-- comparacion: SOLO en el tipo norma, compara una por una las siete cosas con «igual», «distinto» o «no aplica»:
-  numero (de cláusula o de control), termino (el nombre del término), cantidades, orden, quien (hace la acción),
-  obligacion («debe» o «puede») y generalizacion («todos», «solo», «siempre», «las mismas»).
+- comparacion: SOLO en el tipo norma, compara una por una las cuatro cosas con «igual», «distinto» o «no aplica»:
+  numero (de cláusula o de control), termino (el nombre del término), cantidades y obligacion («debe» o «puede»).
   Una sola diferencia es «no coincide». En los demás tipos, no escribas «comparacion».
+  El orden, quién hace la acción y las palabras que generalizan no se comparan una por una: una oración que
+  contradice al pasaje o le agrega una afirmación es «no coincide», aunque las cuatro cosas sean iguales.
 Reglas por tipo:
 - Norma: el pasaje sale de una fuente del curso, nunca de una ficha. Si la oración dice «en este curso» porque
-  resume, agrupa o reordena la norma, compárala igual con su pasaje: coincide si no agrega ni contradice nada.
+  resume, agrupa o reordena la norma, no la compares punto por punto: coincide si no contradice al pasaje ni le
+  agrega una afirmación. Igual necesita su pasaje copiado tal cual.
 - Dato del caso: el pasaje es la línea de la ficha que contiene el dato. Si ninguna ficha lo contiene, es «sin fuente».
 - Regla del curso: es una regla que ninguna fuente dice. La oración debe decir «en este curso». Deja el pasaje vacío.
 - Instrucción: el pasaje es la línea de la ficha de la que sale. Si no sale de ninguna, deja el pasaje vacío.
 - Sin afirmación: títulos, rótulos y oraciones que no afirman nada. Deja el pasaje vacío.
 """
+
+
+REGLA_NORMA_DE_LA_SKILL = (
+    '- Norma: la oración no puede decir más ni menos que el pasaje. Compara una por una estas siete cosas: el número '
+    'de cláusula o de control, el nombre del término, las cantidades ("las siete opciones"), el orden ("la segunda"), '
+    'quién hace la acción, si es obligación o posibilidad ("debe" o "puede") y las palabras que generalizan ("todos", '
+    '"solo", "siempre", "las mismas"). Una sola diferencia es "no coincide".')
+REGLA_NORMA_DE_AULALISTA = (
+    '- Norma: la oración no puede contradecir al pasaje ni agregarle una afirmación. Compara una por una estas cuatro '
+    'cosas: el número de cláusula o de control, el nombre del término, las cantidades ("las siete opciones") y si es '
+    'obligación o posibilidad ("debe" o "puede"). Una sola diferencia es "no coincide". Un resumen que dice "en este '
+    'curso" solo se juzga por si contradice o agrega algo.')
+
+
+def reglas_de_la_skill() -> str:
+    """La subsección de la skill con la excepción aprobada (PLAN.md §0, decisión 10). Si la skill cambia esa
+    regla, el programa se detiene: hay que revisar la excepción antes de seguir."""
+    texto = skill.subseccion("Primera pasada · Veracidad")
+    if REGLA_NORMA_DE_LA_SKILL not in texto:
+        raise KeyError("La regla de las normas de SKILL.md cambió. Revisa la decisión 10 de PLAN.md.")
+    return texto.replace(REGLA_NORMA_DE_LA_SKILL, REGLA_NORMA_DE_AULALISTA)
 
 
 @dataclass
@@ -94,7 +119,7 @@ def _pedido(grupo: list[dict], candidatos: dict[int, list[dict]], fuentes: list[
         bloques.append("\n".join(lineas))
     return "\n".join([
         "Revisa la veracidad de cada oración de este material, como dice la skill:",
-        skill.subseccion("Primera pasada · Veracidad"),
+        reglas_de_la_skill(),
         INSTRUCCIONES,
         "Fuentes disponibles: " + ", ".join(fuentes),
         "",
@@ -139,10 +164,11 @@ def _revisar(o: dict, respuesta: dict, corpus: Corpus, candidatos: list[dict],
 
     if tipo == "norma" and veredicto == "coincide":
         comparacion = respuesta.get("comparacion")
-        if not comparacion:
+        resumen = "en este curso" in normal(o["texto"])   # un resumen no se compara punto por punto
+        if not comparacion and not resumen:
             return {"tipo": tipo, "pasaje": pasaje, "fuente": fuente, "veredicto": "no coincide",
-                    "motivo": "Faltó comparar la oración con la norma en sus siete puntos."}
-        distintas = [c for c, v in comparacion.items() if v == "distinto"]
+                    "motivo": "Faltó comparar la oración con la norma en sus cuatro puntos."}
+        distintas = [] if resumen else [c for c, v in comparacion.items() if c in COMPARACIONES and v == "distinto"]
         if distintas:
             veredicto = "no coincide"
             motivo = f"Difiere de la fuente en: {', '.join(distintas)}. {motivo}"
