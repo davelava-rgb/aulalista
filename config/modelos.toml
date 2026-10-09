@@ -38,5 +38,13 @@ max_turns = 20
 # Primera pasada: veracidad, oración por oración, en grupos de unas 20 oraciones.
 [pasada1]
 modelo = "claude-sonnet-5-5"
-tope_usd = 0.60
+tope_usd = 1.00
 max_turns = 12
+esfuerzo = "low"
+
+# Corrección de oraciones sueltas: devuelve solo las oraciones que cambian.
+[correccion_oraciones]
+modelo = "claude-sonnet-5-5"
+tope_usd = 0.60
+max_turns = 10
+esfuerzo = "medium"

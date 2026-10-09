@@ -46,6 +46,12 @@ def con_error(oracion: str) -> dict:
     return contenido
 
 
+def cambios(*pares, explicaciones=None, datos_nuevos=None):
+    """Respuesta simulada de una corrección por oraciones."""
+    return {"cambios": [{"oracion": a, "nueva": b} for a, b in pares],
+            "explicaciones": explicaciones or [], "datos_nuevos": datos_nuevos or []}
+
+
 def una_pagina(_ruta):
     return 2
 
@@ -197,20 +203,24 @@ def test_lectura_limpia_queda_verificada_en_una_vuelta(sesion):
 
 def test_una_falla_se_corrige_y_se_verifica_de_nuevo(sesion):
     material, consulta = generar(sesion, con_error("Lee este bloque en 10 minutos."),
-                                 {"lectura": LIMPIA, "explicaciones": [], "datos_nuevos": []}, pasada())
+                                 cambios(("Lee este bloque en 10 minutos.", "")), pasada())
     assert material["estado"] == "verificada"
     assert len(consulta.llamadas) == 3
     assert material["correcciones"] == {"verificador": 1, "primera pasada": 0}
+    correccion = consulta.llamadas[1]["options"]
+    assert (correccion.model, correccion.max_budget_usd, correccion.effort) == ("claude-sonnet-5-5", 0.60, "medium")
+    contenido = lectura.archivos(sesion, 1)["contenido"].read_text(encoding="utf-8")
+    assert "10 minutos" not in contenido
     pedido = consulta.llamadas[1]["prompt"]
-    assert "FALLA · tiempo · «Lee este bloque en 10 minutos.»" in pedido
-    assert consulta.llamadas[1]["options"].max_budget_usd == 1.50
+    assert pedido.startswith("REGLAS DE LA SKILL")  # la parte fija va primero
+    assert pedido.rstrip().endswith("FALLA · tiempo · «Lee este bloque en 10 minutos.»: dice «minutos»")
 
 
 def test_un_aviso_explicado_queda_anotado_en_el_excel(sesion):
     oracion = "Algunas tiendas revisan su tablero cada día."
-    material, _ = generar(sesion, con_error(oracion), {"lectura": con_error(oracion), "explicaciones": [
-        {"regla": "palabra imprecisa", "oracion": oracion, "explicacion": "El caso no dice cuántas tiendas."}],
-        "datos_nuevos": []}, pasada())
+    material, consulta = generar(sesion, con_error(oracion), pasada(), cambios(explicaciones=[
+        {"regla": "palabra imprecisa", "oracion": oracion, "explicacion": "El caso no dice cuántas tiendas."}]))
+    assert len(consulta.llamadas) == 3  # el aviso va en la corrección de la pasada: no gasta una vuelta propia
     assert material["estado"] == "verificada"
     hoja = openpyxl.load_workbook(lectura.archivos(sesion, 1)["excel"])["Hallazgos"]
     filas = [[c.value for c in f] for f in hoja.iter_rows(min_row=2)]
@@ -237,7 +247,7 @@ def test_una_estructura_invalida_se_pide_corregir(sesion):
 
 def test_despues_del_tope_de_correcciones_queda_con_fallas(sesion):
     mala = con_error("Lee este bloque en 10 minutos.")
-    respuesta = {"lectura": mala, "explicaciones": [], "datos_nuevos": []}
+    respuesta = cambios()
     material, consulta = generar(sesion, mala, *[respuesta] * lectura.MAX_CORRECCIONES)
     assert material["estado"] == "con fallas"
     assert len(consulta.llamadas) == 1 + lectura.MAX_CORRECCIONES
@@ -246,7 +256,7 @@ def test_despues_del_tope_de_correcciones_queda_con_fallas(sesion):
 
 def test_cada_llamada_queda_en_el_registro_de_tokens(sesion):
     from app import tokens
-    generar(sesion, con_error("Lee este bloque en 10 minutos."), {"lectura": LIMPIA, "explicaciones": [], "datos_nuevos": []},
+    generar(sesion, con_error("Lee este bloque en 10 minutos."), cambios(("Lee este bloque en 10 minutos.", "")),
             pasada())
     lineas = (sesion / "tokens.jsonl").read_text(encoding="utf-8").splitlines()
     etapas = [__import__("json").loads(l)["etapa"] for l in lineas]
@@ -307,10 +317,52 @@ def test_una_configuracion_rota_se_detecta_antes_de_gastar_tokens(sesion):
 
 def test_un_aviso_explicado_con_la_oracion_copiada_con_diferencias_no_vuelve(sesion):
     oracion = "Algunas tiendas revisan su tablero cada día."
-    material, consulta = generar(sesion, con_error(oracion), {"lectura": con_error(oracion), "explicaciones": [
+    material, consulta = generar(sesion, con_error(oracion), pasada(), cambios(explicaciones=[
         {"regla": "Palabra imprecisa", "oracion": "«algunas tiendas revisan su tablero cada dia»",
-         "explicacion": "El caso no dice cuántas tiendas."}], "datos_nuevos": []}, pasada())
+         "explicacion": "El caso no dice cuántas tiendas."}]))
     assert material["estado"] == "verificada"
-    assert len(consulta.llamadas) == 3  # redacción, una corrección y la primera pasada
+    assert len(consulta.llamadas) == 3  # redacción, primera pasada y una corrección
     hoja = openpyxl.load_workbook(lectura.archivos(sesion, 1)["excel"])["Hallazgos"]
     assert hoja["F2"].value == "El caso no dice cuántas tiendas."
+
+
+# ---------- Corrección por oraciones ----------
+
+def test_aplicar_cambios_reemplaza_y_elimina_dentro_de_los_parrafos():
+    datos = copy.deepcopy(LIMPIA)
+    datos["bloques"][0]["parrafos"] = ["Primera oración. Segunda oración.", "Sola."]
+    nuevo, no_encontradas = lectura.aplicar_cambios(datos, [
+        {"oracion": "Segunda oración.", "nueva": "Segunda corregida."},
+        {"oracion": "Sola.", "nueva": ""},
+        {"oracion": "Primero", "nueva": "Encabezado"},
+        {"oracion": "No existe.", "nueva": "x"},
+    ])
+    assert nuevo["bloques"][0]["parrafos"] == ["Primera oración. Segunda corregida."]
+    assert nuevo["bloques"][0]["tabla"]["filas"][0][0] == "Encabezado"
+    assert no_encontradas == ["No existe."]
+    assert datos["bloques"][0]["parrafos"] == ["Primera oración. Segunda oración.", "Sola."]  # no cambia el original
+
+
+def test_borrar_una_celda_no_descuadra_la_tabla_ni_toca_los_pasajes():
+    datos = copy.deepcopy(LIMPIA)
+    datos["pasajes"][0]["texto"] = "Las personas"
+    nuevo, _ = lectura.aplicar_cambios(datos, [{"oracion": "Las personas", "nueva": ""}])
+    assert nuevo["bloques"][0]["tabla"]["filas"][0] == ["Primero", ""]
+    assert nuevo["pasajes"][0]["texto"] == "Las personas"
+
+
+def test_un_problema_del_documento_entero_pide_la_correccion_completa(sesion):
+    paginas = iter([7, 5])
+    material, consulta = generar(sesion, LIMPIA, {"lectura": LIMPIA, "explicaciones": [], "datos_nuevos": []},
+                                 pasada(), contar_paginas=lambda _: next(paginas))
+    assert consulta.llamadas[1]["options"].model == "claude-opus-5-5"
+    assert material["estado"] == "verificada"
+
+
+
+def test_la_explicacion_vale_aunque_la_regla_venga_con_su_nivel():
+    from app.validacion import verificador
+    oracion = 'Si se aplican solo algunas partes, "el resultado final no es Scrum".'
+    explicaciones = {verificador.clave_de_hallazgo("AVISO · palabra imprecisa", oracion): "Viene de la fuente."}
+    assert verificador.buscar_explicacion("palabra imprecisa", oracion, explicaciones) == "Viene de la fuente."
+    assert verificador.buscar_explicacion("oración larga", oracion, explicaciones) is None

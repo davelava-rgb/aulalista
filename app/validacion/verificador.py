@@ -76,7 +76,8 @@ def buscar_explicacion(regla: str, oracion: str, explicaciones: dict) -> str | N
     regla_buscada, oracion_buscada = clave.split("\n", 1)
     for otra, explicacion in explicaciones.items():
         regla_otra, oracion_otra = otra.split("\n", 1)
-        if regla_otra == regla_buscada and oracion_otra and oracion_buscada and (
+        # La IA a veces copia la regla con su nivel o con la línea entera del problema.
+        if regla_buscada and regla_buscada in regla_otra and oracion_otra and oracion_buscada and (
                 oracion_otra in oracion_buscada or oracion_buscada in oracion_otra):
             return explicacion
     return None

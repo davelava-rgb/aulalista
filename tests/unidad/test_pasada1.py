@@ -121,10 +121,10 @@ def test_las_oraciones_sin_cambios_conservan_su_resultado():
     assert consulta.llamadas == [] and resultado.filas[o["huella"]] == guardada
 
 
-def test_las_oraciones_van_en_grupos_de_veinte_con_sus_candidatos():
+def test_las_oraciones_van_en_grupos_de_cuarenta_con_sus_candidatos():
     oraciones = [oracion(n, f"Scrum tiene tres pilares, oración {n}.") for n in range(1, 46)]
-    resultado, consulta = correr(oraciones, pasada(), pasada(), pasada())
-    assert len(consulta.llamadas) == 3
+    resultado, consulta = correr(oraciones, pasada(), pasada())
+    assert len(consulta.llamadas) == 2
     assert resultado.enviadas_a_la_ia == 45
     primero = consulta.llamadas[0]["prompt"]
     assert "(guia.pdf · página 35 · número impreso 54) Scrum tiene tres pilares" in primero
@@ -132,6 +132,8 @@ def test_las_oraciones_van_en_grupos_de_veinte_con_sus_candidatos():
     opciones = consulta.llamadas[0]["options"]
     assert opciones.allowed_tools == [herramientas.BUSCAR] and opciones.tools == []
     assert opciones.model == "claude-sonnet-5-5"
+    assert opciones.effort == "low"
+    assert primero.index("### Primera pasada") < primero.index("ORACIONES:")  # la parte fija va primero
 
 
 def test_la_herramienta_de_busqueda_devuelve_pasajes_con_su_ubicacion():
@@ -169,7 +171,7 @@ def test_lectura_sin_fuente_se_corrige_con_un_dato_nuevo_del_caso(sesion):  # no
     material, consulta = generar(
         sesion, con_dato,
         pasada({inventada: {"tipo": "dato del caso", "veredicto": "sin fuente", "pasaje": ""}}),
-        {"lectura": con_dato, "explicaciones": [], "datos_nuevos": ["Plan de inducción del ejemplo: seis meses"]},
+        {"cambios": [], "explicaciones": [], "datos_nuevos": ["Plan de inducción del ejemplo: seis meses"]},
         pasada({inventada: {"tipo": "dato del caso", "fuente": "ficha del curso",
                             "pasaje": "Plan de inducción del ejemplo: seis meses"}}),
     )
@@ -219,3 +221,24 @@ def test_las_notas_de_la_ficha_no_entran_en_el_pasaje(sesion):  # noqa: F811
     almacen.guardar(sesion, "curso", None, ficha)
     pasajes = _lineas_de_ficha(almacen.ruta_ficha(sesion, "curso", extension=".md"))
     assert {"texto": "Soles", "ubicacion": "Moneda y país de los casos"} in pasajes
+
+
+
+def test_una_oracion_escrita_tal_cual_en_la_fuente_se_aprueba_sin_ia():
+    norma = oracion(1, "Los artefactos deben inspeccionarse con frecuencia.")
+    dato = oracion(2, "Duración de cada Sprint: dos semanas")
+    corta = oracion(3, "Scrum tiene tres pilares")  # está tal cual, pero tiene menos de cinco palabras
+    resultado, consulta = correr([norma, dato, corta], pasada())
+    assert resultado.aprobadas_por_programa == 2
+    assert resultado.filas[norma["huella"]]["tipo"] == "norma"
+    assert resultado.filas[norma["huella"]]["fuente"] == "guia.pdf, página 37 · número impreso 56"
+    assert resultado.filas[dato["huella"]]["tipo"] == "dato del caso"
+    assert consulta.llamadas[0]["prompt"].count("Oración:") == 1
+
+
+def test_una_norma_sin_su_comparacion_no_queda_aprobada():
+    o = oracion(1, "Scrum tiene tres pilares según la guía.")
+    sin_comparacion = respuesta(1, "norma", fuente="guia.pdf", pasaje="Scrum tiene tres pilares")
+    del sin_comparacion["comparacion"]
+    resultado, _ = correr([o], {"oraciones": [sin_comparacion]})
+    assert resultado.filas[o["huella"]]["veredicto"] == "no coincide"

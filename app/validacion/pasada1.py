@@ -19,7 +19,8 @@ VEREDICTOS = ["coincide", "no coincide", "sin fuente"]
 COMPARACIONES = ["numero", "termino", "cantidades", "orden", "quien", "obligacion", "generalizacion"]
 NO_APLICA = "no aplica"
 FICHAS = (FICHA_DEL_CURSO, FICHA_DE_LA_SESION)
-TAMANO_GRUPO = 20
+TAMANO_GRUPO = 40
+PALABRAS_MINIMAS_PARA_APROBAR_SIN_IA = 5
 
 ESQUEMA = {
     "type": "object",
@@ -38,7 +39,7 @@ ESQUEMA = {
                 "required": COMPARACIONES, "additionalProperties": False,
             },
         },
-        "required": ["n", "tipo", "fuente", "pasaje", "veredicto", "motivo", "comparacion"],
+        "required": ["n", "tipo", "fuente", "pasaje", "veredicto", "motivo"],
         "additionalProperties": False,
     }}},
     "required": ["oraciones"],
@@ -51,12 +52,13 @@ Para cada oración devuelve:
 - fuente y pasaje: el pasaje copiado tal cual, en su idioma original, y el nombre exacto de su fuente
   (un archivo de la lista, «ficha del curso» o «ficha de la sesión»). Encuéntralo entre los candidatos
   o con la herramienta buscar_en_fuentes. No lo escribas de memoria. Copia solo palabras que están en la fuente.
+  Copia solo el fragmento que sostiene la oración, de 40 palabras como máximo, sin cortar palabras.
 - veredicto: coincide, no coincide o sin fuente.
-- motivo: una oración que explique el veredicto.
-- comparacion: solo para el tipo norma, compara una por una las siete cosas con «igual» o «distinto»:
+- motivo: 12 palabras como máximo.
+- comparacion: SOLO en el tipo norma, compara una por una las siete cosas con «igual», «distinto» o «no aplica»:
   numero (de cláusula o de control), termino (el nombre del término), cantidades, orden, quien (hace la acción),
   obligacion («debe» o «puede») y generalizacion («todos», «solo», «siempre», «las mismas»).
-  Una sola diferencia es «no coincide». Para los demás tipos, pon «no aplica» en las siete.
+  Una sola diferencia es «no coincide». En los demás tipos, no escribas «comparacion».
 Reglas por tipo:
 - Norma: el pasaje sale de una fuente del curso, nunca de una ficha. Si la oración dice «en este curso» porque
   resume, agrupa o reordena la norma, compárala igual con su pasaje: coincide si no agrega ni contradice nada.
@@ -71,6 +73,7 @@ Reglas por tipo:
 class Resultado:
     filas: dict[str, dict] = field(default_factory=dict)       # huella → fila de la pasada
     enviadas_a_la_ia: int = 0
+    aprobadas_por_programa: int = 0
     pasajes_fuera_de_candidatos: int = 0
     busquedas: int = 0
 
@@ -135,13 +138,32 @@ def _revisar(o: dict, respuesta: dict, corpus: Corpus, candidatos: list[dict],
         fuente = f"{fuente}, {ubicacion}"
 
     if tipo == "norma" and veredicto == "coincide":
-        distintas = [c for c, v in respuesta["comparacion"].items() if v == "distinto"]
+        comparacion = respuesta.get("comparacion")
+        if not comparacion:
+            return {"tipo": tipo, "pasaje": pasaje, "fuente": fuente, "veredicto": "no coincide",
+                    "motivo": "Faltó comparar la oración con la norma en sus siete puntos."}
+        distintas = [c for c, v in comparacion.items() if v == "distinto"]
         if distintas:
             veredicto = "no coincide"
             motivo = f"Difiere de la fuente en: {', '.join(distintas)}. {motivo}"
     if veredicto == "sin fuente":
         pasaje = pasaje or "(sin pasaje)"
     return {"tipo": tipo, "pasaje": pasaje, "fuente": fuente, "veredicto": veredicto, "motivo": motivo}
+
+
+def aprobar_sin_ia(o: dict, corpus: Corpus) -> dict | None:
+    """Una oración escrita tal cual en una fuente coincide con ella: el programa la aprueba sin IA.
+    Si está tal cual en una fuente del curso, es una norma; si está en una ficha, es un dato del caso."""
+    texto = o["texto"].strip()
+    if len(texto.split()) < PALABRAS_MINIMAS_PARA_APROBAR_SIN_IA:
+        return None
+    encontrada = corpus.ubicar_en_cualquiera(texto)
+    if encontrada is None:
+        return None
+    fuente, ubicacion = encontrada
+    tipo = "dato del caso" if fuente in FICHAS else "norma"
+    return {"tipo": tipo, "pasaje": texto.rstrip("."), "fuente": f"{fuente}, {ubicacion}", "veredicto": "coincide",
+            "motivo": "Está escrita tal cual en la fuente; lo comprobó el programa."}
 
 
 async def ejecutar(oraciones: list[dict], *, titulos: set[str], corpus: Corpus, anteriores: dict,
@@ -156,6 +178,9 @@ async def ejecutar(oraciones: list[dict], *, titulos: set[str], corpus: Corpus, 
             resultado.filas[o["huella"]] = anteriores[o["huella"]]
         elif o["texto"].strip() in titulos or o["seccion"].endswith(("· inicio", "· encabezado y pie")):
             resultado.filas[o["huella"]] = fila_sin_afirmacion()
+        elif (literal := aprobar_sin_ia(o, corpus)) is not None:
+            resultado.filas[o["huella"]] = literal
+            resultado.aprobadas_por_programa += 1
         else:
             pendientes.append(o)
     if not pendientes:

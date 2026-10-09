@@ -44,6 +44,8 @@ def opciones_base(tarea: str, clave: str, **extra) -> ClaudeAgentOptions:
         "max_turns": datos.get("max_turns", 1),
         "cwd": str(RAIZ),
     }
+    if "esfuerzo" in datos:
+        valores["effort"] = datos["esfuerzo"]  # «low» a «max»: cuánto razona antes de responder
     valores.update(extra)
     return ClaudeAgentOptions(**valores)
 
