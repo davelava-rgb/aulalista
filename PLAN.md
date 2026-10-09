@@ -28,6 +28,7 @@ Términos usados en este plan:
 | 6 | El redactor recibe las secciones de `SKILL.md` que necesita cada material, leídas por AulaLista. No se usa la carga de skills del SDK, porque con `setting_sources=["project"]` también carga el `CLAUDE.md` del proyecto (aprobado en la etapa 5a) |
 | 7 | Al llegar al tope de cinco vueltas, el programa elimina las oraciones que siguen sin coincidir con su fuente o que la segunda pasada marcó como relleno o ambiguas, y valida de nuevo. Un vacío, una inconsistencia o un punto de la lista de verificación que siga abierto queda en «Decisiones pendientes» y el material no se entrega (aprobado en la etapa 5c) |
 | 8 | Ahorro aprobado en la etapa 5b: correcciones por oración con Sonnet, pedidos con la parte fija primero, primera pasada en grupos de 40 con esfuerzo bajo, segunda pasada con esfuerzo alto solo en su primera revisión. La lectura se mantiene en 1.500 palabras como máximo (decisión del profesor en la etapa 5c) |
+| 9 | Las pasadas tienen su tope de cinco vueltas. Después, cada ronda del revisor independiente tiene hasta dos vueltas para corregir sus hallazgos y lo que esa corrección rompa. Peor caso: 5 + 3 × 2 = 11 vueltas (aprobado en la etapa 5d) |
 
 ### Contradicciones encontradas
 
@@ -253,11 +254,13 @@ Cada oración recibe una huella para saber cuáles son nuevas o cambiaron.
 
 1. Es una sesión nueva del SDK. No continúa la sesión del redactor.
 2. Su carpeta de trabajo tiene solo el texto del material final con oraciones numeradas, `fuentes_texto` y las dos fichas.
-3. Puede leer y buscar en esa carpeta. No puede escribir.
+3. Puede leer y buscar en esa carpeta. No puede escribir. Lo hace con cuatro herramientas propias: listar, leer, buscar un texto y buscar pasajes parecidos. Ninguna sale de la carpeta. No usa Read ni Grep de Claude Code, porque esas pueden leer cualquier archivo de la computadora, también los borradores.
 4. Recibe el pedido exacto de la skill y responde en JSON: número de oración, defecto y prueba.
 5. El programa comprueba que cada prueba citada exista.
-6. El redactor corrige el hallazgo o lo rechaza con el pasaje que lo contradice. Se anota en la columna "Revisor independiente".
+6. El redactor corrige el hallazgo o lo rechaza con el pasaje que lo contradice. El programa comprueba que ese pasaje exista tal cual. Si no existe, el hallazgo sigue abierto. Se anota en la columna "Revisor independiente".
 7. Con tres hallazgos válidos o más, se corrige y se lanza un revisor nuevo. Máximo tres rondas.
+8. Si la tercera ronda encuentra tres hallazgos o más, sus correcciones se validan con el verificador y las dos pasadas, pero no se lanza un cuarto revisor. La entrega lo avisa en "Qué no pude probar".
+9. Un hallazgo que sigue abierto al terminar sus dos vueltas queda en "Decisiones pendientes" y la lectura no se entrega.
 
 ### 5.5 Ciclo de corrección (etapa 5d)
 

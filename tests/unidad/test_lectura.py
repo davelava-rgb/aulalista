@@ -73,8 +73,13 @@ def sesion(entorno):
     return carpeta
 
 
-def generar(sesion, *salidas, contar_paginas=una_pagina):
-    consulta = consulta_en_secuencia(*salidas)
+SIN_HALLAZGOS = {"hallazgos": []}   # respuesta del revisor independiente cuando no encuentra errores
+
+
+def generar(sesion, *salidas, contar_paginas=una_pagina, revisor=True):
+    """revisor=True agrega al final la respuesta del revisor sin hallazgos. Si la lectura no termina
+    limpia, el revisor no corre y esa respuesta queda sin usar."""
+    consulta = consulta_en_secuencia(*salidas, *([SIN_HALLAZGOS] if revisor else []))
     material = asyncio.run(lectura.generar(sesion, "scrum", 1, consulta=consulta, contar_paginas=contar_paginas))
     return material, consulta
 
@@ -193,7 +198,8 @@ def test_lectura_limpia_queda_verificada_en_una_vuelta(sesion):
     assert material["estado"] == "verificada"
     assert material["resumen"].endswith("Fallas: 0 · Avisos: 0")
     assert rutas["word"].exists() and rutas["excel"].exists()
-    assert len(consulta.llamadas) == 3
+    assert len(consulta.llamadas) == 4   # redacción, las dos pasadas y el revisor independiente
+    assert "Busca errores en este material." in consulta.llamadas[3]["prompt"]
     opciones = consulta.llamadas[0]["options"]
     assert opciones.model == "claude-opus-5-5" and opciones.tools == ["Read", "Grep", "Glob"]
     assert "## Material 1 · Lectura" in consulta.llamadas[0]["prompt"]
@@ -205,7 +211,7 @@ def test_una_falla_se_corrige_y_se_verifica_de_nuevo(sesion):
     material, consulta = generar(sesion, con_error("Lee este bloque en 10 minutos."),
                                  cambios(("Lee este bloque en 10 minutos.", "")), pasada(), segunda())
     assert material["estado"] == "verificada"
-    assert len(consulta.llamadas) == 4
+    assert len(consulta.llamadas) == 5
     assert material["correcciones"] == {"verificador": 1, "primera pasada": 0, "segunda pasada": 0}
     correccion = consulta.llamadas[1]["options"]
     assert (correccion.model, correccion.max_budget_usd, correccion.effort) == ("claude-sonnet-5-5", 0.60, "medium")
@@ -220,7 +226,7 @@ def test_un_aviso_explicado_queda_anotado_en_el_excel(sesion):
     oracion = "Algunas tiendas revisan su tablero cada día."
     material, consulta = generar(sesion, con_error(oracion), pasada(), segunda(), cambios(explicaciones=[
         {"regla": "palabra imprecisa", "oracion": oracion, "explicacion": "El caso no dice cuántas tiendas."}]))
-    assert len(consulta.llamadas) == 4  # el aviso va en la corrección de la pasada: no gasta una vuelta propia
+    assert len(consulta.llamadas) == 5  # el aviso va en la corrección de la pasada: no gasta una vuelta propia
     assert material["estado"] == "verificada"
     hoja = openpyxl.load_workbook(lectura.archivos(sesion, 1)["excel"])["Hallazgos"]
     filas = [[c.value for c in f] for f in hoja.iter_rows(min_row=2)]
@@ -260,7 +266,7 @@ def test_cada_llamada_queda_en_el_registro_de_tokens(sesion):
             pasada(), segunda())
     lineas = (sesion / "tokens.jsonl").read_text(encoding="utf-8").splitlines()
     etapas = [__import__("json").loads(l)["etapa"] for l in lineas]
-    assert etapas[-4:] == ["redacción", "corrección 1", "primera pasada", "segunda pasada"]
+    assert etapas[-5:] == ["redacción", "corrección 1", "primera pasada", "segunda pasada", "revisor independiente 1"]
     assert tokens.total("scrum")["llamadas"] >= 2
 
 
@@ -280,7 +286,7 @@ def test_la_pagina_de_la_sesion_genera_y_permite_descargar(sesion, monkeypatch):
 
     async def generar_simulado(carpeta, curso, numero):
         llamadas.append(numero)
-        return await original(carpeta, curso, numero, consulta=consulta_en_secuencia(LIMPIA, pasada(), segunda()), contar_paginas=una_pagina)
+        return await original(carpeta, curso, numero, consulta=consulta_en_secuencia(LIMPIA, pasada(), segunda(), SIN_HALLAZGOS), contar_paginas=una_pagina)
 
     monkeypatch.setattr(lectura, "generar", generar_simulado)
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura", follow_redirects=False)
@@ -321,7 +327,7 @@ def test_un_aviso_explicado_con_la_oracion_copiada_con_diferencias_no_vuelve(ses
         {"regla": "Palabra imprecisa", "oracion": "«algunas tiendas revisan su tablero cada dia»",
          "explicacion": "El caso no dice cuántas tiendas."}]))
     assert material["estado"] == "verificada"
-    assert len(consulta.llamadas) == 4  # redacción, las dos pasadas juntas y una corrección
+    assert len(consulta.llamadas) == 5  # redacción, las dos pasadas juntas, una corrección y el revisor
     hoja = openpyxl.load_workbook(lectura.archivos(sesion, 1)["excel"])["Hallazgos"]
     assert hoja["F2"].value == "El caso no dice cuántas tiendas."
 
@@ -395,12 +401,12 @@ def test_un_defecto_que_cita_una_oracion_inexistente_se_descarta(sesion):
     inventado = {"tipo": "vacío", "bloque": "Pilares de Scrum", "oracion": "Esta oración no está.", "detalle": "x"}
     material, consulta = generar(sesion, LIMPIA, pasada(), segunda(defectos=[inventado]))
     assert material["estado"] == "verificada"
-    assert len(consulta.llamadas) == 3
+    assert len(consulta.llamadas) == 4   # sin corrección: después de las pasadas va el revisor
 
 
 def test_un_punto_de_la_lista_de_verificacion_sin_cumplir_se_corrige(sesion):
     punto = {"pregunta": "¿Hay contenido de sesiones posteriores?", "respuesta": "no", "detalle": "Menciona los roles."}
-    material, consulta = generar(sesion, LIMPIA, pasada(), segunda(lista_no=[punto]), cambios(), segunda())
+    material, consulta = generar(sesion, LIMPIA, pasada(), segunda(lista_no=[punto]), cambios())
     assert "LISTA DE VERIFICACIÓN · ¿Hay contenido de sesiones posteriores?: Menciona los roles." in consulta.llamadas[3]["prompt"]
     assert material["estado"] == "verificada"
 
@@ -433,7 +439,7 @@ def test_al_llegar_al_tope_el_programa_elimina_lo_que_sigue_sin_coincidir(sesion
     for _ in range(lectura.MAX_CORRECCIONES):
         secuencia += [cambios(), falla]
     material, consulta = generar(sesion, *secuencia)
-    assert len(consulta.llamadas) == len(secuencia)   # después del cierre no hay otra segunda pasada
+    assert len(consulta.llamadas) == len(secuencia) + 1   # sin otra segunda pasada después del cierre; luego, el revisor
     assert material["estado"] == "verificada"
     assert material["eliminadas_por_el_programa"] == [mala]
     assert mala not in lectura.archivos(sesion, 1)["contenido"].read_text(encoding="utf-8")

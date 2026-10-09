@@ -62,3 +62,9 @@ modelo = "claude-sonnet-5-5"
 tope_usd = 0.30
 max_turns = 3
 esfuerzo = "medium"
+
+# Revisor independiente: sesión nueva, solo lectura sobre su carpeta (material final, fuentes y fichas).
+[revisor]
+modelo = "claude-opus-5-5"
+tope_usd = 2.00
+max_turns = 30

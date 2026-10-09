@@ -313,6 +313,16 @@ def generar_lectura(curso: str, sesion: int):
     return RedirectResponse(destino, status_code=303)
 
 
+@app.post("/cursos/{curso}/sesiones/{sesion}/materiales/lectura/aprobar")
+def aprobar_lectura(curso: str, sesion: int):
+    destino = f"/cursos/{curso}/sesiones/{sesion}"
+    try:
+        lectura.aprobar(_carpeta(curso), sesion)
+    except lectura.NoSePuedeAprobar as error:
+        return RedirectResponse(destino + "?mensaje=" + quote(str(error)), status_code=303)
+    return RedirectResponse(destino + "?mensaje=" + quote("Lectura aprobada."), status_code=303)
+
+
 @app.get("/cursos/{curso}/sesiones/{sesion}/descargar/{archivo}")
 def descargar(curso: str, sesion: int, archivo: str):
     carpeta = lectura.carpeta_materiales(_carpeta(curso), sesion)
