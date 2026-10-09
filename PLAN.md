@@ -26,6 +26,8 @@ Términos usados en este plan:
 | 4 | El profesor llena las dos fichas en formularios de la página y las puede editar en cualquier momento. Un botón "Proponer desde las fuentes" llena los campos vacíos con datos de los archivos del curso, marcados "(propuesto)" y con su archivo de origen |
 | 5 | La lista inicial de lenguaje de IA es la de la sección 10 de este plan |
 | 6 | El redactor recibe las secciones de `SKILL.md` que necesita cada material, leídas por AulaLista. No se usa la carga de skills del SDK, porque con `setting_sources=["project"]` también carga el `CLAUDE.md` del proyecto (aprobado en la etapa 5a) |
+| 7 | Al llegar al tope de cinco vueltas, el programa elimina las oraciones que siguen sin coincidir con su fuente o que la segunda pasada marcó como relleno o ambiguas, y valida de nuevo. Un vacío, una inconsistencia o un punto de la lista de verificación que siga abierto queda en «Decisiones pendientes» y el material no se entrega (aprobado en la etapa 5c) |
+| 8 | Ahorro aprobado en la etapa 5b: correcciones por oración con Sonnet, pedidos con la parte fija primero, primera pasada en grupos de 40 con esfuerzo bajo, segunda pasada con esfuerzo alto solo en su primera revisión. La lectura se mantiene en 1.500 palabras como máximo (decisión del profesor en la etapa 5c) |
 
 ### Contradicciones encontradas
 
