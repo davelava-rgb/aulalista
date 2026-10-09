@@ -58,7 +58,18 @@ def nueva(tipo: str) -> dict:
 
 def cargar(carpeta_curso: Path, tipo: str, sesion: int | None = None) -> dict:
     ruta = ruta_ficha(carpeta_curso, tipo, sesion)
-    return json.loads(ruta.read_text(encoding="utf-8")) if ruta.exists() else nueva(tipo)
+    ficha = json.loads(ruta.read_text(encoding="utf-8")) if ruta.exists() else nueva(tipo)
+    quitar_faltas_viejas(ficha)
+    return ficha
+
+
+def quitar_faltas_viejas(ficha: dict) -> None:
+    """Quita «Falta definir» de los campos vacíos que ya no son obligatorios. Una ficha guardada antes de la
+    decisión 16 puede traer esa marca en «Público» o en «Empresa»."""
+    obligatorios = {c.id for c, s in plantillas.campos_de(ficha["tipo"]) if plantillas.es_obligatorio(c, s)}
+    for campo_id, dato in ficha["campos"].items():
+        if dato and dato.get("estado") == FALTA_DEFINIR and campo_id not in obligatorios and not dato.get("valor"):
+            dato["estado"] = ""
 
 
 def valor(ficha: dict, campo_id: str) -> str:

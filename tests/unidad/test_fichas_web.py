@@ -71,3 +71,27 @@ def test_proponer_sin_clave_avisa_sin_romper_la_pagina(curso, tmp_path):
     r = cliente.post("/cursos/scrum/ficha", data={"accion": "proponer"})
     assert r.status_code == 200
     assert "No hay clave de API" in r.text
+
+
+
+def test_una_ficha_guardada_antes_no_muestra_falta_definir_en_campos_opcionales(curso):
+    # Antes de la decisión 16, «Público» y «Empresa» eran obligatorios y quedaban marcados «Falta definir».
+    ficha = datos.ficha("curso", {"curso.nombre": "Scrum Master con IA"})
+    for campo_id in ("publico.quienes", "caso.empresa"):
+        ficha["campos"][campo_id] = {"valor": "", "origen": "", "estado": "falta definir"}
+    ficha["campos"]["curso.sesiones"] = {"valor": "", "origen": "", "estado": "falta definir"}
+    almacen.guardar(curso, "curso", None, ficha)
+    cargada = almacen.cargar(curso, "curso")
+    assert cargada["campos"]["publico.quienes"]["estado"] == ""
+    assert cargada["campos"]["caso.empresa"]["estado"] == ""
+    assert cargada["campos"]["curso.sesiones"]["estado"] == "falta definir"   # este sigue obligatorio
+    pagina = cliente.get("/cursos/scrum/ficha").text
+    assert pagina.count('class="marca alerta">Falta definir') == 1
+    assert "2. Público (obligatorio)" not in pagina and "Empresa o institución ficticia y rubro (obligatorio)" not in pagina
+
+
+def test_los_temas_de_la_lectura_dicen_que_se_exigen_al_generarla(curso):
+    almacen.guardar(curso, "curso", None, datos.ficha("curso", datos.CURSO))
+    flujo.confirmar_curso(curso)
+    pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
+    assert "Temas que debe cubrir (obligatorio para generar la lectura)" in pagina

@@ -271,7 +271,9 @@ def vista(tipo: str, campos: dict) -> list[dict]:
                     ]})
                 elementos.append({"repetible": True, "nombre": elemento.prefijo, "encabezado": elemento.encabezado.lstrip("- "), "bloques": bloques})
             elif elemento.tipo == "grupo":
-                elementos.append({"grupo": True, "etiqueta": elemento.etiqueta,
+                # Desde la decisión 16, los temas de la lectura se exigen al generarla, no al confirmar la ficha.
+                etiqueta = elemento.etiqueta.replace("(obligatorio)", "(obligatorio para generar la lectura)")
+                elementos.append({"grupo": True, "etiqueta": etiqueta,
                                   "campos": [dato(s, s.id, seccion) | {"obligatorio": False} for s in elemento.subcampos]})
             else:
                 elementos.append(dato(elemento, elemento.id, seccion))
