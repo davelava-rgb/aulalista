@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "arial",
+        "createdAt": "2026-10-09T02:30:17.989Z",
+        "reason": "Claude decided: Arial matches the font of the project's Excel model S1_Laboratorio_Verificacion.xlsx; internal tool page"
+      }
+    ]
+  }
+}
