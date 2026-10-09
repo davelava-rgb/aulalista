@@ -7,7 +7,7 @@ from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
 
-from app import config, tokens  # noqa: E402
+from app import config  # noqa: E402
 
 
 @pytest.fixture
@@ -16,7 +16,7 @@ def entorno(tmp_path, monkeypatch):
     ruta_env = tmp_path / ".env"
     carpeta_cursos = tmp_path / "cursos"
     monkeypatch.setattr(config, "RUTA_ENV", ruta_env)
-    monkeypatch.setattr(tokens, "CARPETA_CURSOS", carpeta_cursos)
+    monkeypatch.setattr(config, "CARPETA_CURSOS", carpeta_cursos)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     return {"env": ruta_env, "cursos": carpeta_cursos}
 

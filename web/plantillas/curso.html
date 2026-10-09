@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block titulo %}{{ nombre }} · AulaLista{% endblock %}
+{% block ruta %} › {{ nombre }}{% endblock %}
+
+{% block contenido %}
+<h1>{{ nombre }}</h1>
+
+<h2>Fuentes del curso</h2>
+<p>Sube sílabos, normas, programas y materiales anteriores. Formatos: PDF, Word, PowerPoint (.pptx), Excel (.xlsx) e imágenes.</p>
+
+<form method="post" action="/cursos/{{ curso }}/fuentes" enctype="multipart/form-data" class="fila">
+  <label for="archivos">Archivos</label>
+  <input id="archivos" name="archivos" type="file" multiple required>
+  <button type="submit">Subir</button>
+</form>
+
+{% if fuentes %}
+<table class="datos">
+  <thead>
+    <tr><th scope="col">Archivo</th><th scope="col">Estado</th><th scope="col">Pasajes</th><th scope="col">Revisión</th></tr>
+  </thead>
+  <tbody>
+    {% for f in fuentes %}
+    <tr>
+      <td>
+        {% if f.estado == "convertida" %}<a href="/cursos/{{ curso }}/fuentes/{{ f.archivo | urlencode }}">{{ f.archivo }}</a>{% else %}{{ f.archivo }}{% endif %}
+      </td>
+      <td>
+        {{ f.estado }}
+        {% if f.motivo %}<br><span class="nota">{{ f.motivo }}</span>{% endif %}
+        {% for a in f.avisos or [] %}<br><span class="nota">{{ a }}</span>{% endfor %}
+      </td>
+      <td>{{ f.pasajes if f.pasajes is defined else "" }}</td>
+      <td>
+        {% if f.revisar and not f.revisada %}<strong>Revisa el texto leído por IA</strong>
+        {% elif f.revisar %}Revisada{% else %}No hace falta{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<form method="post" action="/cursos/{{ curso }}/convertir" id="form-convertir">
+  <button type="submit" id="convertir">Convertir fuentes a texto</button>
+  <span class="nota">{{ pendientes }} sin convertir o con cambios. Las imágenes y las páginas escaneadas las lee Claude y gastan tokens.</span>
+</form>
+{% endif %}
+
+<p class="nota">Gasto de este curso: {{ gasto.llamadas }} llamadas, {{ "%.4f"|format(gasto.costo_usd) }} USD estimados.</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const formulario = document.getElementById("form-convertir");
+  if (formulario) {
+    formulario.addEventListener("submit", () => {
+      const boton = document.getElementById("convertir");
+      boton.disabled = true;
+      boton.textContent = "Convirtiendo… puede tardar";
+    });
+  }
+</script>
+{% endblock %}

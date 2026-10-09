@@ -27,7 +27,7 @@ body {
 }
 
 main {
-  max-width: 40rem;
+  max-width: 64rem;
   margin: 0 auto;
   padding: 2rem 1rem;
 }
@@ -66,3 +66,63 @@ th, td { padding: 0.35rem 1rem 0.35rem 0; text-align: left; }
 th { font-weight: normal; }
 td { font-weight: bold; }
 .nota { font-size: 0.875rem; opacity: 0.8; }
+
+a { color: var(--principal); }
+.ruta { font-size: 0.875rem; margin: 0 0 1rem; }
+
+.mensaje {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--principal);
+  border-radius: 6px;
+  background: var(--suave);
+}
+
+.fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin: 1rem 0;
+}
+
+input {
+  min-height: 44px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--texto);
+  border-radius: 6px;
+  background: var(--fondo);
+  color: var(--texto);
+  font: inherit;
+}
+
+input[type="file"] { padding: 0.5rem; }
+input:focus-visible { outline: 3px solid var(--principal); outline-offset: 2px; }
+
+.lista { padding-left: 1.25rem; }
+
+table.datos {
+  width: 100%;
+  margin: 1rem 0;
+  font-size: 0.9375rem;
+}
+
+table.datos th {
+  padding: 0.5rem;
+  background: var(--principal);
+  color: var(--fondo);
+  font-weight: bold;
+}
+
+table.datos td {
+  padding: 0.5rem;
+  font-weight: normal;
+  vertical-align: top;
+}
+
+table.datos tbody tr:nth-child(even) { background: var(--suave); }
+table.datos tr.ia td { font-style: italic; }
+table.datos .ubicacion { white-space: nowrap; font-size: 0.8125rem; }
+
+@media (max-width: 40rem) {
+  table.datos .ubicacion { white-space: normal; }
+}

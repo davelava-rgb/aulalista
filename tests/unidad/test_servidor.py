@@ -10,7 +10,7 @@ def test_la_pagina_responde_con_el_boton(entorno):
     r = cliente.get("/")
     assert r.status_code == 200
     assert "Probar conexión" in r.text
-    assert "Gasto registrado" in r.text
+    assert "Gasto de las pruebas de conexión" in r.text
 
 
 def test_probar_conexion_sin_clave_responde_el_mensaje(entorno):

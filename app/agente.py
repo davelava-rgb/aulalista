@@ -1,6 +1,7 @@
 """Único punto de contacto con el Claude Agent SDK (CLAUDE.md)."""
 
-from collections.abc import AsyncIterator, Callable
+import base64
+from collections.abc import AsyncIterable, AsyncIterator, Callable
 
 from claude_agent_sdk import (
     AssistantMessage,
@@ -40,7 +41,7 @@ def opciones_base(tarea: str, clave: str, **extra) -> ClaudeAgentOptions:
         },
         "setting_sources": [],
         "tools": [],
-        "max_turns": 1,
+        "max_turns": datos.get("max_turns", 1),
         "cwd": str(RAIZ),
     }
     valores.update(extra)
@@ -48,7 +49,7 @@ def opciones_base(tarea: str, clave: str, **extra) -> ClaudeAgentOptions:
 
 
 async def ejecutar(
-    pedido: str, opciones: ClaudeAgentOptions, consulta: Consulta = query
+    pedido: str | AsyncIterable[dict], opciones: ClaudeAgentOptions, consulta: Consulta = query
 ) -> tuple[str, ResultMessage]:
     """Envía un pedido y devuelve el texto de la respuesta y el resultado final."""
     partes: list[str] = []
@@ -93,3 +94,59 @@ async def probar_conexion(consulta: Consulta = query) -> dict:
         "tokens_salida": fila["tokens_salida"],
         "costo_usd": fila["costo_usd"],
     }
+
+
+ESQUEMA_LINEAS = {
+    "type": "object",
+    "properties": {"lineas": {"type": "array", "items": {"type": "string"}}},
+    "required": ["lineas"],
+    "additionalProperties": False,
+}
+
+PEDIDO_IMAGEN = (
+    "Transcribe todo el texto que se ve en esta imagen, tal cual, en su idioma original. "
+    "Una línea de la imagen por elemento de la lista, en orden de lectura. "
+    "No corrijas, no traduzcas, no resumas y no agregues nada. "
+    "Si la imagen no tiene texto, devuelve una lista vacía."
+)
+
+
+async def leer_imagen(
+    imagen: bytes, tipo: str, *, curso: str, etiqueta: str, consulta: Consulta = query
+) -> list[str]:
+    """Pide a Claude el texto de una imagen o de una página escaneada (SPEC §9).
+
+    El resultado lo revisa el profesor antes de usarlo.
+    """
+    clave = leer_clave()
+    opciones = opciones_base(
+        "lectura_imagen",
+        clave,
+        output_format={"type": "json_schema", "schema": ESQUEMA_LINEAS},
+    )
+
+    async def mensajes():
+        yield {
+            "type": "user",
+            "message": {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": tipo,
+                            "data": base64.b64encode(imagen).decode("ascii"),
+                        },
+                    },
+                    {"type": "text", "text": PEDIDO_IMAGEN},
+                ],
+            },
+            "parent_tool_use_id": None,
+        }
+
+    _, resultado = await ejecutar(mensajes(), opciones, consulta)
+    tokens.registrar(resultado, curso=curso, sesion="-", material=etiqueta, etapa="lectura_imagen")
+    if resultado.is_error or not isinstance(resultado.structured_output, dict):
+        raise ErrorDeAgente(_describir_error(resultado))
+    return [linea for linea in resultado.structured_output["lineas"] if linea.strip()]

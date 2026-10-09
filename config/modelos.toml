@@ -4,3 +4,9 @@
 [conexion]
 modelo = "claude-haiku-4-5-20251001"
 tope_usd = 0.05
+
+# Texto de imágenes y de páginas escaneadas. El profesor revisa el resultado.
+[lectura_imagen]
+modelo = "claude-sonnet-5-5"
+tope_usd = 0.20
+max_turns = 3

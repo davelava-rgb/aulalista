@@ -10,7 +10,7 @@ from pathlib import Path
 
 from claude_agent_sdk import ResultMessage
 
-from app.config import CARPETA_CURSOS
+from app import config
 
 CURSO_SISTEMA = "_sistema"
 
@@ -49,7 +49,7 @@ def registrar(
         "turnos": resultado.num_turns,
         "error": resultado.is_error,
     }
-    ruta = (carpeta_cursos or CARPETA_CURSOS) / curso / "tokens.jsonl"
+    ruta = (carpeta_cursos or config.CARPETA_CURSOS) / curso / "tokens.jsonl"
     ruta.parent.mkdir(parents=True, exist_ok=True)
     with open(ruta, "a", encoding="utf-8") as archivo:
         archivo.write(json.dumps(fila, ensure_ascii=False) + "\n")
@@ -59,7 +59,7 @@ def registrar(
 def total(curso: str, carpeta_cursos: Path | None = None) -> dict:
     """Suma los tokens y el costo estimado de un curso."""
     suma = {"llamadas": 0, "tokens_entrada": 0, "tokens_salida": 0, "costo_usd": 0.0}
-    ruta = (carpeta_cursos or CARPETA_CURSOS) / curso / "tokens.jsonl"
+    ruta = (carpeta_cursos or config.CARPETA_CURSOS) / curso / "tokens.jsonl"
     if not ruta.exists():
         return suma
     for linea in ruta.read_text(encoding="utf-8").splitlines():

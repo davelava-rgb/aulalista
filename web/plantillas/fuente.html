@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block titulo %}{{ archivo }} · AulaLista{% endblock %}
+{% block ruta %} › <a href="/cursos/{{ curso }}">{{ nombre }}</a> › {{ archivo }}{% endblock %}
+
+{% block contenido %}
+<h1>{{ archivo }}</h1>
+<p>Formato: {{ entrada.formato }}. Método: {{ entrada.metodo }}. Pasajes: {{ entrada.pasajes }}.</p>
+
+{% for a in entrada.avisos %}<p class="mensaje">{{ a }}</p>{% endfor %}
+
+{% if entrada.revisar %}
+  {% if entrada.revisada %}
+  <p class="mensaje">Revisaste el texto que leyó la IA.</p>
+  {% else %}
+  <p class="mensaje">Las filas marcadas «leída por IA» salieron de una imagen. Compáralas con el original antes de usarlas.</p>
+  <form method="post" action="/cursos/{{ curso }}/fuentes/{{ archivo | urlencode }}/revisada">
+    <button type="submit">Marcar como revisada</button>
+  </form>
+  {% endif %}
+{% endif %}
+
+<table class="datos">
+  <thead><tr><th scope="col">N</th><th scope="col">Ubicación</th><th scope="col">Texto</th></tr></thead>
+  <tbody>
+    {% for p in pasajes %}
+    <tr{% if p.origen == "ia" %} class="ia"{% endif %}>
+      <td>{{ p.n }}</td><td class="ubicacion">{{ p.ubicacion }}</td><td>{{ p.texto }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

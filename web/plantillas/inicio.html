@@ -1,68 +1,77 @@
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AulaLista</title>
-  <link rel="stylesheet" href="/estaticos/estilo.css">
-</head>
-<body>
-  <main>
-    <h1>AulaLista</h1>
-    <p>Etapa 1: comprueba que AulaLista se conecta con Claude usando la clave del archivo <code>.env</code>.</p>
+{% extends "base.html" %}
 
-    <button id="probar" type="button">Probar conexión</button>
-    <section id="resultado" aria-live="polite" hidden></section>
+{% block contenido %}
+<h1>AulaLista</h1>
 
-    <h2>Gasto registrado</h2>
-    <table>
-      <tbody>
-        <tr><th scope="row">Llamadas</th><td id="llamadas">{{ gasto.llamadas }}</td></tr>
-        <tr><th scope="row">Tokens de entrada</th><td id="entrada">{{ gasto.tokens_entrada }}</td></tr>
-        <tr><th scope="row">Tokens de salida</th><td id="salida">{{ gasto.tokens_salida }}</td></tr>
-        <tr><th scope="row">Costo estimado (USD)</th><td id="costo">{{ "%.4f"|format(gasto.costo_usd) }}</td></tr>
-      </tbody>
-    </table>
-    <p class="nota">El costo es la estimación del SDK, no la factura.</p>
-  </main>
+<h2>Cursos</h2>
+{% if cursos %}
+<ul class="lista">
+  {% for c in cursos %}<li><a href="/cursos/{{ c.curso }}">{{ c.nombre }}</a></li>{% endfor %}
+</ul>
+{% else %}
+<p>Todavía no hay cursos.</p>
+{% endif %}
 
-  <script>
-    const boton = document.getElementById("probar");
-    const resultado = document.getElementById("resultado");
+<form method="post" action="/cursos" class="fila">
+  <label for="nombre">Nombre del curso nuevo</label>
+  <input id="nombre" name="nombre" required maxlength="120">
+  <button type="submit">Crear curso</button>
+</form>
 
-    function mostrarGasto(g) {
-      document.getElementById("llamadas").textContent = g.llamadas;
-      document.getElementById("entrada").textContent = g.tokens_entrada;
-      document.getElementById("salida").textContent = g.tokens_salida;
-      document.getElementById("costo").textContent = g.costo_usd.toFixed(4);
-    }
+<h2>Conexión con Claude</h2>
+<p>Comprueba que AulaLista se conecta con Claude usando la clave del archivo <code>.env</code>.</p>
+<button id="probar" type="button">Probar conexión</button>
+<section id="resultado" aria-live="polite" hidden></section>
 
-    boton.addEventListener("click", async () => {
-      boton.disabled = true;
-      resultado.hidden = false;
-      resultado.className = "";
-      resultado.textContent = "Consultando a Claude…";
-      try {
-        const r = await fetch("/api/probar-conexion", { method: "POST" });
-        const datos = await r.json();
-        if (!r.ok) {
-          resultado.className = "error";
-          resultado.textContent = datos.error;
-        } else {
-          resultado.className = "bien";
-          resultado.textContent =
-            `Respuesta de Claude: «${datos.texto}». Modelo: ${datos.modelo}. ` +
-            `Tokens: ${datos.tokens_entrada} de entrada y ${datos.tokens_salida} de salida. ` +
-            `Costo estimado: ${datos.costo_usd.toFixed(4)} USD.`;
-          mostrarGasto(datos.gasto);
-        }
-      } catch (e) {
+<h3>Gasto de las pruebas de conexión</h3>
+<table>
+  <tbody>
+    <tr><th scope="row">Llamadas</th><td id="llamadas">{{ gasto.llamadas }}</td></tr>
+    <tr><th scope="row">Tokens de entrada</th><td id="entrada">{{ gasto.tokens_entrada }}</td></tr>
+    <tr><th scope="row">Tokens de salida</th><td id="salida">{{ gasto.tokens_salida }}</td></tr>
+    <tr><th scope="row">Costo estimado (USD)</th><td id="costo">{{ "%.4f"|format(gasto.costo_usd) }}</td></tr>
+  </tbody>
+</table>
+<p class="nota">El costo es la estimación del SDK, no la factura.</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const boton = document.getElementById("probar");
+  const resultado = document.getElementById("resultado");
+
+  function mostrarGasto(g) {
+    document.getElementById("llamadas").textContent = g.llamadas;
+    document.getElementById("entrada").textContent = g.tokens_entrada;
+    document.getElementById("salida").textContent = g.tokens_salida;
+    document.getElementById("costo").textContent = g.costo_usd.toFixed(4);
+  }
+
+  boton.addEventListener("click", async () => {
+    boton.disabled = true;
+    resultado.hidden = false;
+    resultado.className = "";
+    resultado.textContent = "Consultando a Claude…";
+    try {
+      const r = await fetch("/api/probar-conexion", { method: "POST" });
+      const datos = await r.json();
+      if (!r.ok) {
         resultado.className = "error";
-        resultado.textContent = "No se pudo hablar con el servidor local.";
-      } finally {
-        boton.disabled = false;
+        resultado.textContent = datos.error;
+      } else {
+        resultado.className = "bien";
+        resultado.textContent =
+          `Respuesta de Claude: «${datos.texto}». Modelo: ${datos.modelo}. ` +
+          `Tokens: ${datos.tokens_entrada} de entrada y ${datos.tokens_salida} de salida. ` +
+          `Costo estimado: ${datos.costo_usd.toFixed(4)} USD.`;
+        mostrarGasto(datos.gasto);
       }
-    });
-  </script>
-</body>
-</html>
+    } catch (e) {
+      resultado.className = "error";
+      resultado.textContent = "No se pudo hablar con el servidor local.";
+    } finally {
+      boton.disabled = false;
+    }
+  });
+</script>
+{% endblock %}
