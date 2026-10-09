@@ -24,3 +24,12 @@ def secciones(*titulos: str) -> str:
             raise KeyError(f"SKILL.md no tiene la sección «{titulo}».")
         encontradas.append(seccion.strip())
     return "\n\n".join(encontradas)
+
+
+def subseccion(titulo: str) -> str:
+    """Devuelve una subsección «### Título» completa, hasta el siguiente «### » o «## »."""
+    texto = RUTA.read_text(encoding="utf-8")
+    coincidencia = re.search(rf"(?ms)^### {re.escape(titulo)}.*?(?=^##)", texto + "\n##")
+    if coincidencia is None:
+        raise KeyError(f"SKILL.md no tiene la subsección «{titulo}».")
+    return coincidencia.group(0).strip()

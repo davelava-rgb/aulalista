@@ -25,6 +25,7 @@ Términos usados en este plan:
 | 3 | AulaLista usa solo la clave de API del `.env`. Sin clave, se detiene y avisa. No usa el plan Max como respaldo |
 | 4 | El profesor llena las dos fichas en formularios de la página y las puede editar en cualquier momento. Un botón "Proponer desde las fuentes" llena los campos vacíos con datos de los archivos del curso, marcados "(propuesto)" y con su archivo de origen |
 | 5 | La lista inicial de lenguaje de IA es la de la sección 10 de este plan |
+| 6 | El redactor recibe las secciones de `SKILL.md` que necesita cada material, leídas por AulaLista. No se usa la carga de skills del SDK, porque con `setting_sources=["project"]` también carga el `CLAUDE.md` del proyecto (aprobado en la etapa 5a) |
 
 ### Contradicciones encontradas
 
@@ -122,7 +123,7 @@ Funciones del SDK confirmadas en su documentación:
 - los decoradores `@tool` y `create_sdk_mcp_server`;
 - el campo `usage` y el costo estimado `total_cost_usd` en el resultado final.
 
-La skill se carga desde `.claude/skills/` con `setting_sources=["project"]`.
+La skill no se carga con el SDK: AulaLista lee de `SKILL.md` las secciones de cada material y se las pasa al redactor (decisión 6).
 
 ## 3. Estructura de carpetas
 

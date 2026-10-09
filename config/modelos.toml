@@ -34,3 +34,9 @@ max_turns = 40
 modelo = "claude-opus-5-5"
 tope_usd = 1.50
 max_turns = 20
+
+# Primera pasada: veracidad, oración por oración, en grupos de unas 20 oraciones.
+[pasada1]
+modelo = "claude-sonnet-5-5"
+tope_usd = 0.60
+max_turns = 12

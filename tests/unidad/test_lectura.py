@@ -17,7 +17,7 @@ from app.fichas import almacen, flujo
 from app.materiales import docx as generador
 from app.materiales import estilo, lectura
 from app.materiales.contenido import Lectura
-from tests.conftest import consulta_en_secuencia, consulta_simulada
+from tests.conftest import consulta_en_secuencia, consulta_simulada, pasada
 from tests.fixtures import fichas as datos
 from tests.unidad.test_fichas import con_fuente
 
@@ -182,12 +182,12 @@ def test_sin_fichas_confirmadas_no_empieza(entorno):
 
 
 def test_lectura_limpia_queda_verificada_en_una_vuelta(sesion):
-    material, consulta = generar(sesion, LIMPIA)
+    material, consulta = generar(sesion, LIMPIA, pasada())
     rutas = lectura.archivos(sesion, 1)
     assert material["estado"] == "verificada"
     assert material["resumen"].endswith("Fallas: 0 · Avisos: 0")
     assert rutas["word"].exists() and rutas["excel"].exists()
-    assert len(consulta.llamadas) == 1
+    assert len(consulta.llamadas) == 2
     opciones = consulta.llamadas[0]["options"]
     assert opciones.model == "claude-opus-5-5" and opciones.tools == ["Read", "Grep", "Glob"]
     assert "## Material 1 · Lectura" in consulta.llamadas[0]["prompt"]
@@ -197,9 +197,10 @@ def test_lectura_limpia_queda_verificada_en_una_vuelta(sesion):
 
 def test_una_falla_se_corrige_y_se_verifica_de_nuevo(sesion):
     material, consulta = generar(sesion, con_error("Lee este bloque en 10 minutos."),
-                                 {"lectura": LIMPIA, "explicaciones": []})
+                                 {"lectura": LIMPIA, "explicaciones": [], "datos_nuevos": []}, pasada())
     assert material["estado"] == "verificada"
-    assert len(consulta.llamadas) == 2
+    assert len(consulta.llamadas) == 3
+    assert material["correcciones"] == {"verificador": 1, "primera pasada": 0}
     pedido = consulta.llamadas[1]["prompt"]
     assert "FALLA · tiempo · «Lee este bloque en 10 minutos.»" in pedido
     assert consulta.llamadas[1]["options"].max_budget_usd == 1.50
@@ -208,18 +209,20 @@ def test_una_falla_se_corrige_y_se_verifica_de_nuevo(sesion):
 def test_un_aviso_explicado_queda_anotado_en_el_excel(sesion):
     oracion = "Algunas tiendas revisan su tablero cada día."
     material, _ = generar(sesion, con_error(oracion), {"lectura": con_error(oracion), "explicaciones": [
-        {"regla": "palabra imprecisa", "oracion": oracion, "explicacion": "El caso no dice cuántas tiendas."}]})
+        {"regla": "palabra imprecisa", "oracion": oracion, "explicacion": "El caso no dice cuántas tiendas."}],
+        "datos_nuevos": []}, pasada())
     assert material["estado"] == "verificada"
     hoja = openpyxl.load_workbook(lectura.archivos(sesion, 1)["excel"])["Hallazgos"]
     filas = [[c.value for c in f] for f in hoja.iter_rows(min_row=2)]
-    assert filas == [["AVISO", "S1_Lectura.docx · Pilares de Scrum", oracion, "palabra imprecisa", "algunas",
-                      "El caso no dice cuántas tiendas."]]
+    assert filas[0] == ["AVISO", "S1_Lectura.docx · Pilares de Scrum", oracion, "palabra imprecisa", "algunas",
+                        "El caso no dice cuántas tiendas."]
+    assert filas[1][-1] == "Enviado a corrección en la vuelta 1. Resuelto."  # el historial de la vuelta 1
 
 
 def test_mas_de_seis_paginas_es_falla_y_se_pide_acortar(sesion):
     paginas = iter([7, 5])
-    material, consulta = generar(sesion, LIMPIA, {"lectura": LIMPIA, "explicaciones": []},
-                                 contar_paginas=lambda _: next(paginas))
+    material, consulta = generar(sesion, LIMPIA, {"lectura": LIMPIA, "explicaciones": [], "datos_nuevos": []},
+                                 pasada(), contar_paginas=lambda _: next(paginas))
     assert "FALLA · páginas · S1_Lectura.docx: tiene 7 páginas; el máximo es 6" in consulta.llamadas[1]["prompt"]
     assert material["estado"] == "verificada"
 
@@ -227,14 +230,14 @@ def test_mas_de_seis_paginas_es_falla_y_se_pide_acortar(sesion):
 def test_una_estructura_invalida_se_pide_corregir(sesion):
     sin_bloques = copy.deepcopy(LIMPIA)
     sin_bloques["bloques"] = sin_bloques["bloques"][:1]
-    material, consulta = generar(sesion, sin_bloques, {"lectura": LIMPIA, "explicaciones": []})
+    material, consulta = generar(sesion, sin_bloques, {"lectura": LIMPIA, "explicaciones": [], "datos_nuevos": []}, pasada())
     assert "FALLA · estructura · bloques" in consulta.llamadas[1]["prompt"]
     assert material["estado"] == "verificada"
 
 
 def test_despues_del_tope_de_correcciones_queda_con_fallas(sesion):
     mala = con_error("Lee este bloque en 10 minutos.")
-    respuesta = {"lectura": mala, "explicaciones": []}
+    respuesta = {"lectura": mala, "explicaciones": [], "datos_nuevos": []}
     material, consulta = generar(sesion, mala, *[respuesta] * lectura.MAX_CORRECCIONES)
     assert material["estado"] == "con fallas"
     assert len(consulta.llamadas) == 1 + lectura.MAX_CORRECCIONES
@@ -243,15 +246,16 @@ def test_despues_del_tope_de_correcciones_queda_con_fallas(sesion):
 
 def test_cada_llamada_queda_en_el_registro_de_tokens(sesion):
     from app import tokens
-    generar(sesion, con_error("Lee este bloque en 10 minutos."), {"lectura": LIMPIA, "explicaciones": []})
+    generar(sesion, con_error("Lee este bloque en 10 minutos."), {"lectura": LIMPIA, "explicaciones": [], "datos_nuevos": []},
+            pasada())
     lineas = (sesion / "tokens.jsonl").read_text(encoding="utf-8").splitlines()
     etapas = [__import__("json").loads(l)["etapa"] for l in lineas]
-    assert etapas[-2:] == ["redacción", "corrección 1"]
+    assert etapas[-3:] == ["redacción", "corrección 1", "primera pasada"]
     assert tokens.total("scrum")["llamadas"] >= 2
 
 
 def test_el_word_real_cuenta_sus_paginas_con_word(sesion):
-    material, _ = generar(sesion, LIMPIA, contar_paginas=None)
+    material, _ = generar(sesion, LIMPIA, pasada(), contar_paginas=None)
     assert material["estado"] == "verificada"
 
 
@@ -266,7 +270,7 @@ def test_la_pagina_de_la_sesion_genera_y_permite_descargar(sesion, monkeypatch):
 
     async def generar_simulado(carpeta, curso, numero):
         llamadas.append(numero)
-        return await original(carpeta, curso, numero, consulta=consulta_en_secuencia(LIMPIA), contar_paginas=una_pagina)
+        return await original(carpeta, curso, numero, consulta=consulta_en_secuencia(LIMPIA, pasada()), contar_paginas=una_pagina)
 
     monkeypatch.setattr(lectura, "generar", generar_simulado)
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura", follow_redirects=False)
@@ -299,3 +303,14 @@ def test_una_configuracion_rota_se_detecta_antes_de_gastar_tokens(sesion):
         asyncio.run(lectura.generar(sesion, "scrum", 1, consulta=consulta, contar_paginas=una_pagina))
     assert consulta.llamadas == []
     assert lectura.estado(sesion, 1)["estado"] == "error"
+
+
+def test_un_aviso_explicado_con_la_oracion_copiada_con_diferencias_no_vuelve(sesion):
+    oracion = "Algunas tiendas revisan su tablero cada día."
+    material, consulta = generar(sesion, con_error(oracion), {"lectura": con_error(oracion), "explicaciones": [
+        {"regla": "Palabra imprecisa", "oracion": "«algunas tiendas revisan su tablero cada dia»",
+         "explicacion": "El caso no dice cuántas tiendas."}], "datos_nuevos": []}, pasada())
+    assert material["estado"] == "verificada"
+    assert len(consulta.llamadas) == 3  # redacción, una corrección y la primera pasada
+    hoja = openpyxl.load_workbook(lectura.archivos(sesion, 1)["excel"])["Hallazgos"]
+    assert hoja["F2"].value == "El caso no dice cuántas tiendas."

@@ -58,15 +58,35 @@ def ejecutar(configuracion: Path, archivos: list[Path], salida_excel: Path, expl
     return resultado
 
 
+def _comparable(texto: str) -> str:
+    return " ".join(verificar.normalizar(verificar.literal(texto or "")).strip(" .,;:\"'").split())
+
+
 def clave_de_hallazgo(regla: str, oracion: str) -> str:
-    return f"{regla}\n{oracion}"
+    """Clave tolerante: no cambia por mayúsculas, tildes, comillas, espacios ni el punto final."""
+    return f"{_comparable(regla)}\n{_comparable(oracion)}"
+
+
+def buscar_explicacion(regla: str, oracion: str, explicaciones: dict) -> str | None:
+    """Explicación de un aviso, aunque la IA haya copiado la oración con pequeñas diferencias
+    o solo una parte de ella."""
+    clave = clave_de_hallazgo(regla, oracion)
+    if clave in explicaciones:
+        return explicaciones[clave]
+    regla_buscada, oracion_buscada = clave.split("\n", 1)
+    for otra, explicacion in explicaciones.items():
+        regla_otra, oracion_otra = otra.split("\n", 1)
+        if regla_otra == regla_buscada and oracion_otra and oracion_buscada and (
+                oracion_otra in oracion_buscada or oracion_buscada in oracion_otra):
+            return explicacion
+    return None
 
 
 def anotar_explicaciones(salida_excel: Path, explicaciones: dict) -> None:
     libro = openpyxl.load_workbook(salida_excel)
     hoja = libro["Hallazgos"]
     for fila in hoja.iter_rows(min_row=2):
-        clave = clave_de_hallazgo(fila[3].value or "", fila[2].value or "")
-        if clave in explicaciones:
-            fila[5].value = explicaciones[clave]
+        explicacion = buscar_explicacion(fila[3].value or "", fila[2].value or "", explicaciones)
+        if explicacion:
+            fila[5].value = explicacion
     libro.save(salida_excel)

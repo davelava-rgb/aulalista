@@ -163,16 +163,20 @@ async def consultar(
     material: str = "-",
     cwd=None,
     herramientas: tuple[str, ...] = (),
+    servidores: dict | None = None,
     consulta: Consulta = query,
 ) -> dict:
     """Pedido con respuesta en JSON validado contra `esquema`.
 
-    Con `herramientas`, el agente solo puede usar esas (por ejemplo Read y Grep) y
-    todo lo demás queda denegado sin preguntar.
+    Con `herramientas`, el agente solo puede usar esas (por ejemplo Read y Grep, o una
+    herramienta propia «mcp__...» de `servidores`) y todo lo demás queda denegado sin preguntar.
     """
     extra = {"output_format": {"type": "json_schema", "schema": esquema}}
+    permitidas = [h for h in herramientas if not h.startswith("mcp__")]
     if herramientas:
-        extra.update(tools=list(herramientas), allowed_tools=list(herramientas), permission_mode="dontAsk")
+        extra.update(tools=permitidas, allowed_tools=list(herramientas), permission_mode="dontAsk")
+    if servidores:
+        extra["mcp_servers"] = servidores
     if cwd is not None:
         extra["cwd"] = str(cwd)
     opciones = opciones_base(tarea, leer_clave(), **extra)

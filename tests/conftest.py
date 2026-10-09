@@ -63,7 +63,28 @@ def consulta_en_secuencia(*salidas):
 
     async def consulta(*, prompt, options):
         llamadas.append({"prompt": prompt, "options": options})
-        yield resultado_simulado(structured_output=pendientes.pop(0))
+        salida = pendientes.pop(0)
+        yield resultado_simulado(structured_output=salida(prompt) if callable(salida) else salida)
 
     consulta.llamadas = llamadas
     return consulta
+
+
+SIN_COMPARAR = {c: "no aplica" for c in ("numero", "termino", "cantidades", "orden", "quien", "obligacion", "generalizacion")}
+
+
+def pasada(especiales: dict | None = None):
+    """Respuesta simulada de la primera pasada: lee las oraciones del pedido y las aprueba,
+    salvo las que tienen una respuesta especial (por texto de la oración)."""
+    import re as _re
+    especiales = especiales or {}
+
+    def responder(prompt):
+        oraciones = []
+        for n, texto in _re.findall(r"^\[(\d+)\] Sección: .*? \| Oración: (.*)$", prompt, _re.M):
+            base = {"n": int(n), "tipo": "sin afirmación", "fuente": "", "pasaje": "", "veredicto": "coincide",
+                    "motivo": "Sin afirmación.", "comparacion": dict(SIN_COMPARAR)}
+            oraciones.append({**base, **especiales.get(texto, {})})
+        return {"oraciones": oraciones}
+
+    return responder

@@ -368,3 +368,29 @@ def sesiones_confirmadas(carpeta_curso: Path) -> list[int]:
 def puede_empezar_material(carpeta_curso: Path, sesion: int) -> bool:
     """Ningún material empieza sin las dos fichas confirmadas (SPEC §3)."""
     return cargar(carpeta_curso, "curso")["confirmada"] and cargar(carpeta_curso, "sesion", sesion)["confirmada"]
+
+
+def agregar_datos_fijos(carpeta_curso: Path, lineas: list[str], origen: str) -> list[str]:
+    """Agrega datos nuevos del caso a la ficha del curso (SKILL.md, Paso 1.9).
+
+    Solo agrega: la ficha sigue confirmada y los materiales no quedan desactualizados.
+    Cada dato agregado queda registrado con su origen.
+    """
+    ficha = cargar(carpeta_curso, "curso")
+    actuales = _renglones(valor(ficha, "datos.fijos"))
+    vistos = {" ".join(l.lower().split()) for l in actuales}
+    nuevos = []
+    for linea in lineas:
+        limpia = " ".join(linea.strip().lstrip("-• ").split())
+        etiqueta, separador, dato = limpia.partition(":")
+        if separador and etiqueta.strip() and dato.strip() and limpia.lower() not in vistos:
+            nuevos.append(limpia)
+            vistos.add(limpia.lower())
+    if not nuevos:
+        return []
+    anterior = ficha["campos"].get("datos.fijos") or {"origen": PROFESOR, "estado": ""}
+    ficha["campos"]["datos.fijos"] = {**anterior, "valor": "\n".join(actuales + nuevos)}
+    ficha.setdefault("datos_agregados", []).extend(
+        {"linea": l, "origen": origen, "fecha": datetime.now().isoformat(timespec="seconds")} for l in nuevos)
+    guardar(carpeta_curso, "curso", None, ficha, "datos nuevos del caso")
+    return nuevos
