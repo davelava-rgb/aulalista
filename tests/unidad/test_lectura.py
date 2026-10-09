@@ -451,3 +451,30 @@ def test_un_vacio_al_llegar_al_tope_queda_como_decision_pendiente(sesion):
     assert material["estado"] == "con fallas"
     assert material["problemas"] == ["SEGUNDA PASADA · vacío · «Los pilares de Scrum son tres.»: No dice cuáles son."]
     assert material["eliminadas_por_el_programa"] == []
+
+
+def test_un_aviso_en_una_oracion_literal_de_la_fuente_lo_explica_el_programa(sesion):
+    # «Scrum Master con IA» está tal cual en el sílabo de prueba; con «algunas» antes, sería un aviso.
+    from app.validacion.pasajes import Corpus, Fuente
+    from app.validacion import verificador
+    literal = "Algunas veces se usa el nombre completo del curso en la portada de cada material."
+    corpus = Corpus([Fuente("norma.pdf", [{"texto": literal, "ubicacion": "página 3"}])])
+    hallazgo = verificador.verificar.Hallazgo("AVISO", "S1_Lectura.docx · x", literal, "palabra imprecisa", "algunas")
+    resultado = verificador.verificar.Resultado(hallazgos=[hallazgo])
+    explicaciones = {}
+    assert lectura._explicar_literales(resultado, explicaciones, corpus) is True
+    assert "pasaje literal de la fuente (norma.pdf, página 3)" in verificador.buscar_explicacion(
+        "palabra imprecisa", literal, explicaciones)
+
+
+def test_un_vacio_que_el_cierre_no_puede_borrar_sigue_pendiente(sesion):
+    mala = "El Manifiesto Ágil tiene cinco aspectos."
+    vacio = {"tipo": "vacío", "bloque": "Pilares de Scrum", "oracion": "Los pilares de Scrum son tres.", "detalle": "No dice cuáles."}
+    falla = pasada({mala: {"tipo": "norma", "veredicto": "sin fuente", "pasaje": ""}})
+    secuencia = [con_error(mala), falla, segunda(defectos=[vacio])]
+    for _ in range(lectura.MAX_CORRECCIONES):
+        secuencia += [cambios(), falla, segunda(defectos=[vacio])]
+    material, _ = generar(sesion, *secuencia)
+    assert material["eliminadas_por_el_programa"] == [mala]
+    assert material["estado"] == "con fallas"
+    assert material["problemas"] == ["SEGUNDA PASADA · vacío · «Los pilares de Scrum son tres.»: No dice cuáles."]

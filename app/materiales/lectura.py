@@ -318,6 +318,28 @@ def bloques_de(contenido: Lectura) -> list[pasada2.Bloque]:
     return bloques
 
 
+REGLAS_QUE_EXPLICA_EL_PROGRAMA = ("oración larga", "palabra imprecisa")
+
+
+def _explicar_literales(resultado, explicaciones: dict, corpus: Corpus) -> bool:
+    """Un aviso de oración larga o de palabra imprecisa en una oración copiada tal cual de una fuente del
+    curso se explica solo: cambiarla cambiaría lo que dice la fuente (así lo hace el Excel modelo)."""
+    nuevas = False
+    for h in resultado.hallazgos:
+        if h.nivel != "AVISO" or h.regla not in REGLAS_QUE_EXPLICA_EL_PROGRAMA or not h.oracion:
+            continue
+        if verificador.buscar_explicacion(h.regla, h.oracion, explicaciones):
+            continue
+        encontrada = corpus.ubicar_en_cualquiera(h.oracion.split(": ", 1)[-1])
+        if encontrada and encontrada[0] not in pasada1.FICHAS:
+            fuente, ubicacion = encontrada
+            explicaciones[verificador.clave_de_hallazgo(h.regla, h.oracion)] = (
+                f"Es un pasaje literal de la fuente ({fuente}, {ubicacion}). Cambiarlo cambiaría lo que dice. "
+                "Lo comprobó el programa.")
+            nuevas = True
+    return nuevas
+
+
 def _historial(hallazgos, vuelta) -> list[dict]:
     return [{"nivel": h.nivel, "seccion": h.seccion, "oracion": h.oracion, "regla": h.regla,
              "detalle": h.detalle, "vuelta": vuelta} for h in hallazgos]
@@ -386,7 +408,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
     medida = {}
     datos_agregados: list[str] = []
     resultado, problemas = None, []
-    cierre_hecho, eliminadas = False, []
+    cierre_hecho, eliminadas, pendientes_del_cierre, no_borrables = False, [], [], []
     # Una vuelta más que las correcciones, y otra para validar el cierre por programa.
     for vuelta in range(1, MAX_CORRECCIONES + 3):
         borrables: list[str] = []   # oraciones que el programa puede eliminar si se llega al tope
@@ -397,6 +419,9 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
             configuracion = verificador.configuracion_del_material(carpeta_sesion, MATERIAL)
             docx.generar_lectura(contenido, identidad, portada, rutas["word"])
             resultado = verificador.ejecutar(configuracion, [rutas["word"]], rutas["excel"], explicaciones, contar_paginas)
+            if _explicar_literales(resultado, explicaciones, Corpus.del_curso(carpeta_curso, sesion)):
+                _guardar_json(rutas["explicaciones"], explicaciones)
+                verificador.anotar_explicaciones(rutas["excel"], explicaciones)
             fallas, avisos = _hallazgos_abiertos(resultado, explicaciones)
             _avance(carpeta_curso, sesion, f"Verificador, vuelta {vuelta}: {resultado.resumen()}.")
             if fallas:
@@ -445,6 +470,11 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
                 correcciones["segunda pasada"] += len(valor)
                 borrables = [v["texto"] for v in veraces] + [d["oracion"] for d in segunda.defectos
                                                               if d["tipo"] in ("relleno", "ambigüedad")]
+                no_borrables = ([f"SEGUNDA PASADA · {d['tipo']} · «{d['oracion']}»: {d['detalle']}"
+                                 for d in segunda.defectos if d["tipo"] not in ("relleno", "ambigüedad")]
+                                + [f"LISTA DE VERIFICACIÓN · {p['pregunta']}: {p['detalle']}" for p in segunda.lista_no])
+                if cierre_hecho:
+                    problemas += pendientes_del_cierre
                 if pasada.enviadas_a_la_ia or pasada.aprobadas_por_programa:
                     medida = {"enviadas": pasada.enviadas_a_la_ia, "fuera_de_candidatos": pasada.pasajes_fuera_de_candidatos,
                               "busquedas": pasada.busquedas, "aprobadas_por_programa": pasada.aprobadas_por_programa}
@@ -459,7 +489,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
             if not cierre_hecho and borrables:
                 # Cierre por programa (SKILL.md: «Sin fuente: elimina la oración»). Sin IA y sin costo.
                 datos, _ = aplicar_cambios(datos, [{"oracion": o, "nueva": ""} for o in borrables])
-                cierre_hecho, eliminadas = True, borrables
+                cierre_hecho, eliminadas, pendientes_del_cierre = True, borrables, no_borrables
                 _avance(carpeta_curso, sesion, f"Tope de vueltas: el programa eliminó {len(borrables)} oraciones "
                         "que seguían sin coincidir o eran relleno o ambiguas. Se valida de nuevo.")
                 continue
