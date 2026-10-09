@@ -4,15 +4,15 @@ Flujo:
 1. Comprueba que las dos fichas estén confirmadas.
 2. El agente copia de las fuentes los pasajes que va a usar y redacta a partir de ellos.
 3. El generador crea el Word con el diseño común.
-4. Ciclo de corrección (PLAN.md §5.5): verificador, primera y segunda pasada. Lo que encuentran se
-   corrige y se valida de nuevo, hasta MAX_CORRECCIONES veces.
-5. Revisor independiente (PLAN.md §5.4): con la lectura limpia, una sesión nueva la revisa. Sus hallazgos
+4. Ciclo de corrección (PLAN.md §5.5): verificador y primera pasada. Lo que encuentran se corrige y se
+   valida de nuevo, hasta MAX_CORRECCIONES veces.
+5. Revisor independiente (PLAN.md §5.4): con la lectura limpia, una sesión nueva la revisa y hace también la
+   segunda pasada: las cuatro preguntas por bloque y la lista de verificación (decisión 12). Sus hallazgos
    se corrigen o se rechazan con un pasaje, y el ciclo valida de nuevo, hasta VUELTAS_POR_RONDA veces.
    Con tres hallazgos o más se lanza otro revisor nuevo. Máximo MAX_RONDAS rondas.
 6. Entrega en el formato del SPEC §8. El profesor la aprueba desde la página.
 """
 
-import asyncio
 import json
 from datetime import datetime
 from pathlib import Path
@@ -32,6 +32,7 @@ MAX_CORRECCIONES = 5  # tope de vueltas del ciclo de corrección (PLAN.md §5.5)
 MAX_RONDAS = 3        # tope de rondas del revisor independiente (PLAN.md §0, decisión 1)
 VUELTAS_POR_RONDA = 2  # vueltas para corregir lo que encontró una ronda del revisor (PLAN.md §0, decisión 9)
 MINIMO_PARA_OTRA_RONDA = 3  # con tres hallazgos válidos o más se lanza otro revisor (SKILL.md)
+DEFECTOS_QUE_SE_ELIMINAN = ("relleno", "ambigüedad")   # al tope, el programa puede borrar esas oraciones
 INSTRUCCION_SIN_EJECUCION = "No aplica: la lectura no tiene archivos de práctica que ejecutar."
 VUELTA_DE_ULTIMO_INTENTO = 3
 ULTIMO_INTENTO = ("YA SE INTENTÓ CORREGIR: escribe la oración con las palabras exactas de su pasaje, "
@@ -105,7 +106,6 @@ def archivos(carpeta_curso: Path, sesion: int) -> dict[str, Path]:
         "contenido": carpeta / "lectura" / "contenido.json",
         "explicaciones": carpeta / "lectura" / "explicaciones.json",
         "pasada1": carpeta / "lectura" / "pasada1.json",
-        "pasada2": carpeta / "lectura" / "pasada2.json",
     }
 
 
@@ -199,11 +199,12 @@ REGLAS_DE_CORRECCION = """REGLAS DE CORRECCIÓN
   AulaLista lo guarda en los datos fijos de la ficha del curso, y todos los materiales lo usan igual.
 - Si no hay datos nuevos, deja «datos_nuevos» vacío.
 - Si mantienes una oración con AVISO, agrega en «explicaciones» la regla y la oración copiadas tal cual del problema, y por qué se mantiene.
-- SEGUNDA PASADA · relleno: elimina la oración. · ambigüedad: reescríbela para que tenga una sola lectura.
+- REVISOR INDEPENDIENTE · relleno: elimina la oración. · ambigüedad: reescríbela para que tenga una sola lectura.
   · inconsistencia: usa el mismo dato en todas sus apariciones, el de la ficha si existe.
+  · imprecisión: reescríbela para que diga lo que dice su pasaje.
   · vacío: agrega lo que falta. Para agregar, reemplaza la oración indicada por ella misma seguida de la nueva.
 - LISTA DE VERIFICACIÓN: corrige lo que la pregunta señala, con el menor cambio posible.
-- REVISOR INDEPENDIENTE: corrige el hallazgo con el menor cambio posible. Si no estás de acuerdo, no cambies
+- REVISOR INDEPENDIENTE: corrige cada hallazgo con el menor cambio posible. Si no estás de acuerdo, no cambies
   la oración: agrega en «rechazos» la oración tal cual, el pasaje de una fuente que contradice el hallazgo,
   copiado tal cual, y el nombre de esa fuente. Sin un pasaje que exista tal cual, el rechazo no vale.
 - Cambia solo lo necesario. Puedes buscar en las fuentes con Grep y Read si necesitas un pasaje.
@@ -322,11 +323,17 @@ def _guardar_json(ruta: Path, datos) -> None:
     ruta.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+# Avisos que se muestran en la hoja Hallazgos pero no obligan a corregir ni a explicar (PLAN.md §0, decisión 13).
+AVISOS_INFORMATIVOS = ("relleno", "palabra imprecisa")
+NOTA_INFORMATIVA = "Aviso informativo: no obliga a corregir ni a explicar (PLAN.md §0, decisión 13)."
+
+
 def _hallazgos_abiertos(resultado, explicaciones) -> tuple[list, list]:
-    """Fallas del verificador y avisos todavía sin explicar."""
+    """Fallas del verificador y avisos todavía sin explicar. Los avisos informativos no cuentan."""
     fallas = [h for h in resultado.hallazgos if h.nivel == "FALLA"]
     avisos = [h for h in resultado.hallazgos
-              if h.nivel == "AVISO" and not verificador.buscar_explicacion(h.regla, h.oracion, explicaciones)]
+              if h.nivel == "AVISO" and h.regla not in AVISOS_INFORMATIVOS
+              and not verificador.buscar_explicacion(h.regla, h.oracion, explicaciones)]
     return fallas, avisos
 
 
@@ -479,9 +486,8 @@ class _Ciclo:
         self.datos: dict = {}
         self.explicaciones: dict[str, str] = {}
         self.anteriores = _leer_json(rutas["pasada1"])   # solo guarda oraciones que coinciden con su fuente
-        self.anteriores2 = _leer_json(rutas["pasada2"])
         self.historial: list[dict] = []
-        self.correcciones = {"verificador": 0, "primera pasada": 0, "segunda pasada": 0}
+        self.correcciones = {"verificador": 0, "primera pasada": 0}
         self.respuestas2: dict[str, dict] = {}
         self.bloques: list = []
         self.medida: dict = {}
@@ -525,6 +531,7 @@ class _Ciclo:
         if _explicar_literales(self.resultado, self.explicaciones, corpus, [p.model_dump() for p in contenido.pasajes]):
             _guardar_json(rutas["explicaciones"], self.explicaciones)
             verificador.anotar_explicaciones(rutas["excel"], self.explicaciones)
+        excel.anotar_reglas(rutas["excel"], AVISOS_INFORMATIVOS, NOTA_INFORMATIVA)
         self.oraciones = _leer_json(rutas["excel"].with_suffix(".json"))["oraciones"]
         fallas, avisos = _hallazgos_abiertos(self.resultado, self.explicaciones)
         self.avance(f"Verificador, vuelta {vuelta}: {self.resultado.resumen()}.")
@@ -537,48 +544,31 @@ class _Ciclo:
             self.correcciones["verificador"] += len(fallas + avisos)
             return problemas, completa, borrables, abiertos
 
-        # Las dos pasadas corren juntas y sus problemas van en una sola corrección.
+        # Primera pasada en cada vuelta. La segunda la hace el revisor independiente (PLAN.md §0, decisión 12).
         self.bloques = bloques_de(contenido)
-        pasada, segunda = await asyncio.gather(
-            pasada1.ejecutar(
-                self.oraciones, titulos=_titulos(contenido), corpus=corpus,
-                anteriores=self.anteriores, curso=self.curso, sesion=self.sesion, material=CLAVE,
-                anclas=[p.model_dump() for p in contenido.pasajes],
-                instruccion_sin_ejecucion=INSTRUCCION_SIN_EJECUCION, consulta=self.consulta),
-            pasada2.ejecutar(
-                self.bloques, anteriores=self.anteriores2, contexto_fijo=_contexto(self.carpeta_curso, self.sesion),
-                curso=self.curso, sesion=self.sesion, material=MATERIAL, consulta=self.consulta, omitir=cierre_hecho),
-        )
+        pasada = await pasada1.ejecutar(
+            self.oraciones, titulos=_titulos(contenido), corpus=corpus,
+            anteriores=self.anteriores, curso=self.curso, sesion=self.sesion, material=CLAVE,
+            anclas=[p.model_dump() for p in contenido.pasajes],
+            instruccion_sin_ejecucion=INSTRUCCION_SIN_EJECUCION, consulta=self.consulta)
         self.anteriores = {h: f for h, f in pasada.filas.items() if f["veredicto"] == "coincide"}
         _guardar_json(rutas["pasada1"], self.anteriores)
         excel.llenar_oraciones(rutas["excel"], self.oraciones, pasada.filas)
-        self.anteriores2 = segunda.guardar(self.bloques)
-        _guardar_json(rutas["pasada2"], self.anteriores2)
-        self.respuestas2 = segunda.respuestas
 
         veraces = pasada.problemas(self.oraciones)
-        valor = ([f"SEGUNDA PASADA · {d['tipo']} · «{d['oracion']}»: {d['detalle']}" for d in segunda.defectos]
-                 + [f"LISTA DE VERIFICACIÓN · {p['pregunta']}: {p['detalle']}" for p in segunda.lista_no])
         # Los avisos sin explicar van en la misma corrección: no gastan una vuelta propia.
-        problemas = [_describir_veracidad(v) for v in veraces] + [_texto_de(h) for h in avisos] + valor + abiertos
+        problemas = [_describir_veracidad(v) for v in veraces] + [_texto_de(h) for h in avisos] + abiertos
         self.historial += [{"nivel": "FALLA", "seccion": v["seccion"], "oracion": v["texto"],
                             "regla": f"veracidad: {v['veredicto']}", "detalle": v["motivo"], "vuelta": vuelta}
                            for v in veraces] + _historial(avisos, vuelta)
-        self.historial += [{"nivel": "FALLA", "seccion": f"{rutas['word'].name} · {d['bloque']}", "oracion": d["oracion"],
-                            "regla": f"segunda pasada: {d['tipo']}", "detalle": d["detalle"], "vuelta": vuelta}
-                           for d in segunda.defectos]
-        self.historial += [{"nivel": "FALLA", "seccion": rutas["word"].name, "oracion": "",
-                            "regla": "lista de verificación", "detalle": f"{p['pregunta']} {p['detalle']}", "vuelta": vuelta}
-                           for p in segunda.lista_no]
         self.correcciones["primera pasada"] += len(veraces)
         self.correcciones["verificador"] += len(avisos)
-        self.correcciones["segunda pasada"] += len(valor)
-        borrables = [v["texto"] for v in veraces] + [d["oracion"] for d in segunda.defectos
-                                                      if d["tipo"] in ("relleno", "ambigüedad")]
-        no_borrables = ([f"SEGUNDA PASADA · {d['tipo']} · «{d['oracion']}»: {d['detalle']}"
-                         for d in segunda.defectos if d["tipo"] not in ("relleno", "ambigüedad")]
-                        + [f"LISTA DE VERIFICACIÓN · {p['pregunta']}: {p['detalle']}" for p in segunda.lista_no]
-                        + abiertos)
+        # Al tope, el programa puede eliminar lo que sigue sin fuente y lo que el revisor marcó como relleno o ambiguo.
+        abiertos_borrables = [h for h in self.hallazgos_del_revisor
+                              if h.estado == "abierto" and h.defecto in DEFECTOS_QUE_SE_ELIMINAN]
+        borrables = [v["texto"] for v in veraces] + [h.oracion for h in abiertos_borrables]
+        no_borrables = [h.describir() for h in self.hallazgos_del_revisor
+                        if h.estado == "abierto" and h not in abiertos_borrables]
         if cierre_hecho:
             problemas += pendientes_del_cierre
         if pasada.enviadas_a_la_ia or pasada.aprobadas_por_programa:
@@ -587,8 +577,6 @@ class _Ciclo:
         self.avance(f"Primera pasada: {len(self.oraciones)} oraciones, "
                     f"{pasada.enviadas_a_la_ia} revisadas con IA, {pasada.aprobadas_por_programa} aprobadas por el programa, "
                     f"{len(veraces)} con problemas.")
-        self.avance(f"Segunda pasada: {len(segunda.revisados)} bloques revisados con IA, "
-                    f"{len(segunda.defectos)} defectos, {len(segunda.lista_no)} puntos de la lista sin cumplir.")
         return problemas, completa, borrables, no_borrables
 
     # ---------- Corrección ----------
@@ -622,6 +610,19 @@ class _Ciclo:
             self.avance(f"Datos nuevos del caso agregados a la ficha del curso: {len(nuevos)}.")
         if con_revisor:
             self.resolver_hallazgos(respuesta.get("cambios", []), respuesta.get("rechazos", []), enviados=True)
+
+    def borrar_sin_romper(self, oraciones: list[str]) -> tuple[list[str], list[str]]:
+        """Elimina las oraciones una por una mientras la lectura siga con su estructura completa.
+        Devuelve (eliminadas, las que no se pudieron eliminar)."""
+        eliminadas, no_se_pueden = [], []
+        for o in oraciones:
+            candidato, no_encontradas = aplicar_cambios(self.datos, [{"oracion": o, "nueva": ""}])
+            if no_encontradas or _validar(candidato)[1]:
+                no_se_pueden.append(o)
+            else:
+                self.datos = candidato
+                eliminadas.append(o)
+        return eliminadas, no_se_pueden
 
     def resolver_hallazgos(self, cambios: list[dict], rechazos: list[dict], enviados: bool) -> None:
         """Un hallazgo queda resuelto si su oración ya no está en la lectura, y rechazado si el redactor
@@ -681,7 +682,13 @@ class _Ciclo:
             if paso > tope:
                 if not cierre_hecho and borrables:
                     # Cierre por programa (SKILL.md: «Sin fuente: elimina la oración»). Sin IA y sin costo.
-                    self.datos, _ = aplicar_cambios(self.datos, [{"oracion": o, "nueva": ""} for o in borrables])
+                    # No se borra una oración si deja vacía una parte obligatoria: esa queda pendiente.
+                    borrables, no_se_pueden = self.borrar_sin_romper(borrables)
+                    no_borrables = no_borrables + [
+                        f"CIERRE POR PROGRAMA · «{o}»: sigue con problemas y no se puede eliminar sin dejar vacía "
+                        "una parte obligatoria de la lectura." for o in no_se_pueden
+                        # un hallazgo del revisor que no se pudo borrar ya queda pendiente con su propia descripción
+                        if not any(h.estado == "abierto" and h.oracion == o for h in self.hallazgos_del_revisor)]
                     self.historial += [{"nivel": "FALLA", "seccion": self.rutas["word"].name, "oracion": o,
                                         "regla": "cierre por programa", "vuelta": self.vuelta,
                                         "detalle": "Seguía sin coincidir con su fuente, o era relleno o ambigua, "
@@ -724,7 +731,7 @@ class _Ciclo:
             if self.revisadas.get(o["huella"], 0) > ultima:
                 notas.append(f"Ronda {self.revisadas[o['huella']]}: sin hallazgos.")
             valores[o["n"]] = " ".join(notas) or \
-                "Texto nuevo después del revisor: lo validaron el verificador y las dos pasadas."
+                "Texto nuevo después del revisor: lo validaron el verificador y la primera pasada."
         return valores
 
     def historial_del_revisor(self, rondas: list) -> list[dict]:
@@ -739,6 +746,10 @@ class _Ciclo:
                        "regla": f"revisor independiente: {d['defecto']}",
                        "detalle": f"Ronda {r.ronda}. {d['explicacion']} Prueba: «{d['prueba']}» ({d['donde']}).",
                        "resolucion": f"Descartado por el programa: {d['motivo']}"} for d in r.descartados]
+            filas += [{"nivel": "FALLA", "seccion": self.rutas["word"].name, "oracion": "",
+                       "regla": "revisor independiente: lista de verificación",
+                       "detalle": f"Ronda {r.ronda}. {p['pregunta']} {p['detalle']}",
+                       "resolucion": f"Enviado a corrección en la ronda {r.ronda}."} for p in r.lista_no]
         return filas
 
 
@@ -747,6 +758,7 @@ def _resumen_de_rondas(rondas: list, hallazgos: list) -> list[dict]:
     for r in rondas:
         propios = [h for h in hallazgos if h.ronda == r.ronda]
         resumen.append({"ronda": r.ronda, "hallazgos": len(propios), "descartados": len(r.descartados),
+                        "lista": len(r.lista_no),
                         **{estado: sum(1 for h in propios if h.estado == estado)
                            for estado in ("resuelto", "rechazado", "abierto")}})
     return resumen
@@ -769,24 +781,29 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
     for ronda in range(1, MAX_RONDAS + 1):
         if not limpia:
             break
-        ciclo.avance(f"Revisor independiente, ronda {ronda}: una sesión nueva lee la lectura final, las fuentes y las fichas.")
+        ciclo.avance(f"Revisor independiente, ronda {ronda}: una sesión nueva lee la lectura final, las fuentes y las "
+                     "fichas, y hace la segunda pasada.")
         resultado = await revisor.ejecutar(
             ciclo.oraciones, ronda=ronda, carpeta=rutas["revision"] / f"ronda_{ronda}", carpeta_curso=carpeta_curso,
-            curso=curso, sesion=sesion, material=CLAVE, consulta=consulta)
+            curso=curso, sesion=sesion, material=CLAVE, nombre_material=MATERIAL, bloques=ciclo.bloques,
+            consulta=consulta)
         rondas.append(resultado)
         ciclo.revisadas.update(resultado.revisadas)
-        ciclo.avance(f"Revisor independiente, ronda {ronda}: {len(resultado.hallazgos)} hallazgos con prueba"
+        ciclo.respuestas2.update(resultado.respuestas)
+        ciclo.avance(f"Revisor independiente, ronda {ronda}: {len(resultado.hallazgos)} hallazgos con prueba, "
+                     f"{len(resultado.lista_no)} puntos de la lista sin cumplir"
                      + (f", {len(resultado.descartados)} descartados porque su prueba no existe tal cual."
                         if resultado.descartados else "."))
-        if not resultado.hallazgos:
+        if not resultado.encontrados:
             break
         ciclo.hallazgos_del_revisor += resultado.hallazgos
-        limpia = await ciclo.correr(VUELTAS_POR_RONDA, iniciales=[h.describir() for h in resultado.hallazgos])
-        if not limpia or len(resultado.hallazgos) < MINIMO_PARA_OTRA_RONDA:
+        lista = [f"LISTA DE VERIFICACIÓN · {p['pregunta']}: {p['detalle']}" for p in resultado.lista_no]
+        limpia = await ciclo.correr(VUELTAS_POR_RONDA, iniciales=[h.describir() for h in resultado.hallazgos] + lista)
+        if not limpia or resultado.encontrados < MINIMO_PARA_OTRA_RONDA:
             break
         if ronda == MAX_RONDAS:
-            aviso_del_revisor = (f"El revisor de la ronda {MAX_RONDAS} encontró {len(resultado.hallazgos)} errores. "
-                                 "Se corrigieron y se validaron con el verificador y las dos pasadas, pero el tope es de "
+            aviso_del_revisor = (f"El revisor de la ronda {MAX_RONDAS} encontró {resultado.encontrados} errores. "
+                                 "Se corrigieron y se validaron con el verificador y la primera pasada, pero el tope es de "
                                  f"{MAX_RONDAS} rondas: ningún revisor nuevo revisó esas correcciones.")
             ciclo.avance(aviso_del_revisor)
 
@@ -812,7 +829,10 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
         medida_del_buscador=ciclo.medida,
         datos_agregados=ciclo.datos_agregados,
         avisos_de_diseno=ciclo.identidad.avisos,
-        avisos_explicados=sum(1 for h in (ciclo.resultado.hallazgos if ciclo.resultado else []) if h.nivel == "AVISO"),
+        avisos_explicados=sum(1 for h in (ciclo.resultado.hallazgos if ciclo.resultado else [])
+                              if h.nivel == "AVISO" and h.regla not in AVISOS_INFORMATIVOS),
+        avisos_informativos=sum(1 for h in (ciclo.resultado.hallazgos if ciclo.resultado else [])
+                                if h.nivel == "AVISO" and h.regla in AVISOS_INFORMATIVOS),
         paginas=ciclo.paginas,
         bloques=len(final.bloques) if final else 0,
         decisiones=(final.decisiones if final else []),
@@ -852,13 +872,16 @@ def _entrega(material: dict) -> dict:
     valide = [f"Verificador: {material['resumen']}." if material["resumen"] else "El verificador no llegó a correr.",
               *([f"Avisos explicados en la hoja Hallazgos: {material['avisos_explicados']}."]
                 if material.get("avisos_explicados") else []),
-              f"Errores corregidos: verificador {c['verificador']}, primera pasada {c['primera pasada']}, "
-              f"segunda pasada {c['segunda pasada']}."]
+              *([f"Avisos informativos de relleno o palabras imprecisas: {material['avisos_informativos']}. "
+                 "Están en la hoja Hallazgos; no obligan a corregir."] if material.get("avisos_informativos") else []),
+              f"Errores corregidos: verificador {c['verificador']}, primera pasada {c['primera pasada']}."]
     for r in material["revisor"]:
         texto = f"Revisor independiente, ronda {r['ronda']}: {_cuantos(r['hallazgos'], 'hallazgo')}"
         if r["hallazgos"]:
             texto += (f" ({_cuantos(r['resuelto'], 'corregido')}, {_cuantos(r['rechazado'], 'rechazado')} con su pasaje, "
                       f"{_cuantos(r['abierto'], 'abierto')})")
+        if r.get("lista"):
+            texto += f" y {r['lista']} {'punto' if r['lista'] == 1 else 'puntos'} de la lista de verificación sin cumplir"
         texto += "."
         if r["descartados"]:
             texto += (f" El programa descartó {_cuantos(r['descartados'], 'hallazgo')} más, "

@@ -8,28 +8,12 @@ from app import entrega, herramientas, servidor, tokens
 from app.fichas import almacen
 from app.materiales import lectura
 from app.validacion import revisor
-from tests.conftest import pasada, segunda
-from tests.unidad.test_lectura import LIMPIA, cambios, con_error, generar, sesion  # noqa: F401
+from tests.conftest import pasada
+from tests.unidad.test_lectura import (  # noqa: F401  (sesion es la base de prueba)
+    LIMPIA, RELLENO, cambios, con_error, correccion, generar, hallazgo, revision, sesion)
 
-RELLENO = "Los pilares de Scrum son tres."
 MANIFIESTO = "El Manifiesto Ágil tiene cuatro aspectos."
 CUIDADO = "Revisar el avance sin cambiar nada después."
-
-
-def hallazgo(oracion: str, defecto: str = "relleno", prueba: str | None = None, donde: str = revisor.MATERIAL,
-             n: int = 0) -> dict:
-    """Un hallazgo del revisor. Por defecto, la prueba es la misma oración, copiada del material."""
-    return {"n": n, "oracion": oracion, "defecto": defecto, "prueba": prueba or oracion, "donde": donde,
-            "explicacion": f"{defecto} en la oración."}
-
-
-def revision(*hallazgos) -> dict:
-    return {"hallazgos": list(hallazgos)}
-
-
-def correccion(*pares, rechazos=None) -> dict:
-    """Respuesta simulada de una corrección con hallazgos del revisor."""
-    return {**cambios(*pares), "rechazos": rechazos or []}
 
 
 def columna_revisor(sesion) -> dict[str, str]:
@@ -45,11 +29,12 @@ def hallazgos_excel(sesion) -> list[tuple]:
 # ---------- Una sesión nueva, con solo tres cosas ----------
 
 def test_el_revisor_es_una_sesion_nueva_con_el_pedido_de_la_skill(sesion):
-    _, consulta = generar(sesion, LIMPIA, pasada(), segunda())
-    llamada = consulta.llamadas[3]
+    _, consulta = generar(sesion, LIMPIA, pasada())
+    llamada = consulta.llamadas[2]
     pedido, opciones = llamada["prompt"], llamada["options"]
-    assert revisor.pedido_de_la_skill() in pedido
-    assert pedido.count("Busca errores en este material. Compara cada oración con las fuentes.") == 1
+    # El pedido de la skill, adaptado: la veracidad oración por oración ya la revisó la primera pasada (decisión 12).
+    assert revisor.PEDIDO_DE_AULALISTA in pedido
+    assert "Compara cada oración con las fuentes" not in pedido
     assert "- Imprecisión:" in pedido and "- Relleno:" in pedido
     # Sesión nueva: no continúa ni retoma la del redactor.
     assert opciones.resume is None and not opciones.continue_conversation and not opciones.fork_session
@@ -62,11 +47,12 @@ def test_el_revisor_es_una_sesion_nueva_con_el_pedido_de_la_skill(sesion):
 
 
 def test_el_revisor_no_recibe_borradores_ni_la_tabla(sesion):
-    _, consulta = generar(sesion, LIMPIA, pasada(), segunda())
-    pedido = consulta.llamadas[3]["prompt"]
+    _, consulta = generar(sesion, LIMPIA, pasada())
+    pedido = consulta.llamadas[2]["prompt"]
     assert "Usé una tienda como ejemplo." not in pedido      # «decisiones» del redactor
-    assert "REGLAS DE LA SKILL" not in pedido and "Veredicto" not in pedido and "coincide" not in pedido
-    assert f"\n1. " in pedido and RELLENO in pedido           # el material final, con oraciones numeradas
+    assert "REGLAS DE LA SKILL" not in pedido          # las reglas y el contexto del redactor
+    assert "Veredicto" not in pedido and "Pasaje de la fuente" not in pedido   # la tabla de verificación
+    assert "\n1. " in pedido and RELLENO in pedido           # el material final, con oraciones numeradas
     carpeta = lectura.archivos(sesion, 1)["revision"] / "ronda_1"
     assert herramientas.listar(carpeta).splitlines() == [
         "ficha_de_la_sesion.md", "ficha_del_curso.md", "fuentes/silabo.pdf.txt", "material.txt"]
@@ -74,12 +60,12 @@ def test_el_revisor_no_recibe_borradores_ni_la_tabla(sesion):
 
 
 def test_las_herramientas_del_revisor_no_salen_de_su_carpeta(sesion):
-    generar(sesion, LIMPIA, pasada(), segunda())
+    generar(sesion, LIMPIA, pasada())
     carpeta = lectura.archivos(sesion, 1)["revision"] / "ronda_1"
     assert "No existe" in herramientas.leer(carpeta, "../../lectura/contenido.json", 1, 50)
     assert "No existe" in herramientas.leer(carpeta, str(lectura.archivos(sesion, 1)["contenido"]), 1, 50)
     assert "No existe" in herramientas.leer(carpeta, "../../S1_Lectura_Verificacion.json", 1, 50)
-    assert herramientas.leer(carpeta, "material.txt", 1, 1).startswith("1: 1. ")
+    assert herramientas.leer(carpeta, "material.txt", 1, 1) == "1: [Idea central]"
     assert "material.txt:" in herramientas.buscar_texto(carpeta, "pilares de scrum son")
     assert "fuentes/silabo.pdf.txt:1:" in herramientas.buscar_texto(carpeta, "SCRUM MASTER")
     assert herramientas.buscar_texto(carpeta, "Usé una tienda") == "Sin coincidencias."
@@ -90,17 +76,17 @@ def test_las_herramientas_del_revisor_no_salen_de_su_carpeta(sesion):
 def test_un_hallazgo_sin_prueba_real_se_descarta(sesion):
     inventado = hallazgo(RELLENO, "imprecisión", prueba="Scrum tiene cinco pilares.", donde="fuentes/silabo.pdf.txt")
     sin_oracion = hallazgo("Esta oración no está en el material.")
-    material, consulta = generar(sesion, LIMPIA, pasada(), segunda(), revision(inventado, sin_oracion), revisor=False)
+    material, consulta = generar(sesion, LIMPIA, pasada(), revision(inventado, sin_oracion), revisor=False)
     assert material["estado"] == "verificada"
-    assert len(consulta.llamadas) == 4      # nada que corregir
-    assert material["revisor"] == [{"ronda": 1, "hallazgos": 0, "descartados": 2, "resuelto": 0, "rechazado": 0, "abierto": 0}]
+    assert len(consulta.llamadas) == 3      # nada que corregir
+    assert material["revisor"] == [{"ronda": 1, "hallazgos": 0, "descartados": 2, "lista": 0, "resuelto": 0, "rechazado": 0, "abierto": 0}]
     descartados = [f for f in hallazgos_excel(sesion) if f[3].startswith("revisor independiente")]
     assert [f[5] for f in descartados] == ["Descartado por el programa: La prueba no aparece tal cual.",
                                            "Descartado por el programa: La oración no está en el material."]
 
 
 def test_la_prueba_de_una_ficha_o_de_una_fuente_se_ubica_con_su_lugar(sesion):
-    generar(sesion, LIMPIA, pasada(), segunda())
+    generar(sesion, LIMPIA, pasada())
     from app.validacion.pasajes import Corpus
     corpus = Corpus.del_curso(sesion, 1)
     oraciones = [{"n": 1, "texto": RELLENO}]
@@ -115,15 +101,15 @@ def test_la_prueba_de_una_ficha_o_de_una_fuente_se_ubica_con_su_lugar(sesion):
 
 def test_menos_de_tres_hallazgos_se_corrigen_y_no_hay_otra_ronda(sesion):
     nueva = "Los pilares sostienen el trabajo del equipo."
-    material, consulta = generar(sesion, LIMPIA, pasada(), segunda(), revision(hallazgo(RELLENO)),
-                                 correccion((RELLENO, nueva)), pasada(), segunda(), revisor=False)
+    material, consulta = generar(sesion, LIMPIA, pasada(), revision(hallazgo(RELLENO)),
+                                 correccion((RELLENO, nueva)), pasada(), revisor=False)
     assert material["estado"] == "verificada"
-    assert len(consulta.llamadas) == 7          # sin un segundo revisor
-    pedido = consulta.llamadas[4]["prompt"]
+    assert len(consulta.llamadas) == 5          # sin un segundo revisor
+    pedido = consulta.llamadas[3]["prompt"]
     assert "REVISOR INDEPENDIENTE · relleno · «Los pilares de Scrum son tres.»" in pedido
     assert "«rechazos»" in pedido
-    assert "rechazos" in consulta.llamadas[4]["options"].output_format["schema"]["properties"]
-    assert material["revisor"] == [{"ronda": 1, "hallazgos": 1, "descartados": 0, "resuelto": 1, "rechazado": 0, "abierto": 0}]
+    assert "rechazos" in consulta.llamadas[3]["options"].output_format["schema"]["properties"]
+    assert material["revisor"] == [{"ronda": 1, "hallazgos": 1, "descartados": 0, "lista": 0, "resuelto": 1, "rechazado": 0, "abierto": 0}]
     valide = next(s["lineas"] for s in material["entrega"]["secciones"] if s["clave"] == "valide")
     assert "Revisor independiente, ronda 1: 1 hallazgo (1 corregido, 0 rechazados con su pasaje, 0 abiertos)." in valide
     columna = columna_revisor(sesion)
@@ -139,7 +125,7 @@ def test_tres_hallazgos_lanzan_un_revisor_nuevo(sesion):
     arreglo = correccion((RELLENO, "Los pilares sostienen el trabajo."),
                          (MANIFIESTO, "El Manifiesto Ágil tiene cuatro valores."),
                          (CUIDADO, "Revisar el avance y no cambiar nada."))
-    material, consulta = generar(sesion, LIMPIA, pasada(), segunda(), tres, arreglo, pasada(), segunda())
+    material, consulta = generar(sesion, LIMPIA, pasada(), tres, arreglo, pasada())
     assert material["estado"] == "verificada"
     assert [r["ronda"] for r in material["revisor"]] == [1, 2]
     segundo = consulta.llamadas[-1]
@@ -150,11 +136,11 @@ def test_tres_hallazgos_lanzan_un_revisor_nuevo(sesion):
 
 
 def test_despues_de_la_tercera_ronda_se_detiene_y_avisa(sesion):
-    secuencia = [LIMPIA, pasada(), segunda()]
+    secuencia = [LIMPIA, pasada()]
     oraciones = [RELLENO, MANIFIESTO, CUIDADO]
     for ronda in range(1, lectura.MAX_RONDAS + 1):
         nuevas = [o.rstrip(".") + f" en la ronda {ronda}." for o in oraciones]
-        secuencia += [revision(*[hallazgo(o) for o in oraciones]), correccion(*zip(oraciones, nuevas)), pasada(), segunda()]
+        secuencia += [revision(*[hallazgo(o) for o in oraciones]), correccion(*zip(oraciones, nuevas)), pasada()]
         oraciones = nuevas
     material, consulta = generar(sesion, *secuencia)
     assert len(consulta.llamadas) == len(secuencia)      # no se lanza un cuarto revisor
@@ -167,10 +153,10 @@ def test_despues_de_la_tercera_ronda_se_detiene_y_avisa(sesion):
 
 def test_un_rechazo_con_un_pasaje_real_queda_anotado(sesion):
     rechazo = {"oracion": RELLENO, "pasaje": "Scrum Master con IA", "fuente": "silabo.pdf"}
-    material, consulta = generar(sesion, LIMPIA, pasada(), segunda(), revision(hallazgo(RELLENO, "imprecisión")),
+    material, consulta = generar(sesion, LIMPIA, pasada(), revision(hallazgo(RELLENO, "imprecisión")),
                                  correccion(rechazos=[rechazo]), revisor=False)
     assert material["estado"] == "verificada"
-    assert len(consulta.llamadas) == 5          # la lectura no cambió: nada nuevo que validar con IA
+    assert len(consulta.llamadas) == 4          # la lectura no cambió: nada nuevo que validar con IA
     esperado = "Ronda 1: imprecisión. Rechazado: «Scrum Master con IA» (silabo.pdf, página 1)."
     assert columna_revisor(sesion)[RELLENO] == esperado
     assert material["revisor"][0]["rechazado"] == 1
@@ -178,10 +164,10 @@ def test_un_rechazo_con_un_pasaje_real_queda_anotado(sesion):
 
 def test_un_rechazo_con_un_pasaje_inventado_sigue_abierto(sesion):
     falso = {"oracion": RELLENO, "pasaje": "Scrum tiene tres pilares según la guía.", "fuente": "silabo.pdf"}
-    material, consulta = generar(sesion, LIMPIA, pasada(), segunda(), revision(hallazgo(RELLENO, "imprecisión")),
+    material, consulta = generar(sesion, LIMPIA, pasada(), revision(hallazgo(RELLENO, "imprecisión")),
                                  correccion(rechazos=[falso]), correccion(rechazos=[falso]), revisor=False)
-    assert "Sigue abierto" in consulta.llamadas[5]["prompt"]
-    assert len(consulta.llamadas) == 2 + 2 + lectura.VUELTAS_POR_RONDA   # tope de vueltas de la ronda
+    assert "Sigue abierto" in consulta.llamadas[4]["prompt"]
+    assert len(consulta.llamadas) == 3 + lectura.VUELTAS_POR_RONDA   # redacción, pasada, revisor y el tope de la ronda
     assert material["estado"] == "con fallas"
     assert material["problemas"][0].startswith("REVISOR INDEPENDIENTE · imprecisión · «Los pilares de Scrum son tres.»")
     assert columna_revisor(sesion)[RELLENO] == "Ronda 1: imprecisión. Abierto: queda en decisiones pendientes."
@@ -203,7 +189,7 @@ TITULOS = ["Archivos", "Qué probé", "Qué validé", "Qué no pude probar", "Qu
 
 
 def test_la_entrega_tiene_los_puntos_del_spec_en_orden(sesion):
-    material, _ = generar(sesion, LIMPIA, pasada(), segunda())
+    material, _ = generar(sesion, LIMPIA, pasada())
     datos = material["entrega"]
     assert [s["titulo"] for s in datos["secciones"]] == TITULOS      # sin decisiones pendientes: se omite
     assert datos["pregunta"] == "¿Apruebas este material para pasar a la siguiente etapa?"
@@ -213,7 +199,7 @@ def test_la_entrega_tiene_los_puntos_del_spec_en_orden(sesion):
     assert secciones["probe"][0] == "Conté las páginas con Word: 2. El máximo es 6."
     assert secciones["valide"][0].startswith("Verificador: Oraciones: ") and "Fallas: 0" in secciones["valide"][0]
     assert "Revisor independiente, ronda 1: 0 hallazgos." in secciones["valide"]
-    assert secciones["valide"][-1].startswith("Costo de esta lectura: 4 llamadas, ")
+    assert secciones["valide"][-1].startswith("Costo de esta lectura: 3 llamadas, ")
     assert secciones["decidi"] == ["Usé una tienda como ejemplo."]
     texto = lectura.archivos(sesion, 1)["entrega"].read_text(encoding="utf-8")
     posiciones = [texto.index(f"## {t}") for t in TITULOS]
@@ -232,11 +218,11 @@ def test_con_problemas_la_entrega_lista_las_decisiones_pendientes(sesion):
 
 
 def test_el_costo_de_la_entrega_es_solo_el_de_esta_generacion(sesion):
-    generar(sesion, LIMPIA, pasada(), segunda())
+    generar(sesion, LIMPIA, pasada())
     # La segunda vez, las pasadas reusan los resultados guardados: solo la redacción y el revisor llaman a Claude.
     material, _ = generar(sesion, LIMPIA)
     assert material["costo"]["llamadas"] == 2
-    assert tokens.total("scrum")["llamadas"] >= 6
+    assert tokens.total("scrum")["llamadas"] >= 5
     assert tokens.total("scrum", sesion="S1", material="otro")["llamadas"] == 0
 
 
@@ -246,7 +232,7 @@ cliente = TestClient(servidor.app)
 
 
 def test_el_profesor_aprueba_la_lectura_desde_la_pagina(sesion):
-    generar(sesion, LIMPIA, pasada(), segunda())
+    generar(sesion, LIMPIA, pasada())
     pagina = cliente.get("/cursos/scrum/sesiones/1").text
     for titulo in TITULOS:
         assert titulo in pagina
@@ -259,7 +245,7 @@ def test_el_profesor_aprueba_la_lectura_desde_la_pagina(sesion):
 
 
 def test_no_se_aprueba_una_lectura_desactualizada_ni_con_problemas(sesion):
-    generar(sesion, LIMPIA, pasada(), segunda())
+    generar(sesion, LIMPIA, pasada())
     almacen.marcar_desactualizados(sesion, 1)
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura/aprobar", follow_redirects=True)
     assert lectura.estado(sesion, 1)["estado"] == "verificada"
@@ -279,10 +265,46 @@ def test_la_entrega_se_arma_en_el_orden_fijo():
 
 
 def test_generar_de_nuevo_borra_la_entrega_y_la_aprobacion_anteriores(sesion):
-    generar(sesion, LIMPIA, pasada(), segunda())
+    generar(sesion, LIMPIA, pasada())
     lectura.aprobar(sesion, 1)
     with pytest.raises(Exception):
         generar(sesion, revisor=False)      # la redacción falla: no hay respuesta
     material = lectura.estado(sesion, 1)
     assert material["estado"] == "error" and material["entrega"] == {} and material["aprobada"] == ""
     assert "Aprobar la lectura" not in cliente.get("/cursos/scrum/sesiones/1").text
+
+
+# ---------- Lista de verificación por material (PLAN.md §0, decisión 11) ----------
+
+def test_cada_material_recibe_solo_sus_preguntas_de_la_lista():
+    from app.validacion import pasada2
+    completa = pasada2.lista_completa()
+    assert len(completa) == 14
+    lectura_ = pasada2.lista_de_verificacion("Lectura")
+    laboratorio = pasada2.lista_de_verificacion("Laboratorio")
+    guia = pasada2.lista_de_verificacion("Guía del profesor")
+    evaluacion = pasada2.lista_de_verificacion("Evaluación")
+    assert len(lectura_) == 8
+    assert any(p.startswith("En el laboratorio:") for p in laboratorio)
+    assert not any(p.startswith("En el laboratorio:") for p in lectura_ + evaluacion)
+    assert any(p.startswith("En la evaluación:") for p in evaluacion)
+    assert not any(p.startswith("¿Algún material da la respuesta") for p in guia)   # la guía trae las respuestas
+    assert any(p.startswith("¿Ejecutaste cada ejercicio") for p in guia + laboratorio)
+    # Lo que revisa el programa no va a la IA en ningún material.
+    for material in pasada2.TODOS:
+        preguntas = pasada2.lista_de_verificacion(material)
+        assert "¿El diseño es uniforme?" not in preguntas
+        assert not any("minutos, puntos, notas" in p for p in preguntas)
+
+
+def test_una_pregunta_nueva_en_la_skill_detiene_el_programa(monkeypatch):
+    from app.validacion import pasada2
+    monkeypatch.setattr(pasada2, "lista_completa", lambda: ["¿Una pregunta que nadie repartió?"])
+    with pytest.raises(KeyError, match="pregunta nueva"):
+        pasada2.lista_de_verificacion("Lectura")
+
+
+def test_si_la_skill_cambia_el_pedido_del_revisor_el_programa_se_detiene(sesion, monkeypatch):
+    monkeypatch.setattr(revisor, "pedido_de_la_skill", lambda: "Otro pedido.")
+    with pytest.raises(KeyError, match="decisión 12"):
+        generar(sesion, LIMPIA, pasada())

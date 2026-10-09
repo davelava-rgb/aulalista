@@ -50,7 +50,7 @@ Cada regla tiene una prueba automática. Si una regla no tiene prueba, la etapa 
 
 ## Validación
 
-- Ningún material se entrega con una FALLA abierta. Un AVISO se corrige o se explica.
+- Ningún material se entrega con una FALLA abierta. Un AVISO se corrige o se explica, salvo los de relleno y palabras imprecisas, que son informativos (`PLAN.md` §0, decisión 13).
 - Ninguna fila del Excel de verificación queda sin pasaje y veredicto. Ninguna queda "sin fuente".
 - El pasaje que copia la IA se comprueba con un programa contra la fuente.
 - El revisor independiente es una sesión nueva del SDK, sin acceso a borradores ni a la tabla. Máximo tres rondas.

@@ -1,6 +1,7 @@
 """El revisor independiente busca errores puestos a propósito en un material (PLAN.md §5.8).
 
-Del revisor se mide y se reporta cuántos detecta; las dos pasadas son las que deben marcar el 100 %.
+Desde la decisión 12 el revisor hace también la segunda pasada: relleno, vacío, ambigüedad e inconsistencia
+son ahora suyos. Se mide y se reporta cuántos detecta.
 La prueba exige que el programa compruebe cada prueba citada y que el revisor no marque las oraciones correctas.
 Gasta tokens. Se corre con: pytest -m ia tests/ia/test_revisor_sembrados.py -s
 """
@@ -36,6 +37,7 @@ SEMBRADAS = {
     "En la tienda principal, el Sprint del equipo de Ventas dura tres semanas.": "inconsistencia",
     "Este tema es muy importante y conviene tenerlo siempre presente.": "relleno",
     "Marca en el tablero el pedido anterior al último que revisaste.": "ambigüedad",
+    "Abre el archivo y copia la tabla en un documento nuevo.": "vacío",
 }
 
 

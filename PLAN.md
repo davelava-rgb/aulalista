@@ -30,6 +30,9 @@ Términos usados en este plan:
 | 8 | Ahorro aprobado en la etapa 5b: correcciones por oración con Sonnet, pedidos con la parte fija primero, primera pasada en grupos de 40 con esfuerzo bajo, segunda pasada con esfuerzo alto solo en su primera revisión. La lectura se mantiene en 1.500 palabras como máximo (decisión del profesor en la etapa 5c) |
 | 9 | Las pasadas tienen su tope de cinco vueltas. Después, cada ronda del revisor independiente tiene hasta dos vueltas para corregir sus hallazgos y lo que esa corrección rompa. Peor caso: 5 + 3 × 2 = 11 vueltas (aprobado en la etapa 5d) |
 | 10 | Reglas aflojadas en la etapa 5d. Son excepciones a la skill. a) En una norma se comparan cuatro cosas: número, término, cantidades y "debe" o "puede". El orden, quién hace la acción y las palabras que generalizan ya no se comparan una por una; una oración que contradice al pasaje o le agrega una afirmación sigue siendo "no coincide". b) Un resumen de una norma que dice "en este curso" se juzga solo por si contradice o agrega algo. Igual necesita su pasaje copiado tal cual. c) Una oración de más de 25 palabras que sigue a su pasaje de una norma no se parte. Si su pasaje existe tal cual, el programa explica el aviso solo |
+| 11 | La lista de verificación de la skill se aplica por material. Cada material recibe solo las preguntas que le corresponden: la lectura recibe 8 de 14. Las preguntas que ya revisa un programa (diseño uniforme; minutos, puntos y porcentajes) no van a la IA. Si la skill agrega una pregunta, el programa se detiene hasta repartirla (aprobado en la etapa 5d) |
+| 12 | Dos jueces con IA, no tres. La primera pasada revisa la veracidad en cada vuelta. El revisor independiente hace también la segunda pasada: las cuatro preguntas por bloque, la lista de verificación y los errores que solo se ven al leer el documento completo. Ya no compara oración por oración con las fuentes. Es una excepción a la skill, que pide una segunda pasada propia y un revisor que compare cada oración con las fuentes (aprobado en la etapa 5d) |
+| 13 | Los avisos de relleno y de palabras imprecisas se mantienen en la hoja Hallazgos, pero son informativos: no obligan a corregir ni a explicar (aprobado en la etapa 5d) |
 
 ### Contradicciones encontradas
 
@@ -244,24 +247,24 @@ Cada oración recibe una huella para saber cuáles son nuevas o cambiaron.
 7. Si los candidatos no sirven, la IA usa la herramienta `buscar_en_fuentes`.
 8. "No coincide": el redactor reescribe la oración. "Sin fuente": la borra o la convierte en regla del curso.
 
-### 5.3 Segunda pasada, valor y funcionamiento (etapa 5c)
+### 5.3 Segunda pasada, valor y funcionamiento (etapa 5c; desde la 5d la hace el revisor, decisión 12)
 
 1. El programa lista cada cifra, nombre propio, fecha y término del vocabulario con sus oraciones. Así llena "Datos repetidos". Dos valores para el mismo dato crean un hallazgo de inconsistencia.
-2. La IA responde las cuatro preguntas por cada bloque, ejercicio, estación o pregunta. Así llena "Segunda pasada". Una pregunta sin respuesta crea un hallazgo.
+2. El revisor independiente responde las cuatro preguntas por cada bloque, ejercicio, estación o pregunta. Así llena "Segunda pasada". Lo que encuentra va como hallazgo, con su prueba.
 3. El ejecutor vuelve a ejecutar cada ejercicio y cada pregunta.
-4. La IA responde la lista de verificación de la skill en JSON. Cada "no" crea un hallazgo.
+4. El revisor responde la lista de verificación de su material en JSON (decisión 11). Cada "no" crea un hallazgo.
 
 ### 5.4 Revisor independiente (etapa 5d)
 
 1. Es una sesión nueva del SDK. No continúa la sesión del redactor.
 2. Su carpeta de trabajo tiene solo el texto del material final con oraciones numeradas, `fuentes_texto` y las dos fichas.
 3. Puede leer y buscar en esa carpeta. No puede escribir. Lo hace con cuatro herramientas propias: listar, leer, buscar un texto y buscar pasajes parecidos. Ninguna sale de la carpeta. No usa Read ni Grep de Claude Code, porque esas pueden leer cualquier archivo de la computadora, también los borradores.
-4. Recibe el pedido exacto de la skill y responde en JSON: número de oración, defecto y prueba.
+4. Recibe el pedido de la skill, adaptado por la decisión 12: lee el documento completo y no repite la comparación oración por oración, que ya hizo la primera pasada. También hace la segunda pasada (§5.3). Responde en JSON: número de oración, defecto y prueba, las cuatro respuestas por bloque y la lista de verificación.
 5. El programa comprueba que cada prueba citada exista.
 6. El redactor corrige el hallazgo o lo rechaza con el pasaje que lo contradice. El programa comprueba que ese pasaje exista tal cual. Si no existe, el hallazgo sigue abierto. Se anota en la columna "Revisor independiente".
 7. Con tres hallazgos válidos o más, se corrige y se lanza un revisor nuevo. Máximo tres rondas.
-8. Si la tercera ronda encuentra tres hallazgos o más, sus correcciones se validan con el verificador y las dos pasadas, pero no se lanza un cuarto revisor. La entrega lo avisa en "Qué no pude probar".
-9. Un hallazgo que sigue abierto al terminar sus dos vueltas queda en "Decisiones pendientes" y la lectura no se entrega.
+8. Si la tercera ronda encuentra tres hallazgos o más, sus correcciones se validan con el verificador y la primera pasada, pero no se lanza un cuarto revisor. La entrega lo avisa en "Qué no pude probar".
+9. Un hallazgo que sigue abierto al terminar sus dos vueltas queda en "Decisiones pendientes" y la lectura no se entrega. Si es relleno o ambigüedad, el programa elimina la oración, salvo que eso deje vacía una parte obligatoria de la lectura.
 
 ### 5.5 Ciclo de corrección (etapa 5d)
 
@@ -270,10 +273,10 @@ Después de cada cambio:
 1. Se generan los archivos de nuevo.
 2. El verificador corre completo.
 3. La primera pasada revisa solo las oraciones con huella nueva.
-4. La segunda pasada revisa solo los bloques que cambiaron y vuelve a ejecutar sus ejercicios.
+4. Los ejercicios que cambiaron se vuelven a ejecutar. La segunda pasada no corre en cada vuelta: la hace el revisor (decisión 12).
 5. Si la corrección vino de un revisor con tres hallazgos o más, se lanza un revisor nuevo.
 
-El ciclo termina cuando una vuelta completa no cambia ninguna oración: cero fallas, avisos explicados, ninguna oración "no coincide" ni "sin fuente" y un revisor con menos de tres hallazgos. Tope: cinco vueltas.
+El ciclo termina cuando una vuelta completa no cambia ninguna oración: cero fallas, avisos explicados (salvo los informativos), ninguna oración "no coincide" ni "sin fuente" y un revisor con menos de tres hallazgos. Tope: cinco vueltas, y dos por cada ronda del revisor (decisión 9).
 
 ### 5.6 Cómo se llena el Excel
 
