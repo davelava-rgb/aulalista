@@ -29,11 +29,12 @@ Términos usados en este plan:
 | 7 | Al llegar al tope de cinco vueltas, el programa elimina las oraciones que siguen sin coincidir con su fuente o que la segunda pasada marcó como relleno o ambiguas, y valida de nuevo. Un vacío, una inconsistencia o un punto de la lista de verificación que siga abierto queda en «Decisiones pendientes» y el material no se entrega (aprobado en la etapa 5c) |
 | 8 | Ahorro aprobado en la etapa 5b: correcciones por oración con Sonnet, pedidos con la parte fija primero, primera pasada en grupos de 40 con esfuerzo bajo, segunda pasada con esfuerzo alto solo en su primera revisión. La lectura se mantiene en 1.500 palabras como máximo (decisión del profesor en la etapa 5c) |
 | 9 | Las pasadas tienen su tope de cinco vueltas. Después, cada ronda del revisor independiente tiene hasta dos vueltas para corregir sus hallazgos y lo que esa corrección rompa. Peor caso: 5 + 3 × 2 = 11 vueltas (aprobado en la etapa 5d) |
-| 10 | Reglas aflojadas en la etapa 5d. Son excepciones a la skill. a) En una norma se comparan cuatro cosas: número, término, cantidades y "debe" o "puede". El orden, quién hace la acción y las palabras que generalizan ya no se comparan una por una; una oración que contradice al pasaje o le agrega una afirmación sigue siendo "no coincide". b) Un resumen de una norma que dice "en este curso" se juzga solo por si contradice o agrega algo. Igual necesita su pasaje copiado tal cual. c) Una oración de más de 25 palabras que sigue a su pasaje de una norma no se parte. Si su pasaje existe tal cual, el programa explica el aviso solo |
+| 10 | Reglas aflojadas en la etapa 5d. Son excepciones a la skill. a) En el contenido de una fuente se comparan cuatro cosas: número de referencia, término, cantidades y "debe" o "puede". El orden, quién hace la acción y las palabras que generalizan ya no se comparan una por una; una oración que contradice al pasaje o le agrega una afirmación sigue siendo "no coincide". b) Un resumen de una norma que dice "en este curso" se juzga solo por si contradice o agrega algo. Igual necesita su pasaje copiado tal cual. c) Una oración de más de 25 palabras que sigue a su pasaje de una norma no se parte. Si su pasaje existe tal cual, el programa explica el aviso solo |
 | 11 | La lista de verificación de la skill se aplica por material. Cada material recibe solo las preguntas que le corresponden: la lectura recibe 8 de 14. Las preguntas que ya revisa un programa (diseño uniforme; minutos, puntos y porcentajes) no van a la IA. Si la skill agrega una pregunta, el programa se detiene hasta repartirla (aprobado en la etapa 5d) |
 | 12 | Dos jueces con IA, no tres. La primera pasada revisa la veracidad en cada vuelta. El revisor independiente hace también la segunda pasada: las cuatro preguntas por bloque, la lista de verificación y los errores que solo se ven al leer el documento completo. Ya no compara oración por oración con las fuentes. Es una excepción a la skill, que pide una segunda pasada propia y un revisor que compare cada oración con las fuentes (aprobado en la etapa 5d) |
 | 13 | Los avisos de relleno y de palabras imprecisas se mantienen en la hoja Hallazgos, pero son informativos: no obligan a corregir ni a explicar (aprobado en la etapa 5d) |
 | 14 | Oraciones aprobadas protegidas. En una corrección por oraciones, el programa rechaza el cambio a una oración que ya coincide con su fuente si ningún problema la nombra. Si algún problema no nombra oraciones (un punto de la lista de verificación), la protección no se aplica en esa corrección. La corrección completa del documento tampoco se protege. La entrega dice cuántos cambios se rechazaron (aprobado en la etapa 5d) |
+| 15 | La skill es agnóstica al tipo de fuente. «Norma» pasa a ser «contenido de una fuente», y «cláusula o control» pasa a ser «número de referencia» (sección, cláusula, lámina o paso). El contenido de una fuente se puede decir con otras palabras si no cambia su sentido: el juez compara el sentido, no las palabras. Quedan exactos el pasaje que se cita como prueba, las citas entre comillas, los nombres del vocabulario, las cifras y «debe» o «puede». Se corrigió en SKILL.md, en el verificador y en AulaLista; no es una excepción (aprobado en la etapa 5d) |
 
 ### Contradicciones encontradas
 
@@ -220,7 +221,7 @@ El programa extrae el texto de Word (párrafos, tablas, recuadros, encabezado y 
 
 | Revisión | Cómo la hace | Nivel |
 |---|---|---|
-| La cláusula existe | Busca el número en un índice de cláusulas o láminas creado desde `fuentes_texto` y anota el título | FALLA |
+| La referencia existe | Busca el número de sección, cláusula, lámina o paso en un índice creado desde `fuentes_texto` y anota el título | FALLA |
 | La cita es exacta | Busca el texto entre comillas en las fuentes. Solo cambia espacios y tipos de comilla | FALLA |
 | La operación es correcta | Detecta "a + b = c", "×", "÷" y "%" con cifras, y recalcula. Lee números escritos hasta "cien" | FALLA |
 | El dato fijo usa su valor | Si aparece la etiqueta de un dato fijo con otro valor, lo marca | FALLA |
@@ -242,7 +243,7 @@ Cada oración recibe una huella para saber cuáles son nuevas o cambiaron.
 1. El programa busca para cada oración los tres pasajes más parecidos en `fuentes_texto` y en las fichas. En las diapositivas busca además en la lectura validada.
 2. La IA recibe grupos de unas 20 oraciones con sus pasajes, no las fuentes completas.
 3. Por cada oración, la IA responde en JSON: tipo, pasaje copiado, ubicación, veredicto y motivo.
-4. En las normas, la IA compara cuatro cosas: número, término, cantidades y "debe" o "puede" (decisión 10). Son campos obligatorios del JSON. Un resumen con "en este curso" no se compara punto por punto.
+4. En el contenido de una fuente, la IA compara el sentido, no las palabras, y cuatro cosas: número, término, cantidades y "debe" o "puede" (decisión 10). Son campos obligatorios del JSON. Un resumen con "en este curso" no se compara punto por punto.
 5. El programa comprueba que el pasaje copiado exista tal cual en esa ubicación. Si no existe, la oración queda "sin fuente".
 6. Comprobaciones sin IA: regla del curso con "en este curso", dato del caso igual a la ficha, cálculo rehecho con los datos del archivo.
 7. Si los candidatos no sirven, la IA usa la herramienta `buscar_en_fuentes`.
@@ -291,7 +292,7 @@ Formato del modelo: Arial 10, texto ajustado arriba, encabezado en negrita blanc
 | Diapositiva o sección | Verificador: "archivo · sección" o "archivo · diapositiva N" |
 | Parte | Verificador: texto, tabla o recuadro, celda o notas |
 | Oración | Verificador |
-| Tipo de oración | Primera pasada: norma, dato del caso, cálculo, regla del curso, instrucción o sin afirmación |
+| Tipo de oración | Primera pasada: contenido de una fuente, dato del caso, cálculo, regla del curso, instrucción o sin afirmación |
 | Pasaje de la fuente | Primera pasada, después de que el programa comprueba que existe |
 | Fuente | Primera pasada: archivo y página, lámina o celda |
 | Veredicto | Primera pasada: coincide, no coincide o sin fuente |
@@ -310,7 +311,7 @@ Hay cinco Excel por sesión, como en el modelo. El laboratorio y su guía compar
 | Material | Fuente de la primera pasada | Revisiones propias |
 |---|---|---|
 | Lectura | Fuentes del curso | Seis páginas como máximo, según Word. De 2 a 4 bloques. No da respuestas del laboratorio |
-| Diapositivas | Lectura validada. Si una frase cita una norma, también la norma | De 14 a 18 diapositivas. Notas en todas. Sin desbordes, medido con PowerPoint. Mismo orden que la lectura |
+| Diapositivas | Lectura validada. Si una frase cita una fuente del curso, también esa fuente | De 14 a 18 diapositivas. Notas en todas. Sin desbordes, medido con PowerPoint. Mismo orden que la lectura |
 | Laboratorio y archivos | Fichas y fuentes | Datos del caso, cálculos rehechos, nombres en guía, tabla y .zip, ejecución de cada ejercicio, figuras del archivo real |
 | Guía del profesor | Registro de la ejecución | Cada respuesta es igual a lo que salió al ejecutar |
 | Práctica interactiva | Laboratorio validado | Una sola respuesta por caso. Playwright revisa tamaños, modos, teclado, botones de 44 px y errores |
@@ -345,7 +346,7 @@ Reglas del SPEC §6 como pruebas:
 | Sin tiempos ni puntajes | Verificador sobre los seis materiales y su sembrado |
 | Lenguaje claro | Oraciones largas, lista de IA y sembrado de jerga en la segunda pasada |
 | Sin datos inventados | Pasaje comprobado y sembrado de una cifra inventada |
-| Fuentes copiadas | Toda oración de tipo norma tiene un pasaje que existe |
+| Fuentes copiadas | Toda oración de tipo contenido de una fuente tiene un pasaje que existe |
 | "En este curso" | Toda regla del curso contiene esas palabras |
 | Datos ficticios y coherentes | Datos fijos y "Datos repetidos" sin dos valores para el mismo dato |
 | Sin datos personales reales | Los nombres propios del material están en la lista ficticia de la ficha |

@@ -492,7 +492,7 @@ def test_el_programa_no_borra_la_unica_oracion_de_un_bloque(sesion):
 def test_desde_la_tercera_vuelta_la_veracidad_pide_copiar_o_eliminar(sesion):
     mala = "El Manifiesto Ágil tiene cinco aspectos."
     datos = con_error(mala)
-    falla = pasada({mala: {"tipo": "norma", "veredicto": "sin fuente", "pasaje": ""}})
+    falla = pasada({mala: {"tipo": "contenido de una fuente", "veredicto": "sin fuente", "pasaje": ""}})
     material, consulta = generar(sesion, datos, falla, cambios(), falla, cambios(), falla,
                                  cambios((mala, "")))
     assert lectura.ULTIMO_INTENTO not in consulta.llamadas[2]["prompt"]
@@ -502,7 +502,7 @@ def test_desde_la_tercera_vuelta_la_veracidad_pide_copiar_o_eliminar(sesion):
 
 def test_al_llegar_al_tope_el_programa_elimina_lo_que_sigue_sin_coincidir(sesion):
     mala = "El Manifiesto Ágil tiene cinco aspectos."
-    falla = pasada({mala: {"tipo": "norma", "veredicto": "sin fuente", "pasaje": ""}})
+    falla = pasada({mala: {"tipo": "contenido de una fuente", "veredicto": "sin fuente", "pasaje": ""}})
     secuencia = [con_error(mala), falla]
     for _ in range(lectura.MAX_CORRECCIONES):
         secuencia += [cambios(), falla]
@@ -540,7 +540,7 @@ def test_un_aviso_en_una_oracion_literal_de_la_fuente_lo_explica_el_programa(ses
 
 def test_un_vacio_que_el_cierre_no_puede_borrar_sigue_pendiente(sesion):
     mala = "El Manifiesto Ágil tiene cinco aspectos."
-    falla = pasada({mala: {"tipo": "norma", "veredicto": "sin fuente", "pasaje": ""}})
+    falla = pasada({mala: {"tipo": "contenido de una fuente", "veredicto": "sin fuente", "pasaje": ""}})
     secuencia = [con_error(mala), falla]
     for _ in range(lectura.MAX_CORRECCIONES):
         secuencia += [cambios(), falla]
@@ -563,7 +563,7 @@ def test_una_oracion_larga_que_sigue_a_su_pasaje_de_norma_se_explica_sola():
     anclas = [{"oracion": larga, "fuente": "guia.pdf", "ubicacion": "página 9", "texto": norma}]
     explicaciones = {}
     assert lectura._explicar_literales(resultado, explicaciones, corpus, anclas) is True
-    assert "Sigue a su pasaje de la norma (guia.pdf, página 9)" in verificador.buscar_explicacion(
+    assert "Sigue a su pasaje (guia.pdf, página 9)" in verificador.buscar_explicacion(
         "oración larga", larga, explicaciones)
     # Sin un pasaje que exista tal cual, el aviso no se explica solo.
     inventada = [{**anclas[0], "texto": "El Product Owner decide todo."}]
@@ -581,7 +581,7 @@ MANIFIESTO = "El Manifiesto Ágil tiene cuatro aspectos."
 def test_una_correccion_no_puede_cambiar_una_oracion_aprobada_que_nadie_nombra(sesion):
     mala = "El Manifiesto Ágil tiene cinco aspectos."
     nueva = "El Manifiesto Ágil tiene cuatro valores."
-    falla = pasada({mala: {"tipo": "norma", "veredicto": "sin fuente", "pasaje": ""}})
+    falla = pasada({mala: {"tipo": "contenido de una fuente", "veredicto": "sin fuente", "pasaje": ""}})
     material, consulta = generar(sesion, con_error(mala), falla,
                                  cambios((mala, nueva), (MANIFIESTO, "El manifiesto se firmó en 2001.")), pasada())
     contenido = lectura.archivos(sesion, 1)["contenido"].read_text(encoding="utf-8")

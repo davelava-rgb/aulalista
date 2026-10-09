@@ -49,7 +49,7 @@ def clave(entorno):
 
 def test_un_pasaje_que_existe_queda_con_su_ubicacion_real():
     o = oracion(1, "Scrum tiene tres pilares.")
-    resultado, _ = correr([o], {"oraciones": [respuesta(1, "norma", fuente="guia.pdf", pasaje="Scrum tiene tres pilares",
+    resultado, _ = correr([o], {"oraciones": [respuesta(1, pasada1.CONTENIDO, fuente="guia.pdf", pasaje="Scrum tiene tres pilares",
                                                         numero="igual", termino="igual", cantidades="igual")]})
     fila = resultado.filas[o["huella"]]
     assert fila["veredicto"] == "coincide"
@@ -58,7 +58,7 @@ def test_un_pasaje_que_existe_queda_con_su_ubicacion_real():
 
 def test_un_pasaje_inventado_queda_sin_fuente():
     o = oracion(1, "Scrum tiene cuatro pilares.")
-    resultado, _ = correr([o], {"oraciones": [respuesta(1, "norma", fuente="guia.pdf", pasaje="Scrum tiene cuatro pilares")]})
+    resultado, _ = correr([o], {"oraciones": [respuesta(1, pasada1.CONTENIDO, fuente="guia.pdf", pasaje="Scrum tiene cuatro pilares")]})
     fila = resultado.filas[o["huella"]]
     assert fila["veredicto"] == "sin fuente"
     assert "no aparece tal cual" in fila["motivo"]
@@ -73,7 +73,7 @@ def test_el_pasaje_se_busca_en_otra_fuente_si_la_ia_se_equivoca_de_nombre():
 
 def test_una_norma_con_una_diferencia_no_coincide_aunque_la_ia_diga_que_si():
     o = oracion(1, "Los artefactos pueden inspeccionarse con frecuencia.")
-    resultado, _ = correr([o], {"oraciones": [respuesta(1, "norma", fuente="guia.pdf",
+    resultado, _ = correr([o], {"oraciones": [respuesta(1, pasada1.CONTENIDO, fuente="guia.pdf",
                                                         pasaje="Los artefactos deben inspeccionarse con frecuencia",
                                                         obligacion="distinto")]})
     fila = resultado.filas[o["huella"]]
@@ -115,7 +115,7 @@ def test_titulos_portada_y_encabezado_no_van_a_la_ia():
 
 def test_las_oraciones_sin_cambios_conservan_su_resultado():
     o = oracion(1, "Scrum tiene tres pilares.")
-    guardada = {"tipo": "norma", "pasaje": "Scrum tiene tres pilares", "fuente": "guia.pdf, página 35",
+    guardada = {"tipo": pasada1.CONTENIDO, "pasaje": "Scrum tiene tres pilares", "fuente": "guia.pdf, página 35",
                 "veredicto": "coincide", "motivo": "ok"}
     resultado, consulta = correr([o], anteriores={o["huella"]: guardada})
     assert consulta.llamadas == [] and resultado.filas[o["huella"]] == guardada
@@ -197,7 +197,7 @@ def test_lectura_sin_fuente_se_corrige_con_un_dato_nuevo_del_caso(sesion):  # no
 
 def test_una_norma_no_se_apoya_en_la_ficha():
     o = oracion(1, "Cada Sprint dura dos semanas según la guía.")
-    resultado, _ = correr([o], {"oraciones": [respuesta(1, "norma", fuente="ficha del curso",
+    resultado, _ = correr([o], {"oraciones": [respuesta(1, pasada1.CONTENIDO, fuente="ficha del curso",
                                                         pasaje="Duración de cada Sprint: dos semanas")]})
     fila = resultado.filas[o["huella"]]
     assert fila["veredicto"] == "sin fuente" and "no con una ficha" in fila["motivo"]
@@ -230,7 +230,7 @@ def test_una_oracion_escrita_tal_cual_en_la_fuente_se_aprueba_sin_ia():
     corta = oracion(3, "Scrum tiene tres pilares")  # está tal cual, pero tiene menos de cinco palabras
     resultado, consulta = correr([norma, dato, corta], pasada())
     assert resultado.aprobadas_por_programa == 2
-    assert resultado.filas[norma["huella"]]["tipo"] == "norma"
+    assert resultado.filas[norma["huella"]]["tipo"] == pasada1.CONTENIDO
     assert resultado.filas[norma["huella"]]["fuente"] == "guia.pdf, página 37 · número impreso 56"
     assert resultado.filas[dato["huella"]]["tipo"] == "dato del caso"
     assert consulta.llamadas[0]["prompt"].count("Oración:") == 1
@@ -238,7 +238,7 @@ def test_una_oracion_escrita_tal_cual_en_la_fuente_se_aprueba_sin_ia():
 
 def test_una_norma_sin_su_comparacion_no_queda_aprobada():
     o = oracion(1, "Scrum tiene tres pilares según la guía.")
-    sin_comparacion = respuesta(1, "norma", fuente="guia.pdf", pasaje="Scrum tiene tres pilares")
+    sin_comparacion = respuesta(1, pasada1.CONTENIDO, fuente="guia.pdf", pasaje="Scrum tiene tres pilares")
     del sin_comparacion["comparacion"]
     resultado, _ = correr([o], {"oraciones": [sin_comparacion]})
     assert resultado.filas[o["huella"]]["veredicto"] == "no coincide"
@@ -272,15 +272,14 @@ def test_la_norma_se_compara_en_cuatro_puntos():
 
 def test_el_orden_o_quien_distintos_ya_no_bastan_para_no_coincidir():
     o = oracion(1, "Inspección, transparencia y adaptación son los tres pilares de Scrum.")
-    resultado, _ = correr([o], {"oraciones": [respuesta(
-        1, "norma", fuente="guia.pdf", pasaje="Scrum tiene tres pilares: transparencia, inspección y adaptación",
+    resultado, _ = correr([o], {"oraciones": [respuesta(1, pasada1.CONTENIDO, fuente="guia.pdf", pasaje="Scrum tiene tres pilares: transparencia, inspección y adaptación",
         numero="no aplica", termino="igual", cantidades="igual", obligacion="no aplica", orden="distinto")]})
     assert resultado.filas[o["huella"]]["veredicto"] == "coincide"
 
 
 def test_un_resumen_con_en_este_curso_no_se_compara_punto_por_punto():
     o = oracion(1, "En este curso, resumimos la norma: los artefactos se revisan a menudo.")
-    sin_comparacion = respuesta(1, "norma", fuente="guia.pdf", pasaje="Los artefactos deben inspeccionarse con frecuencia",
+    sin_comparacion = respuesta(1, pasada1.CONTENIDO, fuente="guia.pdf", pasaje="Los artefactos deben inspeccionarse con frecuencia",
                                 obligacion="distinto")
     del sin_comparacion["comparacion"]["numero"]
     resultado, _ = correr([o], {"oraciones": [sin_comparacion]})
@@ -291,8 +290,8 @@ def test_un_resumen_que_contradice_sigue_sin_coincidir_y_necesita_su_pasaje():
     contradice = oracion(1, "En este curso, resumimos: los artefactos no se revisan.")
     inventado = oracion(2, "En este curso, resumimos: Scrum tiene cinco pilares.")
     resultado, _ = correr([contradice, inventado], {"oraciones": [
-        respuesta(1, "norma", "no coincide", fuente="guia.pdf", pasaje="Los artefactos deben inspeccionarse con frecuencia"),
-        respuesta(2, "norma", fuente="guia.pdf", pasaje="Scrum tiene cinco pilares")]})
+        respuesta(1, pasada1.CONTENIDO, "no coincide", fuente="guia.pdf", pasaje="Los artefactos deben inspeccionarse con frecuencia"),
+        respuesta(2, pasada1.CONTENIDO, fuente="guia.pdf", pasaje="Scrum tiene cinco pilares")]})
     assert resultado.filas[contradice["huella"]]["veredicto"] == "no coincide"
     assert resultado.filas[inventado["huella"]]["veredicto"] == "sin fuente"
 
@@ -301,5 +300,27 @@ def test_la_ia_recibe_la_regla_de_cuatro_puntos_y_no_la_de_siete():
     o = oracion(1, "Los artefactos se revisan.")
     _, consulta = correr([o], {"oraciones": [respuesta(1, "sin afirmación")]})
     pedido = consulta.llamadas[0]["prompt"]
-    assert pasada1.REGLA_NORMA_DE_AULALISTA in pedido
+    assert pasada1.REGLA_DE_AULALISTA in pedido
     assert "estas siete cosas" not in pedido and "las siete cosas" not in pedido
+
+
+# ---------- Mismo sentido y skill agnóstica (PLAN.md §0, decisión 15) ----------
+
+def test_la_ia_compara_el_sentido_y_no_habla_de_normas():
+    o = oracion(1, "Los artefactos se revisan.")
+    _, consulta = correr([o], {"oraciones": [respuesta(1, "sin afirmación")]})
+    pedido = consulta.llamadas[0]["prompt"]
+    assert "Compara el sentido, no las palabras" in pedido
+    assert "Puede decirlo con otras palabras si no cambia su sentido" in pedido
+    assert pasada1.CONTENIDO == "contenido de una fuente" and pasada1.CONTENIDO in pedido
+    assert "norma" not in pedido.replace("normal", "")
+    assert "cláusula o de control" not in pedido
+
+
+def test_el_redactor_puede_usar_sus_palabras_sin_cambiar_el_sentido(sesion):  # noqa: F811
+    _, consulta = generar(sesion, LIMPIA, pasada())
+    pedido = consulta.llamadas[0]["prompt"]
+    assert "Puedes usar tus palabras si no cambias su sentido" in pedido
+    assert "Deja iguales los nombres del vocabulario, las cifras y «debe» o «puede»" in pedido
+    assert "palabras exactas" not in pedido and "sin cambiar sus términos" not in pedido
+    assert "palabras exactas" not in lectura.ULTIMO_INTENTO

@@ -213,7 +213,7 @@ def test_indice_por_patron_de_clausulas(sesion, tmp_path):
     material = word(tmp_path / "S1_Laboratorio.docx", ["La cláusula 5.1 pide liderazgo.", "La cláusula 7.9 pide recursos."])
     resultado = correr(sesion, [material])
     assert resultado.oraciones[-2].fuente == "Norma, cláusula 5.1: Liderazgo y compromiso"
-    assert [(h.n, h.regla) for h in resultado.hallazgos] == [(resultado.oraciones[-1].n, "cláusula inexistente")]
+    assert [(h.n, h.regla) for h in resultado.hallazgos] == [(resultado.oraciones[-1].n, "referencia inexistente")]
 
 
 # ---------- Revisiones del material completo ----------

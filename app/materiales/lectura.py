@@ -35,8 +35,8 @@ MINIMO_PARA_OTRA_RONDA = 3  # con tres hallazgos válidos o más se lanza otro r
 DEFECTOS_QUE_SE_ELIMINAN = ("relleno", "ambigüedad")   # al tope, el programa puede borrar esas oraciones
 INSTRUCCION_SIN_EJECUCION = "No aplica: la lectura no tiene archivos de práctica que ejecutar."
 VUELTA_DE_ULTIMO_INTENTO = 3
-ULTIMO_INTENTO = ("YA SE INTENTÓ CORREGIR: escribe la oración con las palabras exactas de su pasaje, "
-                  "sin cambiar ningún término, o elimínala.")
+ULTIMO_INTENTO = ("YA SE INTENTÓ CORREGIR: escribe la oración siguiendo su pasaje de cerca, sin agregar ni quitar "
+                  "ninguna idea, o elimínala.")
 PALABRAS_MAX = 1500  # orientación para no pasar de seis páginas con portada
 
 ESQUEMA_CORRECCION = {
@@ -157,19 +157,20 @@ CÓMO ENTREGAR LA LECTURA
   Usa «tabla» solo si ayuda a entender; si no, déjala en null. Máximo 4 columnas.
 - aplicalo.plantilla: la técnica o plantilla lista para copiar, una línea por elemento, sin espacios por llenar.
 - cuidado: de 1 a 3 riesgos de una línea cada uno.
-- pasajes: una entrada por cada oración que afirma algo de una norma o de una fuente: «oracion» copiada
-  tal cual de la lectura, la fuente, la ubicación y en «texto» el pasaje que la sostiene, copiado tal cual,
-  de 40 palabras como máximo. Escribe cada una de esas oraciones a partir de su pasaje, sin cambiar sus términos.
+- pasajes: una entrada por cada oración que afirma algo de una fuente: «oracion» copiada tal cual de la lectura,
+  la fuente, la ubicación y en «texto» el pasaje que la sostiene, copiado tal cual, de 40 palabras como máximo.
+  Escribe cada una de esas oraciones a partir de su pasaje. Puedes usar tus palabras si no cambias su sentido.
+  Deja iguales los nombres del vocabulario, las cifras y «debe» o «puede».
 - decisiones: cada dato o decisión que las fichas no definían.
 - agrupacion: si hubo más temas que bloques, cómo los agrupaste. Si no, texto vacío.
 - Unas {PALABRAS_MAX} palabras como máximo en total, para no pasar de seis páginas con portada.
 - Una idea por oración y 25 palabras como máximo por oración. Excepción: si partir una oración que sigue a su
-  pasaje de una norma cambiaría lo que dice la norma, no la partas y anótala en «pasajes».
+  pasaje cambiaría lo que dice la fuente, no la partas y anótala en «pasajes».
 - Usa los nombres del vocabulario de la sesión tal cual y en su orden. No uses sus variantes.
 - Usa comillas solo para copiar texto tal cual de una fuente.
-- Si agrupas, resumes o cambias el orden de lo que dice una norma, escribe «en este curso».
-- Para afirmar algo de una norma, usa las palabras de su pasaje. No uses «en este curso» para evitar
-  una fuente: úsalo solo en reglas propias del curso o para avisar que resumiste, agrupaste o reordenaste.
+- Si agrupas, resumes o cambias el orden de lo que dice una fuente, escribe «en este curso».
+- Para afirmar algo de una fuente, apóyate en su pasaje: di lo mismo, con sus palabras o con otras más claras.
+  No uses «en este curso» para evitar una fuente: úsalo solo en reglas propias del curso o para avisar que resumiste, agrupaste o reordenaste.
 """
 
 
@@ -182,7 +183,7 @@ def pedido_de_redaccion(carpeta_curso: Path, sesion: int) -> str:
         INSTRUCCIONES_DE_FORMATO,
         "TAREA: redacta la lectura de la sesión. Actúa como diseñador instruccional y editor senior.",
         "Antes de redactar, busca con Grep en las fuentes y lee con Read los pasajes que vas a usar.",
-        "Redacta a partir de esos pasajes, no de memoria. No afirmes sobre una norma nada que no esté en un pasaje copiado.",
+        "Redacta a partir de esos pasajes, no de memoria. No afirmes sobre el contenido de una fuente nada que no esté en un pasaje copiado.",
         "Antes de entregar, revisa cada bloque con las cuatro preguntas de la segunda pasada de la skill:",
         "qué puede hacer el alumno, qué dato necesita y dónde está, qué oración tiene dos lecturas, y qué decide",
         "si su caso no sale como el ejemplo. Define cada término la primera vez que aparece. Corrige lo que falle.",
@@ -192,7 +193,8 @@ def pedido_de_redaccion(carpeta_curso: Path, sesion: int) -> str:
 REGLAS_DE_CORRECCION = """REGLAS DE CORRECCIÓN
 - Una FALLA se corrige siempre. Un AVISO se corrige o se explica.
 - VERACIDAD · no coincide: reescribe la oración para que diga lo que dice su pasaje.
-- VERACIDAD · sin fuente en una norma: busca su pasaje con Grep y reescribe la oración con las palabras de la fuente.
+- VERACIDAD · sin fuente en contenido de una fuente: busca su pasaje con Grep y reescribe la oración para que diga
+  lo que dice ese pasaje.
   No agregues «en este curso» para escapar de la fuente. Si ninguna fuente lo dice, elimina la oración.
 - VERACIDAD · sin fuente en otra oración: elimínala, o conviértela en una regla del curso que diga «en este curso».
   Si es un dato ficticio del caso que hace falta, agrégalo en «datos_nuevos» como «Etiqueta: valor».
@@ -380,8 +382,8 @@ def _pasaje_de_la_oracion(oracion: str, anclas: list[dict], corpus: Corpus) -> t
 def _explicar_literales(resultado, explicaciones: dict, corpus: Corpus, anclas: list[dict] | None = None) -> bool:
     """Un aviso de oración larga o de palabra imprecisa en una oración copiada tal cual de una fuente del
     curso se explica solo: cambiarla cambiaría lo que dice la fuente (así lo hace el Excel modelo).
-    Un aviso de oración larga en una oración escrita a partir de su pasaje de una norma también se explica
-    solo: partirla puede cambiar lo que dice la norma (PLAN.md §0, decisión 10)."""
+    Un aviso de oración larga en una oración escrita a partir de su pasaje también se explica solo: partirla
+    puede cambiar lo que dice la fuente (PLAN.md §0, decisión 10)."""
     nuevas = False
     for h in resultado.hallazgos:
         if h.nivel != "AVISO" or h.regla not in REGLAS_QUE_EXPLICA_EL_PROGRAMA or not h.oracion:
@@ -399,7 +401,7 @@ def _explicar_literales(resultado, explicaciones: dict, corpus: Corpus, anclas: 
         elif h.regla == "oración larga" and (anclada := _pasaje_de_la_oracion(texto, anclas or [], corpus)):
             fuente, ubicacion = anclada
             explicaciones[verificador.clave_de_hallazgo(h.regla, h.oracion)] = (
-                f"Sigue a su pasaje de la norma ({fuente}, {ubicacion}). Partirla puede cambiar lo que dice la norma. "
+                f"Sigue a su pasaje ({fuente}, {ubicacion}). Partirla puede cambiar lo que dice la fuente. "
                 "El programa comprobó que el pasaje existe; la primera pasada compara la oración con él.")
             nuevas = True
     return nuevas

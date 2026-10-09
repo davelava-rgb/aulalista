@@ -19,7 +19,7 @@ CASOS_POR_ORACION = [
     ("variante", "El equipo trabaja según el enfoque Agile.", "FALLA", "variante de un concepto"),
     ("dato fijo", "Fecha de referencia: lunes 5 de octubre de 2025.", "FALLA", "dato fijo"),
     ("cita", "La guía dice «Scrum es un marco para equipos grandes y complejos».", "FALLA", "cita sin fuente"),
-    ("clausula", "Lo explica la lámina 99 del capítulo.", "FALLA", "cláusula inexistente"),
+    ("clausula", "Lo explica la lámina 99 del capítulo.", "FALLA", "referencia inexistente"),
     ("operacion", "El almacén tiene 3 × 4 = 13 estantes.", "FALLA", "operación"),
     ("operacion en palabras", "Doce más tres es igual a dieciséis.", "FALLA", "operación"),
     ("porcentaje mal calculado", "El 10 % de 200 es 30.", "FALLA", "operación"),
