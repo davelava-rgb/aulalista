@@ -224,17 +224,26 @@ def errores(ficha: dict) -> list[str]:
 
 
 def _errores_de_la_sesion(ficha: dict) -> list[str]:
-    lista = []
-    materiales = materiales_de_la_sesion(ficha)
-    bloques = [n for n in range(1, 5) if valor(ficha, f"lectura.bloque.{n}")]
-    if "lectura" in materiales and len(bloques) < 2:
-        lista.append("La lectura necesita de 2 a 4 bloques.")
-    riesgos = _renglones(valor(ficha, "lectura.cuidado"))
-    if "lectura" in materiales and not 1 <= len(riesgos) <= 3:
-        lista.append("«Cuidado con» necesita de 1 a 3 riesgos, uno por línea.")
+    """Lo que se exige para confirmar la ficha de la sesión. Los datos de cada material se exigen al
+    producir ese material (PLAN.md §0, decisión 16): ver errores_del_material()."""
     if not vocabulario(ficha):
-        lista.append("Escribe al menos un concepto clave del vocabulario.")
-    if "laboratorio" in materiales:
+        return ["Escribe al menos un concepto clave del vocabulario."]
+    return []
+
+
+def errores_del_material(ficha: dict, material: str) -> list[str]:
+    """Lo que le falta a la ficha de la sesión para producir un material."""
+    if material not in materiales_de_la_sesion(ficha):
+        return [f"«Materiales de esta sesión» no incluye {material}."]
+    lista = []
+    if material == "lectura":
+        bloques = [n for n in range(1, 5) if valor(ficha, f"lectura.bloque.{n}")]
+        if len(bloques) < 2:
+            lista.append("La lectura necesita de 2 a 4 bloques.")
+        riesgos = _renglones(valor(ficha, "lectura.cuidado"))
+        if not 1 <= len(riesgos) <= 3:
+            lista.append("«Cuidado con» necesita de 1 a 3 riesgos, uno por línea.")
+    if material == "laboratorio":
         ids = ("area", "accion", "entregable", "archivo", "problema", "respuesta")
         ejercicios = bloques_llenos(ficha, "ejercicio", plantillas.MAX_EJERCICIOS, ids)
         if not 3 <= len(ejercicios) <= 5:
@@ -244,11 +253,11 @@ def _errores_de_la_sesion(ficha: dict) -> list[str]:
                                      ("respuesta", "la respuesta correcta"), ("accion", "la acción del alumno")):
                 if not valor(ficha, f"ejercicio.{n}.{campo_id}"):
                     lista.append(f"Ejercicio {n}: falta {nombre}.")
-    if "práctica interactiva" in materiales:
+    if material == "práctica interactiva":
         estaciones = _renglones(valor(ficha, "practica.estaciones"))
         if not 5 <= len(estaciones) <= 7:
             lista.append(f"La práctica necesita de 5 a 7 estaciones, una por línea; tiene {len(estaciones)}.")
-    if "evaluación" in materiales:
+    if material == "evaluación":
         ids = ("concepto", "tarea", "archivo", "problema", "respuesta")
         preguntas = bloques_llenos(ficha, "pregunta", plantillas.MAX_PREGUNTAS, ids)
         if not preguntas:
@@ -368,6 +377,13 @@ def sesiones_confirmadas(carpeta_curso: Path) -> list[int]:
 def puede_empezar_material(carpeta_curso: Path, sesion: int) -> bool:
     """Ningún material empieza sin las dos fichas confirmadas (SPEC §3)."""
     return cargar(carpeta_curso, "curso")["confirmada"] and cargar(carpeta_curso, "sesion", sesion)["confirmada"]
+
+
+def faltantes_para(carpeta_curso: Path, sesion: int, material: str) -> list[str]:
+    """Lo que falta para producir un material: las dos fichas confirmadas y los datos de ese material."""
+    if not puede_empezar_material(carpeta_curso, sesion):
+        return ["Confirma la ficha del curso y la ficha de la sesión."]
+    return errores_del_material(cargar(carpeta_curso, "sesion", sesion), material)
 
 
 def agregar_datos_fijos(carpeta_curso: Path, lineas: list[str], origen: str) -> list[str]:

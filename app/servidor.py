@@ -296,6 +296,8 @@ def ver_sesion(request: Request, curso: str, sesion: int, mensaje: str = ""):
     return plantillas.TemplateResponse(request, "sesion.html", {
         "curso": curso, "nombre": cursos.nombre(curso), "sesion": sesion, "mensaje": mensaje,
         "puede_empezar": almacen.puede_empezar_material(carpeta, sesion),
+        "faltan_lectura": almacen.faltantes_para(carpeta, sesion, lectura.CLAVE)
+        if almacen.puede_empezar_material(carpeta, sesion) else [],
         "lectura": lectura.estado(carpeta, sesion),
         "gasto": tokens.total(curso),
     })
@@ -307,6 +309,10 @@ def generar_lectura(curso: str, sesion: int):
     destino = f"/cursos/{curso}/sesiones/{sesion}"
     if not almacen.puede_empezar_material(carpeta, sesion):
         return RedirectResponse(destino + "?mensaje=" + quote("Confirma las dos fichas antes de generar."), status_code=303)
+    faltan = almacen.faltantes_para(carpeta, sesion, lectura.CLAVE)
+    if faltan:
+        return RedirectResponse(destino + "?mensaje=" + quote("Falta en la ficha de la sesión: " + " ".join(faltan)),
+                                status_code=303)
     if lectura.estado(carpeta, sesion).get("estado") == "trabajando":
         return RedirectResponse(destino, status_code=303)
     _trabajo_en_segundo_plano(lectura.generar, carpeta, curso, sesion)

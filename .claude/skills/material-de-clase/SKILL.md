@@ -365,13 +365,13 @@ FICHA DEL CURSO
   2.
   3.
 
-2. Público (obligatorio)
+2. Público
 - Quiénes son:
 - Qué saben ya del tema:
 - Qué valoran:
 
 3. Caso del curso
-- Empresa o institución ficticia y rubro (obligatorio):
+- Empresa o institución ficticia y rubro:
 - Áreas entre las que rotan los ejemplos:
 - Moneda y país de los casos:
 
@@ -407,7 +407,7 @@ FICHA DEL CURSO
 
 ## Plantilla · Ficha de la sesión
 
-Se llena una vez por sesión. Los campos con (obligatorio) no se pueden dejar vacíos.
+Se llena una vez por sesión. Los campos con (obligatorio) no se pueden dejar vacíos. Los datos de cada material se exigen al producir ese material.
 
 ```
 FICHA DE LA SESIÓN

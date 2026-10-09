@@ -284,6 +284,9 @@ def _portada(carpeta_curso: Path, sesion: int) -> docx.Portada:
 async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.query, contar_paginas=None) -> dict:
     if not almacen.puede_empezar_material(carpeta_curso, sesion):
         raise NoSePuedeEmpezar("Confirma la ficha del curso y la ficha de la sesión antes de generar la lectura.")
+    faltan = almacen.faltantes_para(carpeta_curso, sesion, CLAVE)
+    if faltan:
+        raise NoSePuedeEmpezar("Completa la ficha de la sesión antes de generar la lectura: " + " ".join(faltan))
     rutas = archivos(carpeta_curso, sesion)
     rutas["contenido"].parent.mkdir(parents=True, exist_ok=True)
     _actualizar(carpeta_curso, sesion, estado="trabajando", avance=[], error="", desactualizado=False,

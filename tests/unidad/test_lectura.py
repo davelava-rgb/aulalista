@@ -610,3 +610,19 @@ def test_con_un_punto_de_la_lista_la_correccion_puede_tocar_cualquier_oracion(se
                           pasada(), revisor=False)
     assert material["cambios_rechazados"] == 0
     assert nueva in lectura.archivos(sesion, 1)["contenido"].read_text(encoding="utf-8")
+
+
+
+# ---------- Datos de la lectura: se exigen al generarla (PLAN.md §0, decisión 16) ----------
+
+def test_sin_bloques_la_lectura_no_empieza_y_la_pagina_dice_que_falta(sesion):
+    ficha = almacen.cargar(sesion, "sesion", 1)
+    ficha["campos"]["lectura.bloque.2"] = {"valor": "", "origen": "", "estado": ""}
+    almacen.guardar(sesion, "sesion", 1, ficha)          # la ficha sigue confirmada
+    with pytest.raises(lectura.NoSePuedeEmpezar, match="La lectura necesita de 2 a 4 bloques"):
+        asyncio.run(lectura.generar(sesion, "scrum", 1, consulta=consulta_en_secuencia()))
+    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    assert "Para generar la lectura, completa en la" in pagina and "La lectura necesita de 2 a 4 bloques." in pagina
+    r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura", follow_redirects=True)
+    assert "Falta en la ficha de la sesión: La lectura necesita de 2 a 4 bloques." in r.text
+    assert lectura.estado(sesion, 1).get("estado") is None   # no empezó: no gastó tokens

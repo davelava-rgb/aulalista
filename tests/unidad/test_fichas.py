@@ -140,7 +140,9 @@ def test_ficha_del_curso_sin_obligatorios_no_se_confirma(curso):
     with pytest.raises(almacen.FichaIncompleta) as error:
         flujo.confirmar_curso(curso)
     assert "Falta «Sesiones. Una línea por sesión: número, título y alcance.»." in error.value.errores
-    assert "Falta «Quiénes son»." in error.value.errores  # la sección «Público» es obligatoria
+    # Público y empresa del caso son opcionales (PLAN.md §0, decisión 16).
+    assert "Falta «Quiénes son»." not in error.value.errores
+    assert not any("Empresa o institución" in e for e in error.value.errores)
 
 
 def test_ficha_de_la_sesion_revisa_bloques_ejercicios_estaciones_y_preguntas():
@@ -151,28 +153,45 @@ def test_ficha_de_la_sesion_revisa_bloques_ejercicios_estaciones_y_preguntas():
     valores.pop("ejercicio.2.problema")
     valores["practica.estaciones"] = "Una\nDos"
     valores.pop("pregunta.1.respuesta")
-    lista = almacen.errores(datos.ficha("sesion", valores))
-    assert "La lectura necesita de 2 a 4 bloques." in lista
-    assert "El laboratorio necesita de 3 a 5 ejercicios; tiene 2." in lista
-    assert "Ejercicio 2: falta el problema que trae a propósito." in lista
-    assert "La práctica necesita de 5 a 7 estaciones, una por línea; tiene 2." in lista
-    assert "Pregunta 1: falta la respuesta correcta." in lista
+    ficha = datos.ficha("sesion", valores)
+    assert almacen.errores(ficha) == []          # para confirmar no se exigen los datos de los materiales
+    assert almacen.errores_del_material(ficha, "lectura") == ["La lectura necesita de 2 a 4 bloques."]
+    laboratorio = almacen.errores_del_material(ficha, "laboratorio")
+    assert "El laboratorio necesita de 3 a 5 ejercicios; tiene 2." in laboratorio
+    assert "Ejercicio 2: falta el problema que trae a propósito." in laboratorio
+    assert almacen.errores_del_material(ficha, "práctica interactiva") == [
+        "La práctica necesita de 5 a 7 estaciones, una por línea; tiene 2."]
+    assert "Pregunta 1: falta la respuesta correcta." in almacen.errores_del_material(ficha, "evaluación")
 
 
 def test_si_la_sesion_no_produce_un_material_no_se_exigen_sus_datos():
     valores = {k: v for k, v in datos.SESION.items() if not k.startswith(("ejercicio.", "pregunta.", "practica."))}
     valores["materiales.cuales"] = "Lectura y diapositivas"
-    assert almacen.errores(datos.ficha("sesion", valores)) == []
+    ficha = datos.ficha("sesion", valores)
+    assert almacen.errores(ficha) == [] and almacen.errores_del_material(ficha, "lectura") == []
+    assert almacen.errores_del_material(ficha, "laboratorio") == ["«Materiales de esta sesión» no incluye laboratorio."]
+
+
+def test_la_ficha_de_la_sesion_se_confirma_solo_con_lo_basico():
+    basicos = {k: datos.SESION[k] for k in ("sesion.numero_titulo", "sesion.alcance", "vocabulario.conceptos")}
+    ficha = datos.ficha("sesion", basicos)
+    assert almacen.errores(ficha) == []
+    assert "La lectura necesita de 2 a 4 bloques." in almacen.errores_del_material(ficha, "lectura")
+    sin_vocabulario = datos.ficha("sesion", {k: v for k, v in basicos.items() if k != "vocabulario.conceptos"})
+    assert almacen.errores(sin_vocabulario) == ["Escribe al menos un concepto clave del vocabulario."]
 
 
 def test_como_maximo_cuatro_preguntas_por_vez_y_primero_las_obligatorias():
     ficha = datos.ficha("curso", {})
-    ficha["campos"]["caso.moneda"] = {"valor": "Soles", "origen": "deducido", "estado": "propuesto"}
+    for campo_id, valor in (("caso.moneda", "Soles"), ("caso.areas", "Ventas"), ("publico.quienes", "Jefes"),
+                            ("caso.empresa", "Comercial Los Volcanes")):
+        ficha["campos"][campo_id] = {"valor": valor, "origen": "deducido", "estado": "propuesto"}
     preguntas = almacen.preguntas_pendientes(ficha)
     assert len(preguntas) == 4
-    assert all(p["motivo"].startswith("Es obligatorio") for p in preguntas)
+    # Primero las dos obligatorias (nombre y sesiones); después las propuestas.
+    assert [p["motivo"].startswith("Es obligatorio") for p in preguntas] == [True, True, False, False]
     todas = almacen.preguntas_pendientes(ficha, maximo=100)
-    assert todas[-1]["id"] == "caso.moneda"
+    assert len(todas) == 6 and todas[-1]["id"] == "caso.moneda"
 
 
 # ---------- Propuesta desde las fuentes ----------
@@ -195,7 +214,7 @@ def test_la_propuesta_llena_solo_campos_vacios_y_comprueba_lo_literal(curso):
     assert campos["caso.empresa"] == {"valor": "Comercial Los Volcanes", "origen": "silabo.pdf", "estado": "propuesto"}
     assert campos["caso.moneda"] == {"valor": "Soles", "origen": "deducido", "estado": "propuesto"}
     assert campos["curso.idioma"]["valor"] == "Español"  # no pisa lo que ya estaba
-    assert campos["publico.quienes"]["estado"] == "falta definir"
+    assert (campos.get("publico.quienes") or {}).get("estado", "") != "falta definir"   # el público es opcional
     assert resumen == {"de_las_fuentes": 2, "propuestos": 2, "conflictos": 0, "descartados": 2}
 
 

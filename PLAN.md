@@ -35,6 +35,7 @@ Términos usados en este plan:
 | 13 | Los avisos de relleno y de palabras imprecisas se mantienen en la hoja Hallazgos, pero son informativos: no obligan a corregir ni a explicar (aprobado en la etapa 5d) |
 | 14 | Oraciones aprobadas protegidas. En una corrección por oraciones, el programa rechaza el cambio a una oración que ya coincide con su fuente si ningún problema la nombra. Si algún problema no nombra oraciones (un punto de la lista de verificación), la protección no se aplica en esa corrección. La corrección completa del documento tampoco se protege. La entrega dice cuántos cambios se rechazaron (aprobado en la etapa 5d) |
 | 15 | La skill es agnóstica al tipo de fuente. «Norma» pasa a ser «contenido de una fuente», y «cláusula o control» pasa a ser «número de referencia» (sección, cláusula, lámina o paso). El contenido de una fuente se puede decir con otras palabras si no cambia su sentido: el juez compara el sentido, no las palabras. Quedan exactos el pasaje que se cita como prueba, las citas entre comillas, los nombres del vocabulario, las cifras y «debe» o «puede». Se corrigió en SKILL.md, en el verificador y en AulaLista; no es una excepción (aprobado en la etapa 5d) |
+| 16 | Campos de las fichas. En la ficha del curso, «Público» y «Empresa o institución ficticia y rubro» son opcionales; siguen obligatorios el nombre del curso y las sesiones. La ficha de la sesión se confirma con número y título, alcance y vocabulario. Los datos de cada material (bloques y riesgos de la lectura, ejercicios, estaciones, preguntas) se exigen al generar ese material, y la página dice qué falta. Se corrigió también en las plantillas de SKILL.md (aprobado en la etapa 5d) |
 
 ### Contradicciones encontradas
 
@@ -194,7 +195,7 @@ Respecto del SPEC §12, el orden cambia en dos puntos:
 Reglas de las fichas (etapa 4):
 
 - Los formularios usan los campos exactos de las plantillas de la skill.
-- El software marca los campos obligatorios vacíos.
+- El software marca los campos obligatorios vacíos. Los datos de cada material se exigen al generar ese material (decisión 16).
 - Cada versión guardada queda en `fichas/versiones/` con su fecha.
 - Si una ficha cambia después de generar un material, `verificacion.json` se crea de nuevo. El material queda "desactualizado" y no se entrega hasta validarlo otra vez.
 - Ningún material empieza sin la ficha de la sesión confirmada.

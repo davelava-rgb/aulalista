@@ -22,13 +22,13 @@ def test_la_pagina_muestra_la_plantilla_y_las_preguntas_pendientes(curso):
     assert r.status_code == 200
     assert "Nombre del curso (obligatorio)" in r.text
     assert "¿Material neutral respecto a marcas? (sí o no)" in r.text
-    assert "Responde primero estas 4" in r.text
+    assert "Responde primero estas 2" in r.text   # nombre y sesiones: los dos obligatorios del curso
 
 
 def test_guardar_y_confirmar_con_datos_faltantes(curso):
     r = cliente.post("/cursos/scrum/ficha", data={"accion": "confirmar", "curso.nombre": "Scrum Master con IA"})
     assert "La ficha no se confirmó." in r.text
-    assert "Falta «Quiénes son»." in r.text
+    assert "Falta «Sesiones. Una línea por sesión: número, título y alcance.»." in r.text
     assert almacen.valor(almacen.cargar(curso, "curso"), "curso.nombre") == "Scrum Master con IA"
 
 

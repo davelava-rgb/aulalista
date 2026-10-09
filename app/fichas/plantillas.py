@@ -64,13 +64,13 @@ FICHA_DEL_CURSO = (
             _c("curso.sesiones", "Sesiones (obligatorio). Una línea por sesión: número, título y alcance.",
                tipo="lista", dos_puntos=False, vacio=("1.", "2.", "3.")),
         )),
-        Seccion("2. Público (obligatorio)", (
+        Seccion("2. Público", (
             _c("publico.quienes", "Quiénes son"),
             _c("publico.saben", "Qué saben ya del tema"),
             _c("publico.valoran", "Qué valoran"),
         )),
         Seccion("3. Caso del curso", (
-            _c("caso.empresa", "Empresa o institución ficticia y rubro (obligatorio)"),
+            _c("caso.empresa", "Empresa o institución ficticia y rubro"),
             _c("caso.areas", "Áreas entre las que rotan los ejemplos"),
             _c("caso.moneda", "Moneda y país de los casos"),
         )),

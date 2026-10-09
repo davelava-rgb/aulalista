@@ -61,8 +61,12 @@
   </details>
   {% endif %}
 
+  {% if faltan_lectura %}
+  <p><strong>Para generar la lectura, completa en la <a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">ficha de la sesión</a>:</strong></p>
+  <ul>{% for f in faltan_lectura %}<li>{{ f }}</li>{% endfor %}</ul>
+  {% endif %}
   <form method="post" action="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/lectura">
-    <button type="submit" {% if not puede_empezar or lectura.estado == "trabajando" %}disabled{% endif %}>
+    <button type="submit" {% if not puede_empezar or faltan_lectura or lectura.estado == "trabajando" %}disabled{% endif %}>
       {{ 'Generar de nuevo' if lectura.estado else 'Generar lectura' }}
     </button>
     <span class="nota">Gasta tokens. La redacción y las correcciones pueden tardar varios minutos.</span>
