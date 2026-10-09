@@ -376,3 +376,20 @@ def test_ejemplo_listo_para_probar_marca_sus_seis_errores(tmp_path):
     assert [h.regla for h in resultado.hallazgos] == [
         "cita sin fuente", "tiempo", "dato fijo", "variante de un concepto", "operación", "lenguaje de IA"]
     assert resultado.oraciones[3].fuente == "Guía de Scrum, lámina 54: Tres Pilares de Scrum • Transparencia • Inspección • Adaptación"
+
+
+def test_datos_repetidos_lista_fechas_y_nombres_propios(sesion, tmp_path):
+    material = word(tmp_path / "S1_Laboratorio.docx", [
+        "El equipo de la Sucursal Centro empieza el lunes 5 de octubre de 2026.",
+        "Desde el 5 de octubre, la Sucursal Centro usa el tablero."])
+    filas = {t: n for t, n, _ in correr(sesion, [material]).datos_repetidos}
+    assert filas["Sucursal Centro"] == 2
+    assert filas["lunes 5 de octubre de 2026"] == 1
+    assert filas["5 de octubre"] == 1
+
+
+def test_unidades_con_dos_cifras_distintas():
+    unidades = verificar.unidades_con_cifras([("a", "El Sprint dura dos semanas."), ("b", "El Sprint dura tres semanas."),
+                                              ("c", "Hay 12 pedidos y una tienda.")])
+    assert set(unidades["semanas"]) == {"dos", "tres"}
+    assert "tienda" not in unidades  # «una» es artículo, no cifra

@@ -88,3 +88,18 @@ def pasada(especiales: dict | None = None):
         return {"oraciones": oraciones}
 
     return responder
+
+
+
+def segunda(defectos: list | None = None, lista_no: list | None = None):
+    """Respuesta simulada de la segunda pasada: responde las cuatro preguntas de los bloques pedidos."""
+    import re as _re
+
+    def responder(prompt):
+        linea = prompt.rstrip().splitlines()[-1]
+        nombres = _re.findall(r"\[([^\]]+)\]", linea)
+        bloques = [{"bloque": n, "que_puede_hacer": "Aplicar el concepto.", "que_necesita": "Está en el bloque.",
+                    "dos_lecturas": "Ninguna", "si_no_sale": "No aplica."} for n in nombres]
+        return {"bloques": bloques, "defectos": defectos or [], "lista": lista_no or []}
+
+    return responder

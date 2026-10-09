@@ -12,7 +12,7 @@ from app.fichas import almacen
 from app.materiales import lectura
 from app.validacion import pasada1
 from app.validacion.pasajes import Corpus, Fuente, _lineas_de_ficha
-from tests.conftest import SIN_COMPARAR, consulta_en_secuencia, pasada
+from tests.conftest import SIN_COMPARAR, consulta_en_secuencia, pasada, segunda
 from tests.unidad.test_lectura import LIMPIA, generar, sesion  # noqa: F401  (fixture)
 
 NORMA = Fuente("guia.pdf", [
@@ -171,15 +171,16 @@ def test_lectura_sin_fuente_se_corrige_con_un_dato_nuevo_del_caso(sesion):  # no
     material, consulta = generar(
         sesion, con_dato,
         pasada({inventada: {"tipo": "dato del caso", "veredicto": "sin fuente", "pasaje": ""}}),
+        segunda(),
         {"cambios": [], "explicaciones": [], "datos_nuevos": ["Plan de inducción del ejemplo: seis meses"]},
         pasada({inventada: {"tipo": "dato del caso", "fuente": "ficha del curso",
                             "pasaje": "Plan de inducción del ejemplo: seis meses"}}),
     )
     assert material["estado"] == "verificada"
-    assert material["correcciones"] == {"verificador": 0, "primera pasada": 1}
+    assert material["correcciones"] == {"verificador": 0, "primera pasada": 1, "segunda pasada": 0}
     assert material["datos_agregados"] == ["Plan de inducción del ejemplo: seis meses"]
-    assert "VERACIDAD · sin fuente · «La inducción dura seis meses.»" in consulta.llamadas[2]["prompt"]
-    assert consulta.llamadas[3]["prompt"].count("Oración:") == 1  # la segunda pasada solo revisa lo que no coincidía
+    assert "VERACIDAD · sin fuente · «La inducción dura seis meses.»" in consulta.llamadas[3]["prompt"]
+    assert consulta.llamadas[4]["prompt"].count("Oración:") == 1  # la segunda pasada solo revisa lo que no coincidía
     base = json.loads((almacen.carpeta_sesion(sesion, 1) / "verificacion.json").read_text(encoding="utf-8"))
     assert {"etiqueta": "Plan de inducción del ejemplo", "valor": "seis meses"} in base["datos_fijos"]
 

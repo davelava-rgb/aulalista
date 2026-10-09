@@ -46,3 +46,13 @@ def agregar_historial(ruta: Path, historial: list[dict]) -> None:
         hoja.append([h["nivel"], h["seccion"], h["oracion"], h["regla"], h["detalle"], h["resolucion"]])
         _estilo(hoja[hoja.max_row])
     libro.save(ruta)
+
+
+def llenar_segunda_pasada(ruta: Path, filas: list[list[str]]) -> None:
+    """Hoja Segunda pasada: un bloque por fila, con las cuatro preguntas de la skill."""
+    libro = openpyxl.load_workbook(ruta)
+    hoja = libro["Segunda pasada"]
+    for fila in filas:
+        hoja.append(fila)
+        _estilo(hoja[hoja.max_row])
+    libro.save(ruta)

@@ -749,8 +749,33 @@ def revisar_limites(cfg: Configuracion, ruta: Path, titulos: list[str], datos_pp
                                           f"debe contener «{regla['debe_contener']}»"))
 
 
+MESES = "enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre"
+PATRON_FECHA = re.compile(
+    rf"\b(?:(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo)\s+)?\d{{1,2}}\s+de\s+(?:{MESES})(?:\s+de(?:l)?\s+\d{{4}})?\b"
+    rf"|\b\d{{1,2}}/\d{{1,2}}/\d{{2,4}}\b")
+PATRON_NOMBRE_PROPIO = re.compile(
+    r"(?<=[a-záéíóúñ0-9,;)»] )[A-ZÁÉÍÓÚÑ][a-záéíóúüñ]+(?:\s+(?:de|del|la|las|los|y)?\s*[A-ZÁÉÍÓÚÑ][a-záéíóúüñ]+)*")
+PATRON_CIFRA = re.compile(r"(?<![\w.,])\d+(?:[.,]\d+)*(?![\w])|" + PATRON_NUMERO_EN_PALABRAS.pattern)
+
+
+def unidades_con_cifras(textos: list[tuple[str, str]]) -> dict[str, dict[str, list[str]]]:
+    """Cada palabra que sigue a una cifra («dos semanas», «12 pedidos») con sus valores y oraciones.
+    Una misma palabra con dos valores puede ser una inconsistencia; lo decide la segunda pasada.
+    textos: (dónde, oración)."""
+    unidades: dict[str, dict[str, list[str]]] = {}
+    patron = re.compile(rf"({PATRON_CIFRA.pattern})\s+([a-zñ]{{3,}})")
+    for donde, texto in textos:
+        for m in patron.finditer(normalizar(texto)):
+            cifra, unidad = m.group(1), m.group(m.lastindex)
+            if cifra in ("un", "una", "uno"):
+                continue
+            unidades.setdefault(unidad, {}).setdefault(cifra, []).append(f"{donde}: {texto}")
+    return unidades
+
+
 def listar_datos_repetidos(cfg: Configuracion, oraciones: list[Oracion]) -> list[tuple[str, int, list[str]]]:
-    """Cada concepto, cada variante prohibida y cada cifra, con las oraciones donde aparece."""
+    """Cada concepto y variante prohibida, cada cifra, cada fecha y cada nombre propio,
+    con las oraciones donde aparece (SKILL.md, segunda pasada, punto 1)."""
     filas = []
     def buscar(termino: str, patron: re.Pattern):
         encontradas = [f"{o.seccion}: {o.texto}" for o in oraciones if patron.search(normalizar(o.texto))]
@@ -761,15 +786,22 @@ def listar_datos_repetidos(cfg: Configuracion, oraciones: list[Oracion]) -> list
             buscar(variante, patron_frase(variante))
         buscar(concepto["concepto"], patron_frase(concepto["concepto"]))
 
-    cifras: dict[str, list[str]] = {}
-    patron_cifra = re.compile(r"(?<![\w.,])\d+(?:[.,]\d+)*(?![\w])|" + PATRON_NUMERO_EN_PALABRAS.pattern)
-    for o in oraciones:
-        for m in patron_cifra.finditer(normalizar(o.texto)):
-            cifras.setdefault(m.group(0), []).append(f"{o.seccion}: {o.texto}")
-    for cifra, lista in cifras.items():
-        if cifra in ("un", "una", "uno"):  # artículos, no cifras
-            continue
-        filas.append((cifra, len(lista), list(dict.fromkeys(lista))))
+    def agrupar(patron, sobre_normal: bool, excluir=()):
+        grupos: dict[str, list[str]] = {}
+        for o in oraciones:
+            texto = normalizar(o.texto) if sobre_normal else o.texto
+            for m in patron.finditer(texto):
+                clave = m.group(0)
+                if clave not in excluir:
+                    grupos.setdefault(clave, []).append(f"{o.seccion}: {o.texto}")
+        for clave, lista in grupos.items():
+            unicas = list(dict.fromkeys(lista))
+            filas.append((clave, len(unicas), unicas))
+
+    agrupar(PATRON_CIFRA, True, excluir=("un", "una", "uno"))
+    agrupar(PATRON_FECHA, True)
+    conceptos = {c["concepto"] for c in cfg.vocabulario}
+    agrupar(PATRON_NOMBRE_PROPIO, False, excluir=conceptos)
     return filas
 
 

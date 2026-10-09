@@ -9,6 +9,7 @@ Flujo:
 Las dos pasadas, el revisor independiente y el formato de entrega llegan en las etapas 5b a 5d.
 """
 
+import asyncio
 import json
 from datetime import datetime
 from pathlib import Path
@@ -19,13 +20,16 @@ from app import agente, skill
 from app.fichas import almacen, verificacion
 from app.materiales import docx, estilo
 from app.materiales.contenido import ESQUEMA_LECTURA, Lectura
-from app.validacion import excel, pasada1, verificador
+from app.validacion import excel, pasada1, pasada2, verificador
 from app.validacion.pasajes import Corpus
 
 MATERIAL = "Lectura"
 CLAVE = "lectura"
 MAX_CORRECCIONES = 5  # tope de vueltas del ciclo de corrección (PLAN.md §5.5)
 INSTRUCCION_SIN_EJECUCION = "No aplica: la lectura no tiene archivos de práctica que ejecutar."
+VUELTA_DE_ULTIMO_INTENTO = 3
+ULTIMO_INTENTO = ("YA SE INTENTÓ CORREGIR: escribe la oración con las palabras exactas de su pasaje, "
+                  "sin cambiar ningún término, o elimínala.")
 PALABRAS_MAX = 1500  # orientación para no pasar de seis páginas con portada
 
 ESQUEMA_CORRECCION = {
@@ -75,6 +79,7 @@ def archivos(carpeta_curso: Path, sesion: int) -> dict[str, Path]:
         "contenido": carpeta / "lectura" / "contenido.json",
         "explicaciones": carpeta / "lectura" / "explicaciones.json",
         "pasada1": carpeta / "lectura" / "pasada1.json",
+        "pasada2": carpeta / "lectura" / "pasada2.json",
     }
 
 
@@ -149,6 +154,9 @@ def pedido_de_redaccion(carpeta_curso: Path, sesion: int) -> str:
         "TAREA: redacta la lectura de la sesión. Actúa como diseñador instruccional y editor senior.",
         "Antes de redactar, busca con Grep en las fuentes y lee con Read los pasajes que vas a usar.",
         "Redacta a partir de esos pasajes, no de memoria. No afirmes sobre una norma nada que no esté en un pasaje copiado.",
+        "Antes de entregar, revisa cada bloque con las cuatro preguntas de la segunda pasada de la skill:",
+        "qué puede hacer el alumno, qué dato necesita y dónde está, qué oración tiene dos lecturas, y qué decide",
+        "si su caso no sale como el ejemplo. Define cada término la primera vez que aparece. Corrige lo que falle.",
     ])
 
 
@@ -162,6 +170,10 @@ REGLAS_DE_CORRECCION = """REGLAS DE CORRECCIÓN
   AulaLista lo guarda en los datos fijos de la ficha del curso, y todos los materiales lo usan igual.
 - Si no hay datos nuevos, deja «datos_nuevos» vacío.
 - Si mantienes una oración con AVISO, agrega en «explicaciones» la regla y la oración copiadas tal cual del problema, y por qué se mantiene.
+- SEGUNDA PASADA · relleno: elimina la oración. · ambigüedad: reescríbela para que tenga una sola lectura.
+  · inconsistencia: usa el mismo dato en todas sus apariciones, el de la ficha si existe.
+  · vacío: agrega lo que falta. Para agregar, reemplaza la oración indicada por ella misma seguida de la nueva.
+- LISTA DE VERIFICACIÓN: corrige lo que la pregunta señala, con el menor cambio posible.
 - Cambia solo lo necesario. Puedes buscar en las fuentes con Grep y Read si necesitas un pasaje.
 """
 
@@ -288,6 +300,22 @@ def _texto_de(h) -> str:
     return f"{h.nivel} · {h.regla} · {donde}: {h.detalle}"
 
 
+def bloques_de(contenido: Lectura) -> list[pasada2.Bloque]:
+    """La lectura por bloques, para las cuatro preguntas de la segunda pasada."""
+    separar = verificador.verificar.separar_oraciones
+
+    def oraciones(*parrafos):
+        return [o for p in parrafos for o in separar(p)]
+
+    bloques = [pasada2.Bloque("Idea central", oraciones(*contenido.idea_central))]
+    for b in contenido.bloques:
+        filas = [" | ".join(f) for f in b.tabla.filas] if b.tabla else []
+        bloques.append(pasada2.Bloque(b.subtitulo, oraciones(*b.parrafos, b.ejemplo.titulo, *b.ejemplo.parrafos, *filas)))
+    bloques.append(pasada2.Bloque("Aplícalo así", oraciones(*contenido.aplicalo.parrafos, *contenido.aplicalo.plantilla)))
+    bloques.append(pasada2.Bloque("Cuidado con", oraciones(*contenido.cuidado)))
+    return bloques
+
+
 def _historial(hallazgos, vuelta) -> list[dict]:
     return [{"nivel": h.nivel, "seccion": h.seccion, "oracion": h.oracion, "regla": h.regla,
              "detalle": h.detalle, "vuelta": vuelta} for h in hallazgos]
@@ -349,7 +377,10 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
     explicaciones: dict[str, str] = {}
     anteriores = _leer_json(rutas["pasada1"])   # solo guarda oraciones que coinciden con su fuente
     historial: list[dict] = []
-    correcciones = {"verificador": 0, "primera pasada": 0}
+    correcciones = {"verificador": 0, "primera pasada": 0, "segunda pasada": 0}
+    anteriores2 = _leer_json(rutas["pasada2"])
+    respuestas2: dict[str, dict] = {}
+    bloques: list = []
     medida = {}
     datos_agregados: list[str] = []
     resultado, problemas = None, []
@@ -370,33 +401,58 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
                 historial += _historial(fallas + avisos, vuelta)
                 correcciones["verificador"] += len(problemas)
             else:
+                # Las dos pasadas corren juntas y sus problemas van en una sola corrección.
                 oraciones = _leer_json(rutas["excel"].with_suffix(".json"))["oraciones"]
-                pasada = await pasada1.ejecutar(
-                    oraciones, titulos=_titulos(contenido), corpus=Corpus.del_curso(carpeta_curso, sesion),
-                    anteriores=anteriores, curso=curso, sesion=sesion, material=CLAVE,
-                    instruccion_sin_ejecucion=INSTRUCCION_SIN_EJECUCION, consulta=consulta)
+                bloques = bloques_de(contenido)
+                pasada, segunda = await asyncio.gather(
+                    pasada1.ejecutar(
+                        oraciones, titulos=_titulos(contenido), corpus=Corpus.del_curso(carpeta_curso, sesion),
+                        anteriores=anteriores, curso=curso, sesion=sesion, material=CLAVE,
+                        instruccion_sin_ejecucion=INSTRUCCION_SIN_EJECUCION, consulta=consulta),
+                    pasada2.ejecutar(
+                        bloques, anteriores=anteriores2, contexto_fijo=_contexto(carpeta_curso, sesion),
+                        curso=curso, sesion=sesion, material=MATERIAL, consulta=consulta),
+                )
                 anteriores = {h: f for h, f in pasada.filas.items() if f["veredicto"] == "coincide"}
                 _guardar_json(rutas["pasada1"], anteriores)
                 excel.llenar_oraciones(rutas["excel"], oraciones, pasada.filas)
+                anteriores2 = segunda.guardar(bloques)
+                _guardar_json(rutas["pasada2"], anteriores2)
+                respuestas2 = segunda.respuestas
+
                 veraces = pasada.problemas(oraciones)
-                # Los avisos sin explicar van en la misma corrección que la veracidad: no gastan una vuelta propia.
-                problemas = [_describir_veracidad(v) for v in veraces] + [_texto_de(h) for h in avisos]
+                valor = ([f"SEGUNDA PASADA · {d['tipo']} · «{d['oracion']}»: {d['detalle']}" for d in segunda.defectos]
+                         + [f"LISTA DE VERIFICACIÓN · {p['pregunta']}: {p['detalle']}" for p in segunda.lista_no])
+                # Los avisos sin explicar van en la misma corrección: no gastan una vuelta propia.
+                problemas = [_describir_veracidad(v) for v in veraces] + [_texto_de(h) for h in avisos] + valor
                 historial += [{"nivel": "FALLA", "seccion": v["seccion"], "oracion": v["texto"],
                                "regla": f"veracidad: {v['veredicto']}", "detalle": v["motivo"], "vuelta": vuelta}
                               for v in veraces] + _historial(avisos, vuelta)
+                historial += [{"nivel": "FALLA", "seccion": f"{rutas['word'].name} · {d['bloque']}", "oracion": d["oracion"],
+                               "regla": f"segunda pasada: {d['tipo']}", "detalle": d["detalle"], "vuelta": vuelta}
+                              for d in segunda.defectos]
+                historial += [{"nivel": "FALLA", "seccion": rutas["word"].name, "oracion": "",
+                               "regla": "lista de verificación", "detalle": f"{p['pregunta']} {p['detalle']}", "vuelta": vuelta}
+                              for p in segunda.lista_no]
                 correcciones["primera pasada"] += len(veraces)
                 correcciones["verificador"] += len(avisos)
+                correcciones["segunda pasada"] += len(valor)
                 if pasada.enviadas_a_la_ia or pasada.aprobadas_por_programa:
                     medida = {"enviadas": pasada.enviadas_a_la_ia, "fuera_de_candidatos": pasada.pasajes_fuera_de_candidatos,
                               "busquedas": pasada.busquedas, "aprobadas_por_programa": pasada.aprobadas_por_programa}
                 _avance(carpeta_curso, sesion, f"Primera pasada: {len(oraciones)} oraciones, "
                         f"{pasada.enviadas_a_la_ia} revisadas con IA, {pasada.aprobadas_por_programa} aprobadas por el programa, "
                         f"{len(veraces)} con problemas.")
+                _avance(carpeta_curso, sesion, f"Segunda pasada: {len(segunda.revisados)} bloques revisados con IA, "
+                        f"{len(segunda.defectos)} defectos, {len(segunda.lista_no)} puntos de la lista sin cumplir.")
         if not problemas:
             break
         if vuelta > MAX_CORRECCIONES:
             _avance(carpeta_curso, sesion, f"Quedan {len(problemas)} problemas después de {MAX_CORRECCIONES} correcciones.")
             break
+        if vuelta >= VUELTA_DE_ULTIMO_INTENTO:
+            # Una oración que sigue sin coincidir después de varias correcciones no se vuelve a reescribir libremente.
+            problemas = [p + " " + ULTIMO_INTENTO if p.startswith("VERACIDAD") else p for p in problemas]
         if completa:
             _avance(carpeta_curso, sesion, f"Corrigiendo la lectura completa: {len(problemas)} problemas.")
             respuesta = await agente.consultar(pedido_de_correccion(carpeta_curso, sesion, datos, problemas),
@@ -422,6 +478,9 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
             _avance(carpeta_curso, sesion, f"Datos nuevos del caso agregados a la ficha del curso: {len(nuevos)}.")
 
     terminado = not problemas
+    if resultado is not None and respuestas2 and bloques:
+        excel.llenar_segunda_pasada(rutas["excel"], [[b.nombre, *[respuestas2.get(b.nombre, {}).get(c, "") for c in pasada2.CAMPOS]]
+                                                     for b in bloques])
     if resultado is not None:
         excel.agregar_historial(rutas["excel"], [
             {**h, "resolucion": f"Enviado a corrección en la vuelta {h['vuelta']}." + (" Resuelto." if terminado else "")}
