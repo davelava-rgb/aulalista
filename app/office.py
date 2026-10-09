@@ -124,3 +124,21 @@ def word_a_pdf(origen: Path, destino: Path) -> Path:
         finally:
             documento.Close(False)
     return destino
+
+
+ESTADISTICA_PAGINAS = 2  # wdStatisticPages
+
+
+def contar_paginas_word(ruta: Path) -> int:
+    """Páginas del Word tal como las cuenta el Word instalado."""
+    with abrir_word() as word:
+        documento = word.Documents.Open(
+            str(ruta.resolve()), ConfirmConversions=False, ReadOnly=True, AddToRecentFiles=False
+        )
+        try:
+            documento.Repaginate()
+            return int(documento.ComputeStatistics(ESTADISTICA_PAGINAS))
+        except Exception as error:
+            raise ErrorDeOffice(f"Word no pudo contar las páginas de {ruta.name}: {error}") from error
+        finally:
+            documento.Close(False)

@@ -1,0 +1,25 @@
+# Palabras imprecisas. Una por línea. Cada aparición es un AVISO: se corrige o se explica.
+# La búsqueda no distingue mayúsculas ni tildes y busca la palabra completa.
+algunas
+algunos
+algún
+varios
+varias
+muchos
+muchas
+pocos
+pocas
+bastante
+ciertos
+ciertas
+etc.
+entre otros
+entre otras
+y demás
+aproximadamente
+normalmente
+generalmente
+a veces
+suele
+suelen
+más o menos

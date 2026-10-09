@@ -1,0 +1,41 @@
+{
+  "sesion": 1,
+  "material": "Lectura",
+  "fuentes": [
+    {
+      "nombre": "Guía de Scrum",
+      "texto": "guia.pdf.jsonl",
+      "norma": true,
+      "referencias": {
+        "patron": "lámina (\\d+)",
+        "indice": "numero_impreso"
+      }
+    }
+  ],
+  "datos_fijos": [
+    {
+      "etiqueta": "Fecha de referencia",
+      "valor": "lunes 5 de octubre de 2026"
+    }
+  ],
+  "vocabulario": [
+    {
+      "concepto": "Manifiesto Ágil",
+      "variantes": [
+        "Agile"
+      ]
+    }
+  ],
+  "nunca_se_incluye": [
+    "objetivos de aprendizaje",
+    "requisitos previos",
+    "glosario"
+  ],
+  "permitidos": [
+    "notas del profesor"
+  ],
+  "carpeta_practica": "practica",
+  "limites": {
+    "paginas_max": 6
+  }
+}
