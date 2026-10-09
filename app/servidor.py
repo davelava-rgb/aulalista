@@ -185,6 +185,8 @@ def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, m
         desactualizados = [n for n, m in almacen.cargar_estado(carpeta, sesion)["materiales"].items() if m.get("desactualizado")]
     return plantillas.TemplateResponse(request, "ficha.html", {
         "curso": curso, "nombre": cursos.nombre(curso), "titulo": titulo, "ficha": ficha,
+        "propuesta": flujo.estado_propuesta(carpeta, tipo, sesion),
+        "hay_propuestos": any((d or {}).get("estado") == almacen.PROPUESTO for d in ficha["campos"].values()),
         "secciones": plantillas_fichas.vista(tipo, ficha["campos"]),
         "preguntas": almacen.preguntas_pendientes(ficha),
         "errores": errores or [], "mensaje": mensaje,
@@ -208,6 +210,10 @@ async def _accion_ficha(request: Request, curso: str, tipo: str, sesion: int | N
         almacen.guardar(carpeta, tipo, sesion, ficha, "editada por el profesor")
     mensaje, errores = "Ficha guardada.", []
     try:
+        if accion == "aceptar":
+            flujo.aceptar_propuestos(ficha)
+            almacen.guardar(carpeta, tipo, sesion, ficha, "propuesta aceptada")
+            accion = "confirmar"
         if accion == "proponer":
             resumen = await asyncio.to_thread(
                 lambda: asyncio.run(flujo.proponer(carpeta, curso, tipo, sesion))
@@ -217,7 +223,7 @@ async def _accion_ficha(request: Request, curso: str, tipo: str, sesion: int | N
             else:
                 mensaje = (f"Datos tomados de las fuentes: {resumen['de_las_fuentes']}. "
                            f"Propuestos: {resumen['propuestos']}. Con dos versiones: {resumen['conflictos']}.")
-        elif accion == "confirmar":
+        if accion == "confirmar":
             if tipo == "curso":
                 resultado = flujo.confirmar_curso(carpeta)
                 sesiones = ", ".join(f"S{n}" for n in resultado["desactualizados"])
@@ -235,8 +241,17 @@ async def _accion_ficha(request: Request, curso: str, tipo: str, sesion: int | N
     return _pagina_ficha(request, curso, tipo, sesion, mensaje, errores)
 
 
+def _proponer_si_corresponde(curso: str, tipo: str, sesion: int | None) -> None:
+    """Con fuentes convertidas, una ficha vacía se propone sola al abrirla (PLAN.md §0, decisión 17)."""
+    carpeta = _carpeta(curso)
+    if flujo.debe_proponer_sola(carpeta, tipo, sesion):
+        flujo.marcar_propuesta_en_curso(carpeta, tipo, sesion)
+        _trabajo_en_segundo_plano(flujo.proponer_sola, carpeta, curso, tipo, sesion)
+
+
 @app.get("/cursos/{curso}/ficha")
 def ver_ficha_del_curso(request: Request, curso: str):
+    _proponer_si_corresponde(curso, "curso", None)
     return _pagina_ficha(request, curso, "curso", None)
 
 
@@ -248,6 +263,7 @@ async def accion_ficha_del_curso(request: Request, curso: str):
 @app.get("/cursos/{curso}/sesiones/{sesion}/ficha")
 def ver_ficha_de_la_sesion(request: Request, curso: str, sesion: int):
     _exigir_ficha_del_curso(_carpeta(curso), curso)
+    _proponer_si_corresponde(curso, "sesion", sesion)
     return _pagina_ficha(request, curso, "sesion", sesion)
 
 
