@@ -37,7 +37,7 @@ Cada regla tiene una prueba automática. Si una regla no tiene prueba, la etapa 
 - Sin tiempos ni puntajes en ningún material.
 - Lenguaje claro: una idea por oración, sin jerga, término inevitable definido la primera vez.
 - Sin datos inventados: ni cifras reales, ni estudios, ni funciones de herramientas.
-- Toda afirmación sobre el contenido de una fuente sale de un pasaje copiado de una fuente del curso. Se puede decir con otras palabras si no cambia el sentido (`PLAN.md` §0, decisión 15).
+- Toda afirmación sobre el contenido de una fuente sale de un pasaje copiado de una fuente del curso. Se puede decir con otras palabras si no cambia el sentido (`PLAN.md` §0, decisiones 15 y 18).
 - Toda regla propia del curso lleva "en este curso".
 - Datos del caso ficticios y coherentes con los datos fijos de la ficha.
 - Sin datos personales reales.

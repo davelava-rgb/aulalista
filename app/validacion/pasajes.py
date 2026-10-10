@@ -34,6 +34,13 @@ def literal(texto: str) -> str:
     return " ".join(texto.split())
 
 
+def flexible(texto: str) -> str:
+    """Para ubicar un pasaje copiado con pequeñas diferencias (PLAN.md §0, decisión 18): sin tildes ni mayúsculas,
+    sin signos, y con las palabras cortadas con guion al final de una línea unidas otra vez."""
+    texto = re.sub(r"(\w)-\s+(\w)", r"\1\2", literal(texto))
+    return " ".join(re.sub(r"[^\w\s]", " ", normal(texto)).split())
+
+
 @dataclass
 class Fuente:
     nombre: str
@@ -50,6 +57,14 @@ class Fuente:
             posicion += len(texto) + 1
         self.continuo = " ".join(partes)
         self._minusculas = self.continuo.casefold()
+        # Una palabra cortada con guion al final de un pasaje sigue en el siguiente: se une sin espacio.
+        self._flexible, self._inicios_flexibles, cortada = "", [], False
+        for pasaje in self.pasajes:
+            if self._flexible and not cortada:
+                self._flexible += " "
+            self._inicios_flexibles.append(len(self._flexible))
+            self._flexible += flexible(pasaje["texto"])
+            cortada = bool(re.search(r"\w-$", literal(pasaje["texto"])))
 
     def ubicar(self, pasaje: str) -> str | None:
         buscado = literal(pasaje).strip(" .,;:\"'")
@@ -58,10 +73,15 @@ class Fuente:
         posicion = self.continuo.find(buscado)
         if posicion < 0:
             posicion = self._minusculas.find(buscado.casefold())
+        if posicion >= 0:
+            return self.pasajes[bisect.bisect_right(self.inicios, posicion) - 1]["ubicacion"]
+        buscado = flexible(pasaje)
+        if len(buscado) < 3:
+            return None
+        posicion = self._flexible.find(buscado)
         if posicion < 0:
             return None
-        indice = bisect.bisect_right(self.inicios, posicion) - 1
-        return self.pasajes[indice]["ubicacion"]
+        return self.pasajes[bisect.bisect_right(self._inicios_flexibles, posicion) - 1]["ubicacion"]
 
 
 PALABRAS_VACIAS = set("""

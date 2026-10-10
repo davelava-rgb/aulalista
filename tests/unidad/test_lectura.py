@@ -226,7 +226,18 @@ LARGA = ("Cada viernes el equipo revisa su tablero, conversa con los clientes de
          "en una hoja compartida y decide qué cambia para el viernes siguiente sin esperar el cierre.")
 
 
-def test_un_aviso_explicado_queda_anotado_en_el_excel(sesion):
+@pytest.fixture
+def aviso_de_prueba(monkeypatch):
+    """Desde la decisión 19 ninguna regla de oración da un aviso que obligue a explicar. El mecanismo sigue
+    para los demás materiales: estas pruebas lo ejercitan con un aviso de prueba sobre LARGA."""
+    import re
+    from app.validacion import verificador
+    reglas = verificador.verificar.TIEMPOS_Y_PUNTAJES + [
+        (verificador.verificar.AVISO, "oración larga", re.compile(r"cada viernes el equipo revisa"))]
+    monkeypatch.setattr(verificador.verificar, "TIEMPOS_Y_PUNTAJES", reglas)
+
+
+def test_un_aviso_explicado_queda_anotado_en_el_excel(sesion, aviso_de_prueba):
     material, consulta = generar(sesion, con_error(LARGA), pasada(), cambios(explicaciones=[
         {"regla": "oración larga", "oracion": LARGA, "explicacion": "Es una sola acción con sus pasos."}]))
     assert len(consulta.llamadas) == 4  # el aviso va en la corrección de la pasada: no gasta una vuelta propia
@@ -337,7 +348,7 @@ def test_una_configuracion_rota_se_detecta_antes_de_gastar_tokens(sesion):
     assert lectura.estado(sesion, 1)["estado"] == "error"
 
 
-def test_un_aviso_explicado_con_la_oracion_copiada_con_diferencias_no_vuelve(sesion):
+def test_un_aviso_explicado_con_la_oracion_copiada_con_diferencias_no_vuelve(sesion, aviso_de_prueba):
     copiada = "«" + LARGA.lower().replace("decide qué", "decide que") + "»"
     material, consulta = generar(sesion, con_error(LARGA), pasada(), cambios(explicaciones=[
         {"regla": "Oración larga", "oracion": copiada, "explicacion": "El caso no dice cuántas tiendas."}]))
@@ -443,10 +454,25 @@ def test_la_lectura_recibe_solo_su_parte_de_la_lista_de_verificacion(sesion):
     pedido = consulta.llamadas[2]["prompt"]
     lista = pedido.split("LISTA DE VERIFICACIÓN:\n", 1)[1].split("\n\n", 1)[0]
     assert "¿Hay contenido de sesiones posteriores?" in lista
-    assert "¿Algún material da la respuesta de un ejercicio?" in lista
+    assert len(lista.splitlines()) == 3                # PLAN.md §0, decisión 20
+    assert "¿Algún material da la respuesta de un ejercicio?" not in lista
+    assert "¿Un alumno del público descrito entiende los casos?" not in lista
     assert "En el laboratorio" not in lista and "En la evaluación" not in lista
     assert "¿Ejecutaste cada ejercicio" not in lista and "¿El diseño es uniforme?" not in lista
     assert "minutos, puntos, notas" not in lista      # lo revisa el verificador, sin IA
+
+
+def test_la_lectura_responde_solo_dos_de_las_cuatro_preguntas_por_bloque(sesion):
+    from app.validacion import pasada2
+    _, consulta = generar(sesion, LIMPIA, pasada())
+    revisor_ = consulta.llamadas[2]
+    pedido = revisor_["prompt"].split("LISTA DE VERIFICACIÓN:")[0]
+    assert "- que_puede_hacer: ¿Qué puede hacer el alumno con esto?" in pedido
+    assert "- dos_lecturas: ¿Qué oración tiene dos lecturas?" in pedido
+    assert "- que_necesita:" not in pedido and "- si_no_sale:" not in pedido
+    hoja = openpyxl.load_workbook(lectura.archivos(sesion, 1)["excel"])["Segunda pasada"]
+    fila = [c.value for c in next(hoja.iter_rows(min_row=2))]
+    assert fila[2] == fila[4] == pasada2.NO_SE_APLICA
 
 
 def test_un_punto_de_la_lista_de_verificacion_sin_cumplir_se_corrige(sesion):
@@ -549,28 +575,6 @@ def test_un_vacio_que_el_cierre_no_puede_borrar_sigue_pendiente(sesion):
     assert material["eliminadas_por_el_programa"] == [mala]
     assert material["estado"] == "con fallas"
     assert material["problemas"][0].startswith("REVISOR INDEPENDIENTE · vacío · «Los pilares de Scrum son tres.»")
-
-
-def test_una_oracion_larga_que_sigue_a_su_pasaje_de_norma_se_explica_sola():
-    from app.validacion.pasajes import Corpus, Fuente
-    from app.validacion import verificador
-    norma = "El Product Owner es responsable de maximizar el valor del producto resultante del trabajo del Scrum Team."
-    larga = ("El Product Owner es responsable de maximizar el valor del producto que resulta del trabajo del "
-             "Scrum Team, y lo hace sin dejar de ser una sola persona dentro del equipo.")
-    corpus = Corpus([Fuente("guia.pdf", [{"texto": norma, "ubicacion": "página 9"}])])
-    hallazgo = verificador.verificar.Hallazgo("AVISO", "S1_Lectura.docx · x", larga, "oración larga", "27 palabras")
-    resultado = verificador.verificar.Resultado(hallazgos=[hallazgo])
-    anclas = [{"oracion": larga, "fuente": "guia.pdf", "ubicacion": "página 9", "texto": norma}]
-    explicaciones = {}
-    assert lectura._explicar_literales(resultado, explicaciones, corpus, anclas) is True
-    assert "Sigue a su pasaje (guia.pdf, página 9)" in verificador.buscar_explicacion(
-        "oración larga", larga, explicaciones)
-    # Sin un pasaje que exista tal cual, el aviso no se explica solo.
-    inventada = [{**anclas[0], "texto": "El Product Owner decide todo."}]
-    assert lectura._explicar_literales(resultado, {}, corpus, inventada) is False
-    # Una palabra imprecisa no se explica por tener pasaje: solo si la oración es literal.
-    imprecisa = verificador.verificar.Hallazgo("AVISO", "x", larga, "palabra imprecisa", "algunas")
-    assert lectura._explicar_literales(verificador.verificar.Resultado(hallazgos=[imprecisa]), {}, corpus, anclas) is False
 
 
 # ---------- Protección de oraciones aprobadas ----------

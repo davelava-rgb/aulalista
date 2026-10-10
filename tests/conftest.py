@@ -70,9 +70,6 @@ def consulta_en_secuencia(*salidas):
     return consulta
 
 
-SIN_COMPARAR = {c: "no aplica" for c in ("numero", "termino", "cantidades", "obligacion")}
-
-
 def pasada(especiales: dict | None = None):
     """Respuesta simulada de la primera pasada: lee las oraciones del pedido y las aprueba,
     salvo las que tienen una respuesta especial (por texto de la oración)."""
@@ -83,7 +80,7 @@ def pasada(especiales: dict | None = None):
         oraciones = []
         for n, texto in _re.findall(r"^\[(\d+)\] Sección: .*? \| Oración: (.*)$", prompt, _re.M):
             base = {"n": int(n), "tipo": "sin afirmación", "fuente": "", "pasaje": "", "veredicto": "coincide",
-                    "motivo": "Sin afirmación.", "comparacion": dict(SIN_COMPARAR)}
+                    "motivo": "Sin afirmación."}
             oraciones.append({**base, **especiales.get(texto, {})})
         return {"oraciones": oraciones}
 

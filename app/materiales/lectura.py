@@ -364,29 +364,12 @@ def bloques_de(contenido: Lectura) -> list[pasada2.Bloque]:
     return bloques
 
 
-REGLAS_QUE_EXPLICA_EL_PROGRAMA = ("oración larga", "palabra imprecisa")
+REGLAS_QUE_EXPLICA_EL_PROGRAMA = ("palabra imprecisa",)
 
 
-def _pasaje_de_la_oracion(oracion: str, anclas: list[dict], corpus: Corpus) -> tuple[str, str] | None:
-    """La fuente y la ubicación del pasaje que el redactor dijo usar para esta oración, si existe tal cual
-    en una fuente del curso (no en una ficha)."""
-    buscada = _comparable(oracion)
-    for ancla in anclas:
-        propia = _comparable(ancla.get("oracion", ""))
-        if not propia or not (propia in buscada or buscada in propia):
-            continue
-        ubicacion = corpus.ubicar(ancla["fuente"], ancla["texto"])
-        encontrada = (ancla["fuente"], ubicacion) if ubicacion else corpus.ubicar_en_cualquiera(ancla["texto"])
-        if encontrada and encontrada[0] not in pasada1.FICHAS:
-            return encontrada
-    return None
-
-
-def _explicar_literales(resultado, explicaciones: dict, corpus: Corpus, anclas: list[dict] | None = None) -> bool:
-    """Un aviso de oración larga o de palabra imprecisa en una oración copiada tal cual de una fuente del
-    curso se explica solo: cambiarla cambiaría lo que dice la fuente (así lo hace el Excel modelo).
-    Un aviso de oración larga en una oración escrita a partir de su pasaje también se explica solo: partirla
-    puede cambiar lo que dice la fuente (PLAN.md §0, decisión 10)."""
+def _explicar_literales(resultado, explicaciones: dict, corpus: Corpus) -> bool:
+    """Un aviso de palabra imprecisa en una oración copiada tal cual de una fuente del curso se explica solo:
+    cambiarla cambiaría lo que dice la fuente (así lo hace el Excel modelo)."""
     nuevas = False
     for h in resultado.hallazgos:
         if h.nivel != "AVISO" or h.regla not in REGLAS_QUE_EXPLICA_EL_PROGRAMA or not h.oracion:
@@ -400,12 +383,6 @@ def _explicar_literales(resultado, explicaciones: dict, corpus: Corpus, anclas: 
             explicaciones[verificador.clave_de_hallazgo(h.regla, h.oracion)] = (
                 f"Es un pasaje literal de la fuente ({fuente}, {ubicacion}). Cambiarlo cambiaría lo que dice. "
                 "Lo comprobó el programa.")
-            nuevas = True
-        elif h.regla == "oración larga" and (anclada := _pasaje_de_la_oracion(texto, anclas or [], corpus)):
-            fuente, ubicacion = anclada
-            explicaciones[verificador.clave_de_hallazgo(h.regla, h.oracion)] = (
-                f"Sigue a su pasaje ({fuente}, {ubicacion}). Partirla puede cambiar lo que dice la fuente. "
-                "El programa comprobó que el pasaje existe; la primera pasada compara la oración con él.")
             nuevas = True
     return nuevas
 
@@ -535,7 +512,7 @@ class _Ciclo:
         self.resultado = verificador.ejecutar(configuracion, [rutas["word"]], rutas["excel"], self.explicaciones,
                                               self.contar_paginas)
         corpus = Corpus.del_curso(self.carpeta_curso, self.sesion)
-        if _explicar_literales(self.resultado, self.explicaciones, corpus, [p.model_dump() for p in contenido.pasajes]):
+        if _explicar_literales(self.resultado, self.explicaciones, corpus):
             _guardar_json(rutas["explicaciones"], self.explicaciones)
             verificador.anotar_explicaciones(rutas["excel"], self.explicaciones)
         excel.anotar_reglas(rutas["excel"], AVISOS_INFORMATIVOS, NOTA_INFORMATIVA)

@@ -29,37 +29,42 @@ ARCHIVO_FICHA_SESION = "ficha_de_la_sesion.md"
 CARPETA_FUENTES = "fuentes"
 NOMBRES_DE_FICHA = {ARCHIVO_FICHA_CURSO: FICHA_DEL_CURSO, ARCHIVO_FICHA_SESION: FICHA_DE_LA_SESION}
 
-ESQUEMA = {
-    "type": "object",
-    "properties": {"hallazgos": {"type": "array", "items": {
+def esquema(campos: list[str]) -> dict:
+    """La respuesta del revisor, con solo las preguntas por bloque de su material (PLAN.md §0, decisión 20)."""
+    return {
         "type": "object",
-        "properties": {
-            "n": {"type": "integer"},
-            "oracion": {"type": "string"},
-            "defecto": {"type": "string", "enum": DEFECTOS},
-            "prueba": {"type": "string"},
-            "donde": {"type": "string"},
-            "explicacion": {"type": "string"},
+        "properties": {"hallazgos": {"type": "array", "items": {
+            "type": "object",
+            "properties": {
+                "n": {"type": "integer"},
+                "oracion": {"type": "string"},
+                "defecto": {"type": "string", "enum": DEFECTOS},
+                "prueba": {"type": "string"},
+                "donde": {"type": "string"},
+                "explicacion": {"type": "string"},
+            },
+            "required": ["n", "oracion", "defecto", "prueba", "donde", "explicacion"],
+            "additionalProperties": False,
+        }},
+            "bloques": {"type": "array", "items": {
+                "type": "object",
+                "properties": {"bloque": {"type": "string"}, **{c: {"type": "string"} for c in campos}},
+                "required": ["bloque", *campos], "additionalProperties": False,
+            }},
+            "lista": {"type": "array", "items": {
+                "type": "object",
+                "properties": {"pregunta": {"type": "string"},
+                               "respuesta": {"type": "string", "enum": pasada2.RESPUESTAS_LISTA},
+                               "detalle": {"type": "string"}},
+                "required": ["pregunta", "respuesta", "detalle"], "additionalProperties": False,
+            }},
         },
-        "required": ["n", "oracion", "defecto", "prueba", "donde", "explicacion"],
+        "required": ["hallazgos", "bloques", "lista"],
         "additionalProperties": False,
-    }},
-        "bloques": {"type": "array", "items": {
-            "type": "object",
-            "properties": {"bloque": {"type": "string"}, **{c: {"type": "string"} for c in pasada2.CAMPOS}},
-            "required": ["bloque", *pasada2.CAMPOS], "additionalProperties": False,
-        }},
-        "lista": {"type": "array", "items": {
-            "type": "object",
-            "properties": {"pregunta": {"type": "string"},
-                           "respuesta": {"type": "string", "enum": pasada2.RESPUESTAS_LISTA},
-                           "detalle": {"type": "string"}},
-            "required": ["pregunta", "respuesta", "detalle"], "additionalProperties": False,
-        }},
-    },
-    "required": ["hallazgos", "bloques", "lista"],
-    "additionalProperties": False,
-}
+    }
+
+
+ESQUEMA = esquema(pasada2.CAMPOS)
 
 # El pedido de la skill, adaptado: la comparación oración por oración ya la hizo la primera pasada
 # (PLAN.md §0, decisión 12). Si la skill cambia su pedido, el programa se detiene.
@@ -161,11 +166,13 @@ def _pedido(carpeta: Path, bloques: list[pasada2.Bloque], material: str) -> str:
         "",
         "SEGUNDA PASADA, como dice la skill:",
         skill.subseccion("Segunda pasada · Valor y funcionamiento"),
-        "- bloques: cada bloque de la lista «BLOQUES», con las cuatro respuestas, 25 palabras como máximo cada una.",
+        f"- bloques: cada bloque de la lista «BLOQUES». En este material ({material}) responde solo estas preguntas,",
+        "  25 palabras como máximo cada una; las demás no se aplican:",
+        *[f"  - {c}: {p}" for c, p in zip(pasada2.campos_de(material), pasada2.preguntas_de(material))],
         "  Si no hay oración con dos lecturas, escribe «Ninguna». Cada relleno, vacío, ambigüedad o inconsistencia",
         "  que encuentres va también en «hallazgos». En un vacío, la oración es la que va antes de lo que falta.",
-        "- La cuarta pregunta se aplica a las instrucciones y pasos que el alumno ejecuta. Un ejemplo ilustra una",
-        "  idea: no es un vacío que no cubra otros casos.",
+        *(["- La cuarta pregunta se aplica a las instrucciones y pasos que el alumno ejecuta. Un ejemplo ilustra una",
+           "  idea: no es un vacío que no cubra otros casos."] if "si_no_sale" in pasada2.campos_de(material) else []),
         f"- lista: cada pregunta de la LISTA DE VERIFICACIÓN con «sí», «no» o «no aplica», solo para este material ({material}).",
         "  «no» es para lo que no se puede señalar en una sola oración; si ya está en «hallazgos», responde «sí».",
         "  Juntar dos sujetos con «y» no es tener dos ideas.",
@@ -258,15 +265,18 @@ def ubicar_prueba(prueba: str, donde: str, corpus: Corpus, oraciones: list[dict]
 
 
 def comprobar(respuesta: dict, ronda: int, oraciones: list[dict], corpus: Corpus,
-              bloques: list[pasada2.Bloque] | None = None) -> Resultado:
+              bloques: list[pasada2.Bloque] | None = None, campos: list[str] | None = None) -> Resultado:
     resultado = Resultado(ronda=ronda, revisadas={o["huella"]: ronda for o in oraciones})
+    campos = campos or pasada2.CAMPOS
     nombres = {b.nombre for b in bloques or []}
     for fila in respuesta.get("bloques", []):
         nombre = fila["bloque"].strip("[] ")
         if nombre in nombres:
-            resultado.respuestas[nombre] = {c: fila[c] for c in pasada2.CAMPOS}
+            resultado.respuestas[nombre] = {c: fila.get(c, "(sin respuesta)") if c in campos else pasada2.NO_SE_APLICA
+                                            for c in pasada2.CAMPOS}
     for nombre in sorted(nombres - set(resultado.respuestas)):
-        resultado.respuestas[nombre] = {c: "(sin respuesta)" for c in pasada2.CAMPOS}
+        resultado.respuestas[nombre] = {c: "(sin respuesta)" if c in campos else pasada2.NO_SE_APLICA
+                                        for c in pasada2.CAMPOS}
     resultado.lista_no = [p for p in respuesta.get("lista", []) if p["respuesta"] == "no"]
     vistos = set()
     for r in respuesta["hallazgos"]:
@@ -291,12 +301,13 @@ async def ejecutar(oraciones: list[dict], *, ronda: int, carpeta: Path, carpeta_
     """oraciones: las filas del verificador sobre el archivo final (n, huella, texto).
     material: la clave para el registro de tokens; nombre_material: el nombre para la lista de verificación."""
     bloques = bloques or []
+    campos = pasada2.campos_de(nombre_material)
     preparar_carpeta(carpeta, carpeta_curso, sesion, oraciones, bloques)
     corpus = Corpus.del_curso(carpeta_curso, sesion)
     servidor, _ = herramientas.servidor_del_revisor(carpeta, corpus)
     respuesta = await agente.consultar(
-        _pedido(carpeta, bloques, nombre_material), tarea="revisor", esquema=ESQUEMA, curso=curso,
+        _pedido(carpeta, bloques, nombre_material), tarea="revisor", esquema=esquema(campos), curso=curso,
         etapa=f"revisor independiente {ronda}", sesion=f"S{sesion}", material=material, cwd=carpeta,
         herramientas=herramientas.HERRAMIENTAS_REVISOR, servidores={herramientas.SERVIDOR_REVISOR: servidor},
         consulta=consulta)
-    return comprobar(respuesta, ronda, oraciones, corpus, bloques)
+    return comprobar(respuesta, ronda, oraciones, corpus, bloques, campos)

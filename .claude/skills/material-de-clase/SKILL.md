@@ -275,12 +275,12 @@ El programa no entiende el significado. Por eso siguen las dos pasadas.
 Llena estas columnas en cada fila de la tabla que creó el programa:
 
 - Tipo de oración. Elige uno solo: contenido de una fuente, dato del caso, cálculo, regla del curso, instrucción o sin afirmación.
-- Pasaje de la fuente: el pasaje copiado tal cual, en su idioma original, con su página, sección o lámina. Encuéntralo con una búsqueda en el archivo, no de memoria.
+- Pasaje de la fuente: el pasaje copiado de la fuente, en su idioma original, con su página, sección o lámina. Encuéntralo con una búsqueda en el archivo, no de memoria.
 - Veredicto: coincide, no coincide o sin fuente.
 
 Reglas por tipo:
 
-- Contenido de una fuente: la oración no puede decir más ni menos que el pasaje. Puede decirlo con otras palabras si no cambia su sentido. Compara una por una estas siete cosas: el número de referencia (sección, cláusula, lámina o paso), el nombre del término, las cantidades ("las siete opciones"), el orden ("la segunda"), quién hace la acción, si es obligación o posibilidad ("debe" o "puede") y las palabras que generalizan ("todos", "solo", "siempre", "las mismas"). Una sola diferencia es "no coincide".
+- Contenido de una fuente: la oración coincide si dice lo mismo que el pasaje, aunque use otras palabras, sinónimos u otro orden. Solo es "no coincide" si cambia el sentido: contradice al pasaje, le agrega una afirmación que el pasaje no tiene, cambia una cifra o una cantidad, o cambia una obligación por una posibilidad ("debe" por "puede"). Un resumen que agrupa o reordena la fuente coincide si no hace ninguna de esas cuatro cosas.
 - Contenido traducido por ti: si la fuente está en otro idioma, la oración dice que el nombre es una traducción del curso.
 - Regla del curso: es una regla que ninguna fuente dice. La oración lleva escrito "en este curso". Si no lo lleva, es "no coincide".
 - Dato del caso: coincide con los datos fijos de la ficha del curso y con las demás apariciones del mismo dato.

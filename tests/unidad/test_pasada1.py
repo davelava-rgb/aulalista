@@ -12,7 +12,7 @@ from app.fichas import almacen
 from app.materiales import lectura
 from app.validacion import pasada1
 from app.validacion.pasajes import Corpus, Fuente, _lineas_de_ficha
-from tests.conftest import SIN_COMPARAR, consulta_en_secuencia, pasada
+from tests.conftest import consulta_en_secuencia, pasada
 from tests.unidad.test_lectura import LIMPIA, generar, sesion  # noqa: F401  (fixture)
 
 NORMA = Fuente("guia.pdf", [
@@ -26,9 +26,9 @@ def oracion(n, texto, seccion="S1_Lectura.docx · Pilares"):
     return {"n": n, "huella": f"h{n}-{hash(texto)}", "seccion": seccion, "texto": texto}
 
 
-def respuesta(n, tipo, veredicto="coincide", fuente="", pasaje="", **comparacion):
+def respuesta(n, tipo, veredicto="coincide", fuente="", pasaje=""):
     return {"n": n, "tipo": tipo, "fuente": fuente, "pasaje": pasaje, "veredicto": veredicto,
-            "motivo": "Motivo de prueba.", "comparacion": {**SIN_COMPARAR, **comparacion}}
+            "motivo": "Motivo de prueba."}
 
 
 def correr(oraciones, *salidas, anteriores=None, titulos=frozenset(), corpus=None):
@@ -49,8 +49,7 @@ def clave(entorno):
 
 def test_un_pasaje_que_existe_queda_con_su_ubicacion_real():
     o = oracion(1, "Scrum tiene tres pilares.")
-    resultado, _ = correr([o], {"oraciones": [respuesta(1, pasada1.CONTENIDO, fuente="guia.pdf", pasaje="Scrum tiene tres pilares",
-                                                        numero="igual", termino="igual", cantidades="igual")]})
+    resultado, _ = correr([o], {"oraciones": [respuesta(1, pasada1.CONTENIDO, fuente="guia.pdf", pasaje="Scrum tiene tres pilares")]})
     fila = resultado.filas[o["huella"]]
     assert fila["veredicto"] == "coincide"
     assert fila["fuente"] == "guia.pdf, página 35 · número impreso 54"
@@ -71,14 +70,11 @@ def test_el_pasaje_se_busca_en_otra_fuente_si_la_ia_se_equivoca_de_nombre():
     assert resultado.filas[o["huella"]]["fuente"] == "ficha del curso, Cifras, reglas y nombres"
 
 
-def test_una_norma_con_una_diferencia_no_coincide_aunque_la_ia_diga_que_si():
+def test_un_cambio_de_sentido_que_marca_la_ia_no_coincide():
     o = oracion(1, "Los artefactos pueden inspeccionarse con frecuencia.")
-    resultado, _ = correr([o], {"oraciones": [respuesta(1, pasada1.CONTENIDO, fuente="guia.pdf",
-                                                        pasaje="Los artefactos deben inspeccionarse con frecuencia",
-                                                        obligacion="distinto")]})
-    fila = resultado.filas[o["huella"]]
-    assert fila["veredicto"] == "no coincide"
-    assert "obligacion" in fila["motivo"]
+    resultado, _ = correr([o], {"oraciones": [respuesta(1, pasada1.CONTENIDO, "no coincide", fuente="guia.pdf",
+                                                        pasaje="Los artefactos deben inspeccionarse con frecuencia")]})
+    assert resultado.filas[o["huella"]]["veredicto"] == "no coincide"
 
 
 def test_regla_del_curso_necesita_en_este_curso():
@@ -236,12 +232,10 @@ def test_una_oracion_escrita_tal_cual_en_la_fuente_se_aprueba_sin_ia():
     assert consulta.llamadas[0]["prompt"].count("Oración:") == 1
 
 
-def test_una_norma_sin_su_comparacion_no_queda_aprobada():
-    o = oracion(1, "Scrum tiene tres pilares según la guía.")
-    sin_comparacion = respuesta(1, pasada1.CONTENIDO, fuente="guia.pdf", pasaje="Scrum tiene tres pilares")
-    del sin_comparacion["comparacion"]
-    resultado, _ = correr([o], {"oraciones": [sin_comparacion]})
-    assert resultado.filas[o["huella"]]["veredicto"] == "no coincide"
+def test_una_oracion_con_otras_palabras_queda_aprobada_sin_comparar_puntos():
+    o = oracion(1, "Según la guía, Scrum se apoya en tres pilares.")
+    resultado, _ = correr([o], {"oraciones": [respuesta(1, pasada1.CONTENIDO, fuente="guia.pdf", pasaje="Scrum tiene tres pilares")]})
+    assert resultado.filas[o["huella"]]["veredicto"] == "coincide"
 
 
 def test_el_pasaje_del_redactor_es_el_primer_candidato():
@@ -262,28 +256,17 @@ def test_un_pasaje_del_redactor_que_no_existe_no_se_usa():
     assert pasada1._candidato_de_ancla(o, anclas, Corpus([NORMA])) is None
 
 
-# ---------- Reglas aflojadas (PLAN.md §0, decisión 10) ----------
+# ---------- Solo el sentido (PLAN.md §0, decisión 18) ----------
 
-def test_la_norma_se_compara_en_cuatro_puntos():
-    assert pasada1.COMPARACIONES == ["numero", "termino", "cantidades", "obligacion"]
-    esquema = pasada1.ESQUEMA["properties"]["oraciones"]["items"]["properties"]["comparacion"]
-    assert esquema["required"] == pasada1.COMPARACIONES
-
-
-def test_el_orden_o_quien_distintos_ya_no_bastan_para_no_coincidir():
-    o = oracion(1, "Inspección, transparencia y adaptación son los tres pilares de Scrum.")
-    resultado, _ = correr([o], {"oraciones": [respuesta(1, pasada1.CONTENIDO, fuente="guia.pdf", pasaje="Scrum tiene tres pilares: transparencia, inspección y adaptación",
-        numero="no aplica", termino="igual", cantidades="igual", obligacion="no aplica", orden="distinto")]})
-    assert resultado.filas[o["huella"]]["veredicto"] == "coincide"
-
-
-def test_un_resumen_con_en_este_curso_no_se_compara_punto_por_punto():
-    o = oracion(1, "En este curso, resumimos la norma: los artefactos se revisan a menudo.")
-    sin_comparacion = respuesta(1, pasada1.CONTENIDO, fuente="guia.pdf", pasaje="Los artefactos deben inspeccionarse con frecuencia",
-                                obligacion="distinto")
-    del sin_comparacion["comparacion"]["numero"]
-    resultado, _ = correr([o], {"oraciones": [sin_comparacion]})
-    assert resultado.filas[o["huella"]]["veredicto"] == "coincide"
+def test_la_ia_ya_no_compara_puntos_uno_por_uno():
+    assert "comparacion" not in pasada1.ESQUEMA["properties"]["oraciones"]["items"]["properties"]
+    o = oracion(1, "Los artefactos se revisan.")
+    _, consulta = correr([o], {"oraciones": [respuesta(1, "sin afirmación")]})
+    pedido = consulta.llamadas[0]["prompt"]
+    assert "Juzga el sentido, no las palabras" in pedido
+    assert all(cambio in pedido for cambio in pasada1.CAMBIOS_DE_SENTIDO)
+    assert "una por una" not in pedido and "siete cosas" not in pedido
+    assert "aunque use otras palabras, sinónimos u otro orden" in pedido   # la regla de la skill
 
 
 def test_un_resumen_que_contradice_sigue_sin_coincidir_y_necesita_su_pasaje():
@@ -296,12 +279,18 @@ def test_un_resumen_que_contradice_sigue_sin_coincidir_y_necesita_su_pasaje():
     assert resultado.filas[inventado["huella"]]["veredicto"] == "sin fuente"
 
 
-def test_la_ia_recibe_la_regla_de_cuatro_puntos_y_no_la_de_siete():
-    o = oracion(1, "Los artefactos se revisan.")
-    _, consulta = correr([o], {"oraciones": [respuesta(1, "sin afirmación")]})
-    pedido = consulta.llamadas[0]["prompt"]
-    assert pasada1.REGLA_DE_AULALISTA in pedido
-    assert "estas siete cosas" not in pedido and "las siete cosas" not in pedido
+def test_un_pasaje_copiado_con_pequenas_diferencias_se_ubica():
+    fuente = Fuente("guia.pdf", [
+        {"texto": "Los artefactos de Scrum deben inspeccio-", "ubicacion": "página 37"},
+        {"texto": "narse con frecuencia, según la Guía.", "ubicacion": "página 37"}])
+    corpus = Corpus([fuente])
+    assert corpus.ubicar("guia.pdf", "los artefactos de scrum deben inspeccionarse con frecuencia segun la guia") == "página 37"
+    assert corpus.ubicar("guia.pdf", "Los artefactos de Scrum deben revisarse") is None   # otras palabras: no existe
+    o = oracion(1, "Los artefactos de Scrum se revisan seguido.")
+    resultado, _ = correr([o], {"oraciones": [respuesta(1, pasada1.CONTENIDO, fuente="guia.pdf",
+                                                        pasaje="Los artefactos de Scrum deben inspeccionarse con frecuencia")]},
+                          corpus=corpus)
+    assert resultado.filas[o["huella"]]["veredicto"] == "coincide"
 
 
 # ---------- Mismo sentido y skill agnóstica (PLAN.md §0, decisión 15) ----------
@@ -310,8 +299,7 @@ def test_la_ia_compara_el_sentido_y_no_habla_de_normas():
     o = oracion(1, "Los artefactos se revisan.")
     _, consulta = correr([o], {"oraciones": [respuesta(1, "sin afirmación")]})
     pedido = consulta.llamadas[0]["prompt"]
-    assert "Compara el sentido, no las palabras" in pedido
-    assert "Puede decirlo con otras palabras si no cambia su sentido" in pedido
+    assert "Juzga el sentido, no las palabras" in pedido
     assert pasada1.CONTENIDO == "contenido de una fuente" and pasada1.CONTENIDO in pedido
     assert "norma" not in pedido.replace("normal", "")
     assert "cláusula o de control" not in pedido

@@ -1,12 +1,11 @@
 """Primera pasada · Veracidad, oración por oración (SKILL.md y PLAN.md §5.2).
 
 1. El programa elige para cada oración los tres pasajes más parecidos de las fuentes y las fichas.
-2. La IA recibe grupos de unas 20 oraciones con sus pasajes y da a cada una un tipo, el pasaje
-   copiado tal cual, su fuente y un veredicto. En el contenido de una fuente compara el sentido, no las palabras,
-   y cuatro cosas una por una (PLAN.md §0, decisión 10: excepción a la skill, que pide siete). Un resumen que dice
-   «en este curso» solo se juzga por si contradice o agrega algo.
-3. El programa comprueba que cada pasaje exista tal cual y pone la ubicación real.
-   Si no existe, la oración queda «sin fuente».
+2. La IA recibe grupos de oraciones con sus pasajes y da a cada una un tipo, el pasaje copiado,
+   su fuente y un veredicto. En el contenido de una fuente juzga solo el sentido: otras palabras, sinónimos
+   u otro orden coinciden (PLAN.md §0, decisión 18).
+3. El programa comprueba que cada pasaje exista en la fuente y pone la ubicación real. Tolera tildes,
+   mayúsculas, signos y palabras cortadas con guion al final de una línea. Si no existe, la oración queda «sin fuente».
 4. Sin IA: los títulos son «sin afirmación»; una regla del curso debe decir «en este curso».
 Las oraciones que no cambiaron conservan su resultado anterior (SPEC §9).
 """
@@ -19,8 +18,8 @@ from app.validacion.pasajes import FICHA_DE_LA_SESION, FICHA_DEL_CURSO, Corpus, 
 CONTENIDO = "contenido de una fuente"   # antes «norma»: la skill vale para cualquier curso, no solo normas ISO
 TIPOS = [CONTENIDO, "dato del caso", "cálculo", "regla del curso", "instrucción", "sin afirmación"]
 VEREDICTOS = ["coincide", "no coincide", "sin fuente"]
-COMPARACIONES = ["numero", "termino", "cantidades", "obligacion"]
 NO_APLICA = "no aplica"
+CAMBIOS_DE_SENTIDO = ["contradice", "agrega una afirmación", "cambia una cifra", "cambia «debe» por «puede»"]
 FICHAS = (FICHA_DEL_CURSO, FICHA_DE_LA_SESION)
 TAMANO_GRUPO = 40
 PALABRAS_MINIMAS_PARA_APROBAR_SIN_IA = 5
@@ -36,11 +35,6 @@ ESQUEMA = {
             "pasaje": {"type": "string"},
             "veredicto": {"type": "string", "enum": VEREDICTOS},
             "motivo": {"type": "string"},
-            "comparacion": {
-                "type": "object",
-                "properties": {c: {"type": "string", "enum": ["igual", "distinto", NO_APLICA]} for c in COMPARACIONES},
-                "required": COMPARACIONES, "additionalProperties": False,
-            },
         },
         "required": ["n", "tipo", "fuente", "pasaje", "veredicto", "motivo"],
         "additionalProperties": False,
@@ -52,23 +46,16 @@ ESQUEMA = {
 INSTRUCCIONES = f"""
 Para cada oración devuelve:
 - tipo: uno solo de {", ".join(TIPOS)}.
-- fuente y pasaje: el pasaje copiado tal cual, en su idioma original, y el nombre exacto de su fuente
+- fuente y pasaje: el pasaje copiado de la fuente, en su idioma original, y el nombre exacto de su fuente
   (un archivo de la lista, «ficha del curso» o «ficha de la sesión»). Encuéntralo entre los candidatos
   o con la herramienta buscar_en_fuentes. No lo escribas de memoria. Copia solo palabras que están en la fuente.
   Copia solo el fragmento que sostiene la oración, de 40 palabras como máximo, sin cortar palabras.
-- veredicto: coincide, no coincide o sin fuente. Compara el sentido, no las palabras: una oración dicha con otras
-  palabras coincide si dice lo mismo que su pasaje. Un sinónimo de una palabra común no es una diferencia.
-- motivo: 12 palabras como máximo.
-- comparacion: SOLO en el tipo {CONTENIDO}, compara una por una las cuatro cosas con «igual», «distinto» o «no aplica»:
-  numero (de referencia: sección, cláusula, lámina o paso), termino (el nombre de un término de la fuente o del
-  vocabulario de la sesión), cantidades y obligacion («debe» o «puede»).
-  Una sola diferencia es «no coincide». En los demás tipos, no escribas «comparacion».
-  El orden, quién hace la acción y las palabras que generalizan no se comparan una por una: una oración que
-  contradice al pasaje o le agrega una afirmación es «no coincide», aunque las cuatro cosas sean iguales.
+- veredicto: coincide, no coincide o sin fuente. Juzga el sentido, no las palabras. Otras palabras, sinónimos,
+  otro orden o un resumen coinciden si dicen lo mismo que el pasaje. Solo es «no coincide» si la oración
+  {", ".join(CAMBIOS_DE_SENTIDO[:-1])} o {CAMBIOS_DE_SENTIDO[-1]}.
+- motivo: 12 palabras como máximo. Si es «no coincide», di cuál de esos cuatro cambios hace.
 Reglas por tipo:
-- Contenido de una fuente: el pasaje sale de una fuente del curso, nunca de una ficha. Si la oración dice «en este
-  curso» porque resume, agrupa o reordena la fuente, no la compares punto por punto: coincide si no contradice al pasaje ni le
-  agrega una afirmación. Igual necesita su pasaje copiado tal cual.
+- Contenido de una fuente: el pasaje sale de una fuente del curso, nunca de una ficha.
 - Dato del caso: el pasaje es la línea de la ficha que contiene el dato. Si ninguna ficha lo contiene, es «sin fuente».
 - Regla del curso: es una regla que ninguna fuente dice. La oración debe decir «en este curso». Deja el pasaje vacío.
 - Instrucción: el pasaje es la línea de la ficha de la que sale. Si no sale de ninguna, deja el pasaje vacío.
@@ -76,27 +63,8 @@ Reglas por tipo:
 """
 
 
-REGLA_DE_LA_SKILL = (
-    '- Contenido de una fuente: la oración no puede decir más ni menos que el pasaje. Puede decirlo con otras palabras '
-    'si no cambia su sentido. Compara una por una estas siete cosas: el número de referencia (sección, cláusula, '
-    'lámina o paso), el nombre del término, las cantidades ("las siete opciones"), el orden ("la segunda"), '
-    'quién hace la acción, si es obligación o posibilidad ("debe" o "puede") y las palabras que generalizan ("todos", '
-    '"solo", "siempre", "las mismas"). Una sola diferencia es "no coincide".')
-REGLA_DE_AULALISTA = (
-    '- Contenido de una fuente: la oración no puede contradecir al pasaje ni agregarle una afirmación. Puede decirlo '
-    'con otras palabras si no cambia su sentido. Compara una por una estas cuatro cosas: el número de referencia '
-    '(sección, cláusula, lámina o paso), el nombre del término, las cantidades ("las siete opciones") y si es '
-    'obligación o posibilidad ("debe" o "puede"). Una sola diferencia es "no coincide". Un resumen que dice "en este '
-    'curso" solo se juzga por si contradice o agrega algo.')
-
-
 def reglas_de_la_skill() -> str:
-    """La subsección de la skill con la excepción aprobada (PLAN.md §0, decisión 10). Si la skill cambia esa
-    regla, el programa se detiene: hay que revisar la excepción antes de seguir."""
-    texto = skill.subseccion("Primera pasada · Veracidad")
-    if REGLA_DE_LA_SKILL not in texto:
-        raise KeyError("La regla del contenido de una fuente de SKILL.md cambió. Revisa la decisión 10 de PLAN.md.")
-    return texto.replace(REGLA_DE_LA_SKILL, REGLA_DE_AULALISTA)
+    return skill.subseccion("Primera pasada · Veracidad")
 
 
 @dataclass
@@ -167,16 +135,6 @@ def _revisar(o: dict, respuesta: dict, corpus: Corpus, candidatos: list[dict],
             resultado.pasajes_fuera_de_candidatos += 1
         fuente = f"{fuente}, {ubicacion}"
 
-    if tipo == CONTENIDO and veredicto == "coincide":
-        comparacion = respuesta.get("comparacion")
-        resumen = "en este curso" in normal(o["texto"])   # un resumen no se compara punto por punto
-        if not comparacion and not resumen:
-            return {"tipo": tipo, "pasaje": pasaje, "fuente": fuente, "veredicto": "no coincide",
-                    "motivo": "Faltó comparar la oración con su pasaje en sus cuatro puntos."}
-        distintas = [] if resumen else [c for c, v in comparacion.items() if c in COMPARACIONES and v == "distinto"]
-        if distintas:
-            veredicto = "no coincide"
-            motivo = f"Difiere de la fuente en: {', '.join(distintas)}. {motivo}"
     if veredicto == "sin fuente":
         pasaje = pasaje or "(sin pasaje)"
     return {"tipo": tipo, "pasaje": pasaje, "fuente": fuente, "veredicto": veredicto, "motivo": motivo}

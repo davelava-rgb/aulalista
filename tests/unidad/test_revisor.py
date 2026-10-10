@@ -284,7 +284,11 @@ def test_cada_material_recibe_solo_sus_preguntas_de_la_lista():
     laboratorio = pasada2.lista_de_verificacion("Laboratorio")
     guia = pasada2.lista_de_verificacion("Guía del profesor")
     evaluacion = pasada2.lista_de_verificacion("Evaluación")
-    assert len(lectura_) == 8
+    assert lectura_ == [p for p in completa if p.startswith((
+        "¿Cada sección aporta", "¿Hay alguna frase con dos ideas", "¿Hay contenido de sesiones posteriores"))]
+    assert pasada2.lista_de_verificacion("Diapositivas") == lectura_     # PLAN.md §0, decisión 20
+    assert pasada2.campos_de("Lectura") == pasada2.campos_de("Diapositivas") == ["que_puede_hacer", "dos_lecturas"]
+    assert pasada2.campos_de("Laboratorio") == pasada2.CAMPOS
     assert any(p.startswith("En el laboratorio:") for p in laboratorio)
     assert not any(p.startswith("En el laboratorio:") for p in lectura_ + evaluacion)
     assert any(p.startswith("En la evaluación:") for p in evaluacion)
