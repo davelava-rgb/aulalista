@@ -68,35 +68,3 @@ def consulta_en_secuencia(*salidas):
 
     consulta.llamadas = llamadas
     return consulta
-
-
-def pasada(especiales: dict | None = None):
-    """Respuesta simulada de la primera pasada: lee las oraciones del pedido y las aprueba,
-    salvo las que tienen una respuesta especial (por texto de la oración)."""
-    import re as _re
-    especiales = especiales or {}
-
-    def responder(prompt):
-        oraciones = []
-        for n, texto in _re.findall(r"^\[(\d+)\] Sección: .*? \| Oración: (.*)$", prompt, _re.M):
-            base = {"n": int(n), "tipo": "sin afirmación", "fuente": "", "pasaje": "", "veredicto": "coincide",
-                    "motivo": "Sin afirmación."}
-            oraciones.append({**base, **especiales.get(texto, {})})
-        return {"oraciones": oraciones}
-
-    return responder
-
-
-
-def segunda(defectos: list | None = None, lista_no: list | None = None):
-    """Respuesta simulada de la segunda pasada: responde las cuatro preguntas de los bloques pedidos."""
-    import re as _re
-
-    def responder(prompt):
-        linea = prompt.rstrip().splitlines()[-1]
-        nombres = _re.findall(r"\[([^\]]+)\]", linea)
-        bloques = [{"bloque": n, "que_puede_hacer": "Aplicar el concepto.", "que_necesita": "Está en el bloque.",
-                    "dos_lecturas": "Ninguna", "si_no_sale": "No aplica."} for n in nombres]
-        return {"bloques": bloques, "defectos": defectos or [], "lista": lista_no or []}
-
-    return responder

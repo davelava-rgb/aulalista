@@ -1,6 +1,6 @@
 ---
 name: "material-de-clase"
-description: "Genera el material completo de una sesión de cualquier curso a partir de una ficha: lectura, diapositivas, laboratorio con archivos de práctica, guía del profesor, práctica web y evaluación práctica tipo PBQ (Performance Based Question) pensada para 30 minutos. Ningún material muestra tiempos ni puntajes. Valida cada material con un programa verificador, dos pasadas oración por oración y un revisor independiente. No usar para una guía de laboratorio suelta."
+description: "Genera el material completo de una sesión de cualquier curso a partir de una ficha: lectura, diapositivas, laboratorio con archivos de práctica, guía del profesor, práctica web y evaluación práctica tipo PBQ (Performance Based Question) pensada para 30 minutos. Ningún material muestra tiempos ni puntajes. Valida cada material en dos pasadas: un programa verificador y una revisión del contenido por bloque. No usar para una guía de laboratorio suelta."
 ---
 
 # Material de clase por sesión
@@ -238,90 +238,67 @@ La clave trae, por cada pregunta:
 
 Ningún otro material da la respuesta de una pregunta de la evaluación.
 
-## Validación doble antes de cada entrega
+## Validación en dos pasadas antes de cada entrega
 
-El profesor no revisa el material a mano. La validación la hacen tres revisores que no dependen de quien escribió el texto: un programa, la tabla oración por oración y un revisor independiente. Ningún material se entrega con una falla abierta.
+La validación tiene dos pasadas: un programa que revisa lo mecánico y una revisión del contenido que revisa el significado. Ningún material se entrega con una falla abierta del programa. Decir lo mismo que la fuente con otras palabras nunca es un error.
 
 Qué significa cada defecto:
 
 - Vacío: falta un paso, un dato, un archivo o una explicación que el alumno necesita para seguir.
 - Inconsistencia: dos partes dicen cosas distintas sobre el mismo dato, nombre, cifra u orden.
 - Ambigüedad: una instrucción o una pregunta se puede entender de dos maneras.
-- Imprecisión: una afirmación es falsa, está incompleta o dice más o menos que su fuente.
+- Imprecisión: una afirmación contradice su fuente, cambia una cifra o un "debe" por un "puede", o afirma algo que ninguna fuente dice.
 - Relleno: una frase o una sección se puede borrar sin que el alumno pierda nada.
 
-### Preparación · El programa verificador
+### Primera pasada · El programa verificador
 
 1. Al confirmar la ficha de la sesión, escribe el archivo verificacion.json con los datos de las dos fichas: las fuentes del curso y sus archivos, los datos fijos del caso, el vocabulario de la sesión, las variantes que no se deben usar de cada concepto, lo que nunca se incluye y la carpeta de los archivos de práctica. El formato está al inicio de scripts/verificar.py.
 2. Cuando el material esté terminado, ejecuta:
    `python3 scripts/verificar.py --config verificacion.json --salida S[sesión]_[material]_Verificacion.xlsx [archivos del material]`
-3. El programa extrae el texto del archivo final, lo separa en oraciones y crea la tabla con una fila por oración. Revisa sin ayuda:
-   - que cada número de referencia (sección, cláusula, lámina o paso) exista en la fuente citada, y anota el título que tiene en ella;
+3. El programa extrae el texto del archivo final y lo separa en oraciones. Revisa sin ayuda:
+   - que cada número de referencia (sección, cláusula, lámina o paso) exista en la fuente citada;
    - que cada cita entre comillas aparezca tal cual en una fuente;
    - que cada operación escrita dé el resultado escrito;
    - que cada dato fijo use el valor de la ficha;
    - que no haya tiempos, puntajes, emojis ni nada de lo que nunca se incluye;
    - que no se usen variantes de un concepto clave;
    - que cada archivo mencionado exista;
-   - las oraciones largas, las frases de relleno y las palabras imprecisas.
+   - las frases de relleno y las palabras imprecisas, solo como aviso informativo.
 4. Una FALLA se corrige siempre. Un AVISO se corrige o se explica en la columna "Cómo se resolvió" de la hoja Hallazgos.
 5. Si una fuente no se puede leer, no cites esa fuente en el material.
 6. Ejecuta el programa de nuevo después de cada corrección. El material no se entrega mientras el programa termine con fallas.
 
-El programa no entiende el significado. Por eso siguen las dos pasadas.
+El programa no entiende el significado. Por eso sigue la segunda pasada.
 
-### Primera pasada · Veracidad
+### Segunda pasada · Revisión del contenido
 
-Llena estas columnas en cada fila de la tabla que creó el programa:
-
-- Tipo de oración. Elige uno solo: contenido de una fuente, dato del caso, cálculo, regla del curso, instrucción o sin afirmación.
-- Pasaje de la fuente: el pasaje copiado de la fuente, en su idioma original, con su página, sección o lámina. Encuéntralo con una búsqueda en el archivo, no de memoria.
-- Veredicto: coincide, no coincide o sin fuente.
-
-Reglas por tipo:
-
-- Contenido de una fuente: la oración coincide si dice lo mismo que el pasaje, aunque use otras palabras, sinónimos u otro orden. Solo es "no coincide" si cambia el sentido: contradice al pasaje, le agrega una afirmación que el pasaje no tiene, cambia una cifra o una cantidad, o cambia una obligación por una posibilidad ("debe" por "puede"). Un resumen que agrupa o reordena la fuente coincide si no hace ninguna de esas cuatro cosas.
-- Contenido traducido por ti: si la fuente está en otro idioma, la oración dice que el nombre es una traducción del curso.
-- Regla del curso: es una regla que ninguna fuente dice. La oración lleva escrito "en este curso". Si no lo lleva, es "no coincide".
-- Dato del caso: coincide con los datos fijos de la ficha del curso y con las demás apariciones del mismo dato.
-- Cálculo: rehazlo con un programa a partir de los datos del archivo.
-- Instrucción: ejecútala con los archivos de práctica.
-
-Qué hacer con cada resultado:
-
-- "No coincide": reescribe la oración para que diga lo que dice la fuente.
-- "Sin fuente": elimina la oración, o conviértela en una regla del curso con "en este curso". No queda ninguna fila "sin fuente" en la entrega.
-
-### Segunda pasada · Valor y funcionamiento
-
-1. Lista con un programa cada cifra, cada nombre propio, cada fecha y cada término del vocabulario, con todas las oraciones donde aparece. Dos apariciones distintas del mismo dato son una inconsistencia.
-2. Por cada bloque, ejercicio, estación o pregunta, responde por escrito en una segunda hoja del archivo de verificación:
+1. Revisa el material bloque por bloque: cada bloque, ejercicio, estación o pregunta, junto con los pasajes de las fuentes y de las fichas que lo sostienen. Búscalos en los archivos, no de memoria.
+2. Reporta solo errores reales, cada uno con su oración y su tipo:
+   - contradice la fuente: cambia una cifra, una cantidad o un "debe" por un "puede", o afirma lo contrario;
+   - dato inventado: afirma algo de una fuente que ninguna fuente dice, o un dato del caso que contradice las fichas;
+   - vacío, ambigüedad o inconsistencia, como se definen arriba.
+3. No es un error decir lo mismo con otras palabras, con sinónimos, en otro orden o en un resumen. Tampoco el estilo.
+4. Una contradicción o una inconsistencia lleva su prueba: el texto copiado de la fuente, de la ficha o de otra parte del material. Sin prueba, no es un error.
+5. Estas preguntas ayudan a encontrar vacíos y ambigüedades:
    - ¿Qué puede hacer el alumno con esto? Si no hay respuesta, es relleno.
    - ¿Qué dato, archivo o paso necesita el alumno, y en qué oración está? Si no está, es un vacío.
    - ¿Qué oración se puede entender de dos maneras? Escribe las dos lecturas. Si existen, es una ambigüedad.
    - ¿Qué decide el alumno cuando el caso no sale como el ejemplo? Si el material no lo dice, es un vacío.
-3. Ejecuta de nuevo cada ejercicio y cada pregunta con sus archivos, como un alumno del público de la ficha.
-4. Repasa la lista de verificación.
+6. Ejecuta de nuevo cada ejercicio y cada pregunta con sus archivos, como un alumno del público de la ficha.
+7. Corrige los errores una sola vez. Después, ejecuta el programa otra vez y revisa de nuevo solo los bloques que cambiaron.
+8. Lo que siga abierto va a "Decisiones pendientes", con la oración, el error y su prueba. El profesor decide.
 
 ### Revisor independiente
 
-Quien escribió el material no es su último revisor.
+Es opcional: se usa cuando el profesor quiere una segunda opinión sobre un material.
 
-1. Si el entorno permite lanzar otro agente, lanza uno nuevo. Dale solo tres cosas: el archivo final, las fuentes del curso y las dos fichas. No le des borradores, ni la tabla de verificación, ni tus notas.
+1. Si el entorno permite lanzar otro agente, lanza uno nuevo. Dale solo tres cosas: el archivo final, las fuentes del curso y las dos fichas. No le des borradores, ni el archivo de verificación, ni tus notas.
 2. Pídele esto: "Busca errores en este material. Compara cada oración con las fuentes. Entrega una lista con el número de oración, el defecto (vacío, inconsistencia, ambigüedad, imprecisión o relleno) y la prueba. No des opiniones de estilo".
-3. Anota cada hallazgo en la columna "Revisor independiente" y corrígelo. Si no estás de acuerdo con un hallazgo, escribe el pasaje de la fuente que lo contradice.
-4. Si el revisor encuentra tres errores o más, lanza otro revisor nuevo después de corregir. Repite hasta que un revisor encuentre menos de tres.
-5. Si el entorno no permite lanzar otro agente, dilo en la primera línea de la entrega: "Este material no pasó por un revisor independiente". Recomienda generar el material en un entorno que sí lo permita.
-
-### Después de corregir
-
-- Cada corrección es texto nuevo y puede traer un error nuevo. Genera el archivo otra vez, ejecuta el programa otra vez y llena una fila nueva por cada oración que cambió.
-- Repite hasta que una vuelta completa no cambie ninguna oración.
-- No digas que algo está validado si su fila no tiene pasaje y veredicto.
+3. Lo que encuentre, con su prueba, va a "Decisiones pendientes". El profesor decide si se corrige.
 
 ### Qué queda para el profesor
 
-Nada que deba buscar. Si después de todo queda una duda que ningún revisor pudo cerrar, la entrega la lista en "Decisiones pendientes", con la oración y las dos opciones. Lo normal es que esa lista esté vacía.
+Las decisiones pendientes: los errores que la corrección no cerró y lo que encontró el revisor independiente, si se pidió. Cada uno con su oración y su prueba. Lo normal es que esa lista sea corta.
 
 ## Lista de verificación
 
@@ -344,7 +321,7 @@ Nada que deba buscar. Si después de todo queda una duda que ningún revisor pud
 
 1. Una línea por archivo que diga qué contiene.
 2. "Qué probé": qué ejecutaste y qué resultado dio.
-3. "Qué validé": la última línea que imprimió el programa, con el número de oraciones, fallas y avisos. Luego, cuántos errores corrigió cada pasada y cuántos encontró el revisor independiente. Adjunta el archivo de verificación.
+3. "Qué validé": la última línea que imprimió el programa, con el número de oraciones, fallas y avisos. Luego, cuántos errores encontró la revisión del contenido, cuántos se corrigieron y cuántos quedaron pendientes. Si se pidió, cuántos encontró el revisor independiente. Adjunta el archivo de verificación.
 4. "Decisiones pendientes": solo si quedó alguna. Si no, omite este punto.
 5. "Qué no pude probar": lo que quedó sin verificar y por qué.
 6. "Qué decidí por mi cuenta": cada dato o decisión que las fichas no definían.

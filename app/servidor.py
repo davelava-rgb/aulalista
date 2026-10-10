@@ -352,6 +352,18 @@ def generar_lectura(curso: str, sesion: int):
     return RedirectResponse(destino, status_code=303)
 
 
+@app.post("/cursos/{curso}/sesiones/{sesion}/materiales/lectura/revisor")
+def revisor_de_la_lectura(curso: str, sesion: int):
+    """El revisor independiente opcional (PLAN.md §0, decisión 22): lo pide el profesor."""
+    carpeta = _carpeta(curso)
+    destino = f"/cursos/{curso}/sesiones/{sesion}"
+    if lectura.estado(carpeta, sesion).get("estado") not in ("verificada", "con pendientes", "aprobada"):
+        return RedirectResponse(destino + "?mensaje=" + quote("El revisor revisa una lectura generada y sin fallas."),
+                                status_code=303)
+    _trabajo_en_segundo_plano(lectura.revisar_con_revisor, carpeta, curso, sesion, clave=(curso, sesion, lectura.CLAVE))
+    return RedirectResponse(destino, status_code=303)
+
+
 @app.post("/cursos/{curso}/sesiones/{sesion}/materiales/lectura/detener")
 def detener_lectura(curso: str, sesion: int):
     """Cancela la generación en curso. Si no hay ninguna (el servidor se cerró a mitad de camino),
@@ -364,7 +376,7 @@ def detener_lectura(curso: str, sesion: int):
         bucle.call_soon_threadsafe(tarea.cancel)
         mensaje = "Deteniendo la lectura. La llamada a Claude en curso se corta."
     elif lectura.marcar_detenida(_carpeta(curso), sesion):
-        mensaje = "Lectura detenida."
+        mensaje = "Trabajo detenido."
     else:
         mensaje = "La lectura no estaba trabajando."
     return RedirectResponse(destino + "?mensaje=" + quote(mensaje), status_code=303)

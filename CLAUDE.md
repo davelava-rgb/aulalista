@@ -48,21 +48,21 @@ Cada regla tiene una prueba automática. Si una regla no tiene prueba, la etapa 
 - Diseño uniforme: tres colores como máximo, mismos recuadros y tablas.
 - Nunca se incluye, por defecto: objetivos de aprendizaje, requisitos previos, glosarios, relleno, emojis y lenguaje publicitario.
 
-## Validación
+## Validación (dos pasadas, `PLAN.md` §0, decisión 22)
 
-- Ningún material se entrega con una FALLA abierta. Un AVISO se corrige o se explica, salvo los de relleno y palabras imprecisas, que son informativos (`PLAN.md` §0, decisión 13).
-- Ninguna fila del Excel de verificación queda sin pasaje y veredicto. Ninguna queda "sin fuente".
-- El pasaje que copia la IA se comprueba con un programa contra la fuente.
-- El revisor independiente es una sesión nueva del SDK, sin acceso a borradores ni a la tabla. Máximo tres rondas.
-- El ciclo de corrección tiene un máximo de cinco vueltas. Después se detiene y avisa.
-- El Excel de verificación copia el formato de `S1_Laboratorio_Verificacion.xlsx`, sin sus defectos (ver `PLAN.md` §0).
+- Primera pasada: el verificador, sin IA. Ningún material se aprueba con una FALLA abierta. Un AVISO se corrige o se explica, salvo los de relleno y palabras imprecisas, que son informativos (`PLAN.md` §0, decisión 13).
+- Segunda pasada: una revisión del contenido con IA, por bloque. Solo reporta errores reales: contradice la fuente, dato inventado, vacío, ambigüedad o inconsistencia. Decir lo mismo con otras palabras nunca es un error.
+- La prueba de una contradicción o de una inconsistencia se comprueba con un programa contra la fuente, las fichas o el material. Sin prueba real, el error se descarta.
+- Una sola corrección de los errores de la revisión. Después, el verificador otra vez y la revisión solo de los bloques que cambiaron. Lo que quede va a la entrega como pendiente y el profesor decide.
+- El revisor independiente es opcional: lo lanza el profesor con un botón. Es una sesión nueva del SDK, sin acceso a borradores. No corrige.
+- El Excel de verificación queda solo con la hoja Hallazgos, en el formato de `S1_Laboratorio_Verificacion.xlsx`.
 
 ## Costo
 
 - El verificador corre antes que cualquier revisión con IA.
 - Cada fuente se convierte a texto una sola vez.
 - La IA recibe pasajes, no fuentes completas.
-- Después de una corrección, solo se validan las oraciones que cambiaron.
+- Después de una corrección, solo se revisan de nuevo los bloques que cambiaron.
 - Cada llamada al SDK registra sus tokens en `cursos/[curso]/tokens.jsonl` y tiene un tope con `max_budget_usd`.
 - Los modelos por tarea están en `config/modelos.toml`.
 

@@ -1,13 +1,9 @@
-"""Segunda pasada · Valor y funcionamiento (SKILL.md y PLAN.md §5.3).
+"""Piezas comunes de la revisión por bloque (PLAN.md §5.3 y §0, decisiones 11, 20 y 22).
 
-Desde la etapa 5d la hace el revisor independiente (PLAN.md §0, decisión 12): responde las cuatro preguntas
-por bloque y la lista de verificación de su material. Este módulo tiene las piezas comunes:
-
-- los bloques del material y su huella;
-- las palabras que aparecen con dos cifras distintas, para que el revisor decida si son el mismo dato
-  (la hoja «Datos repetidos» la escribe el verificador);
-- las cuatro preguntas y la lista de verificación de la skill, repartidas por material
-  (PLAN.md §0, decisiones 11 y 20).
+- los bloques del material y su huella, para revisar de nuevo solo los que cambiaron;
+- las palabras que aparecen con dos cifras distintas, para que la IA decida si son el mismo dato;
+- las cuatro preguntas y la lista de verificación de la skill, repartidas por material. Las usa el
+  revisor independiente opcional.
 """
 
 import hashlib

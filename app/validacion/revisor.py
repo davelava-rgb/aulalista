@@ -67,13 +67,14 @@ def esquema(campos: list[str]) -> dict:
 
 ESQUEMA = esquema(pasada2.CAMPOS)
 
-# El pedido de la skill, adaptado: la comparación oración por oración ya la hizo la primera pasada
-# (PLAN.md §0, decisión 12). Si la skill cambia su pedido, el programa se detiene.
+# El pedido de la skill, adaptado: el revisor es opcional y la revisión del contenido ya comparó cada bloque
+# con sus pasajes (PLAN.md §0, decisiones 12 y 22). Si la skill cambia su pedido, el programa se detiene.
 PEDIDO_DE_AULALISTA = (
-    "Busca errores en este material. Léelo completo, como un experto que no lo escribió. La primera pasada ya "
-    "comparó cada oración con su pasaje de las fuentes: busca lo que solo se ve al leer el documento completo o "
-    "desde el lugar del alumno. Entrega una lista con el número de oración, el defecto (vacío, inconsistencia, "
-    "ambigüedad, imprecisión o relleno) y la prueba. No des opiniones de estilo.")
+    "Busca errores en este material. Léelo completo, como un experto que no lo escribió. La revisión del "
+    "contenido ya comparó cada bloque con sus pasajes de las fuentes: busca lo que solo se ve al leer el documento "
+    "completo o desde el lugar del alumno. Decir lo mismo que la fuente con otras palabras no es un error. Entrega "
+    "una lista con el número de oración, el defecto (vacío, inconsistencia, ambigüedad, imprecisión o relleno) y la "
+    "prueba. No des opiniones de estilo.")
 
 
 PEDIDO_DE_LA_SKILL = ("Busca errores en este material. Compara cada oración con las fuentes. Entrega una lista con "
@@ -91,7 +92,7 @@ def pedido_de_la_skill() -> str:
 
 
 def definiciones_de_defectos() -> str:
-    texto = skill.secciones("Validación doble antes de cada entrega")
+    texto = skill.secciones("Validación en dos pasadas antes de cada entrega")
     return "\n".join(l for l in texto.splitlines()
                      if l.startswith("- ") and l[2:].split(":")[0].lower() in DEFECTOS)
 
@@ -184,8 +185,8 @@ def _pedido(carpeta: Path, bloques: list[pasada2.Bloque], material: str) -> str:
         "- Los títulos y rótulos no son defectos. No reportes opiniones de estilo.",
         "- Si no encuentras errores, devuelve la lista vacía.",
         "",
-        "SEGUNDA PASADA, como dice la skill:",
-        skill.subseccion("Segunda pasada · Valor y funcionamiento"),
+        "PREGUNTAS POR BLOQUE, como dice la skill:",
+        skill.subseccion("Segunda pasada · Revisión del contenido"),
         f"- bloques: cada bloque de la lista «BLOQUES». En este material ({material}) responde solo estas preguntas,",
         "  25 palabras como máximo cada una; las demás no se aplican:",
         *[f"  - {c}: {p}" for c, p in zip(pasada2.campos_de(material), pasada2.preguntas_de(material))],

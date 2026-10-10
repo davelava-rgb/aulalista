@@ -100,20 +100,11 @@ Ningún material se entrega con una falla abierta.
 - **Solo contenido de valor.** No hay relleno: toda frase le sirve al alumno para hacer algo.
 - **Sin lenguaje de IA.** No hay frases hechas, muletillas ni adornos que delatan un texto generado. La lista de frases prohibidas vive en un archivo del proyecto y se puede ampliar.
 
-**Archivo de verificación.** Es un Excel con una fila por cada oración del material. Cada fila muestra la oración, el pasaje de la fuente con el que se comparó, el archivo y la página o celda de ese pasaje, y el veredicto. El profesor puede abrirlo y comprobar cualquier oración contra su fuente.
-
-El modelo del archivo es `S1_Laboratorio_Verificacion.xlsx`, que está en la carpeta del proyecto. Tiene cuatro hojas:
-
-| Hoja | Columnas |
-|---|---|
-| Oraciones | N, Diapositiva o sección, Parte, Oración, Tipo de oración, Pasaje de la fuente, Fuente, Veredicto, Revisor independiente |
-| Hallazgos | Nivel, Diapositiva, Oración, Regla, Detalle, Cómo se resolvió |
-| Datos repetidos | Término o cifra, Apariciones, Oraciones |
-| Segunda pasada | Bloque y las cuatro preguntas de la segunda pasada |
+**Archivo de verificación.** Es un Excel con la hoja Hallazgos, en el formato del modelo `S1_Laboratorio_Verificacion.xlsx`, que está en la carpeta del proyecto. Columnas: Nivel, Diapositiva o sección, Oración, Regla, Detalle y Cómo se resolvió. Tiene lo que encontró el verificador, los errores de la revisión del contenido con su prueba y cómo se resolvió cada uno (`PLAN.md` §0, decisión 22).
 
 **Lectura de las fuentes.** El software extrae el texto de cada fuente antes de comparar: PDF, Word, hojas de cálculo e imágenes. El texto de una imagen se obtiene por reconocimiento de texto. Si una fuente no se puede leer, el material no la cita.
 
-La validación tiene tres partes. El programa revisa lo que se puede comprobar de forma mecánica. Las dos pasadas y el revisor revisan el significado, que el programa no entiende.
+La validación tiene dos pasadas (`PLAN.md` §0, decisión 22). El programa revisa lo que se puede comprobar de forma mecánica. Una revisión con IA revisa el significado, que el programa no entiende.
 
 **a. Programa verificador.** Recibe `verificacion.json` y los archivos del material. Separa el texto en oraciones y crea una tabla con una fila por oración. Revisa:
 
@@ -124,18 +115,15 @@ La validación tiene tres partes. El programa revisa lo que se puede comprobar d
 - que no haya tiempos, puntajes ni emojis;
 - que no se usen variantes de un concepto clave;
 - que cada archivo mencionado exista;
-- las oraciones largas, las frases de relleno, las palabras imprecisas y las frases de la lista de lenguaje de IA.
+- las frases de relleno, las palabras imprecisas y las frases de la lista de lenguaje de IA.
 
 Una FALLA se corrige siempre. Un AVISO se corrige o se explica.
 
-**b. Dos pasadas oración por oración.**
+**b. Revisión del contenido, por bloque.** La IA lee cada bloque con los pasajes de las fuentes y de las fichas que elige el programa. Reporta solo errores reales: lo que contradice la fuente, un dato inventado, un vacío, una ambigüedad o una inconsistencia. Decir lo mismo con otras palabras no es un error. La prueba de una contradicción o de una inconsistencia se comprueba con un programa.
 
-- Primera pasada, veracidad: cada oración recibe un tipo, el pasaje de su fuente y un veredicto (coincide, no coincide o sin fuente). No queda ninguna oración "sin fuente".
-- Segunda pasada, valor y funcionamiento: el software busca vacíos, inconsistencias, ambigüedades y relleno, y ejecuta de nuevo cada ejercicio.
+Los errores se corrigen una sola vez. Después se repite el verificador y la revisión de los bloques que cambiaron. Lo que quede va a la entrega como pendiente y el profesor decide.
 
-**c. Revisor independiente.** Otro agente recibe solo el archivo final, las fuentes y las dos fichas. Si encuentra tres errores o más, se corrige y se lanza un revisor nuevo.
-
-Después de cada corrección se repite la validación. El ciclo termina cuando una vuelta completa no cambia ninguna oración.
+**c. Revisor independiente, opcional.** El profesor lo pide con un botón. Otro agente recibe solo el archivo final, las fuentes y las dos fichas. Lo que encuentra queda pendiente para que el profesor decida.
 
 **Qué se valida en cada material.** Cada material se valida por separado. Validar la lectura no valida los demás.
 
@@ -154,7 +142,7 @@ Las revisiones del programa se aplican a todos los materiales. Sin archivo de ve
 
 1. Una línea por archivo, con lo que contiene.
 2. "Qué probé".
-3. "Qué validé": oraciones, fallas, avisos y hallazgos del revisor.
+3. "Qué validé": fallas y avisos del verificador, errores de la revisión del contenido y, si se pidió, hallazgos del revisor.
 4. "Decisiones pendientes", solo si hay alguna.
 5. "Qué no pude probar".
 6. "Qué decidí por mi cuenta".
@@ -191,9 +179,9 @@ cursos/[curso]/
 
 - El programa verificador corre primero. Lo que detecta se corrige antes de usar IA para revisar.
 - Un programa convierte cada fuente a texto una sola vez y guarda el resultado con su página o celda. La IA solo lee imágenes y PDF escaneados, y el profesor revisa ese resultado.
-- El programa busca en la fuente el pasaje de cada oración. La IA recibe ese pasaje, no la fuente completa.
-- Después de una corrección se validan solo las oraciones que cambiaron.
-- El revisor independiente tiene un máximo de tres rondas. Si no alcanza, el software se detiene y avisa.
+- El programa busca en la fuente los pasajes de cada bloque. La IA recibe esos pasajes, no la fuente completa.
+- Después de una corrección se revisan solo los bloques que cambiaron.
+- Los errores de la revisión se corrigen una sola vez. El revisor independiente solo corre si el profesor lo pide.
 - El software registra los tokens que gasta cada etapa de cada material.
 
 ## 10. Fuera de alcance en esta versión
@@ -219,7 +207,7 @@ Cada etapa termina con sus pruebas en verde y un commit.
 2. Conversión de las fuentes a texto, con su página o celda.
 3. Fichas: plantillas, lectura de archivos del curso y confirmación.
 4. Programa verificador y `verificacion.json`.
-5. Lectura en Word, con la identidad visual, las dos pasadas, el revisor independiente y el formato de entrega.
+5. Lectura en Word, con la identidad visual, las dos pasadas, el revisor independiente opcional y el formato de entrega.
 6. Diapositivas.
 7. Laboratorio, archivos de práctica, imágenes y guía del profesor.
 8. Práctica interactiva en HTML.
