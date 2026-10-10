@@ -116,9 +116,14 @@ FICHA_DE_LA_SESION = (
             _c("sesion.alcance", "Alcance (obligatorio)"),
             _c("sesion.ya_vieron", "Lo que los alumnos ya vieron en sesiones anteriores"),
             _c("sesion.no_adelantar", "Temas de sesiones posteriores que no se deben adelantar"),
+            _c("sesion.referencia", "Material de referencia: una línea por archivo de las fuentes, con sus páginas "
+               "(por ejemplo «manual.pdf: páginas 5 a 20»); sin páginas, se usa el archivo completo", tipo="lineas"),
+            _c("sesion.exclusiones", "Exclusiones del material de referencia: temas o páginas que no se usan "
+               "(vacío: se usa todo el material de referencia)", tipo="lineas"),
         )),
         Seccion("2. Lectura", (
-            _c("lectura.temas", "Temas que debe cubrir (obligatorio), agrupados en 2 a 4 bloques", tipo="grupo",
+            _c("lectura.temas", "Temas que debe cubrir (obligatorio si no hay material de referencia), "
+               "agrupados en 2 a 4 bloques", tipo="grupo",
                subcampos=tuple(Campo(f"lectura.bloque.{n}", f"Bloque {n}", sangria="  ") for n in range(1, 5))),
             _c("lectura.ejemplo", "Ejemplo completo que debe incluir, con un caso distinto al del laboratorio"),
             _c("lectura.aplicalo", 'Contenido de "Aplícalo así"'),
@@ -272,7 +277,9 @@ def vista(tipo: str, campos: dict) -> list[dict]:
                 elementos.append({"repetible": True, "nombre": elemento.prefijo, "encabezado": elemento.encabezado.lstrip("- "), "bloques": bloques})
             elif elemento.tipo == "grupo":
                 # Desde la decisión 16, los temas de la lectura se exigen al generarla, no al confirmar la ficha.
-                etiqueta = elemento.etiqueta.replace("(obligatorio)", "(obligatorio para generar la lectura)")
+                # Desde la decisión 23, solo si la sesión no tiene material de referencia.
+                etiqueta = elemento.etiqueta.replace("(obligatorio si no hay material de referencia)",
+                                                     "(obligatorio para generar la lectura si no hay material de referencia)")
                 elementos.append({"grupo": True, "etiqueta": etiqueta,
                                   "campos": [dato(s, s.id, seccion) | {"obligatorio": False} for s in elemento.subcampos]})
             else:

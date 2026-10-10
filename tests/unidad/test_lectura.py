@@ -2,6 +2,7 @@
 
 import asyncio
 import copy
+import json
 import re
 import zipfile
 
@@ -35,7 +36,7 @@ LIMPIA = {
                  "plantilla": ["Qué observamos esta semana.", "Qué cambiamos la próxima semana."]},
     "cuidado": ["Revisar el avance sin cambiar nada después."],
     "pasajes": [{"fuente": "silabo.pdf", "ubicacion": "página 1", "texto": "Scrum Master con IA"}],
-    "decisiones": ["Usé una tienda como ejemplo."],
+    "decisiones": [{"texto": "Usé una tienda como ejemplo.", "tipo": "decisión"}],
     "agrupacion": "",
 }
 
@@ -214,7 +215,7 @@ def test_lectura_limpia_queda_verificada_con_dos_llamadas(sesion):
     assert "## Material 1 · Lectura" in consulta.llamadas[0]["prompt"]
     assert "FICHA DE LA SESIÓN" in consulta.llamadas[0]["prompt"]
     assert consulta.llamadas[1]["options"].model == "claude-sonnet-5-5"
-    assert material["decisiones"] == ["Usé una tienda como ejemplo."]
+    assert material["decisiones"] == [{"texto": "Usé una tienda como ejemplo.", "tipo": "decisión"}]
     assert material["revision"] == {"bloques": 5, "errores": 0, "corregidos": 0, "pendientes": 0, "descartados": 0}
 
 
@@ -492,7 +493,130 @@ def test_sin_bloques_la_lectura_no_empieza_y_la_pagina_dice_que_falta(sesion):
     with pytest.raises(lectura.NoSePuedeEmpezar, match="La lectura necesita de 2 a 4 bloques"):
         asyncio.run(lectura.generar(sesion, "scrum", 1, consulta=consulta_en_secuencia()))
     pagina = cliente.get("/cursos/scrum/sesiones/1").text
-    assert "Para generar la lectura, completa en la" in pagina and "La lectura necesita de 2 a 4 bloques." in pagina
+    assert "Para generar la lectura, completa en la" in pagina and "La lectura necesita de 2 a 4 bloques, o un material de referencia." in pagina
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura", follow_redirects=True)
-    assert "Falta en la ficha de la sesión: La lectura necesita de 2 a 4 bloques." in r.text
+    assert "Falta en la ficha de la sesión: La lectura necesita de 2 a 4 bloques, o un material de referencia." in r.text
     assert lectura.estado(sesion, 1).get("estado") is None   # no empezó: no gastó tokens
+
+
+# ---------- Material de referencia y exclusiones (PLAN.md §0, decisión 23) ----------
+
+def manual(carpeta, paginas=5, nombre="manual.pdf"):
+    """Fuente convertida de varias páginas, sin IA."""
+    import pymupdf
+    from app.fuentes import convertir
+    documento = pymupdf.open()
+    for n in range(1, paginas + 1):
+        documento.new_page().insert_text((72, 72), f"Tema {n} del manual de Scrum", fontsize=12)
+    documento.save(carpeta / "fuentes" / nombre)
+    asyncio.run(convertir.convertir_curso(carpeta, None))
+
+
+def con_referencia(carpeta, referencia, exclusiones="", sin_bloques=True):
+    ficha = almacen.cargar(carpeta, "sesion", 1)
+    ficha["campos"]["sesion.referencia"] = {"valor": referencia, "origen": "profesor", "estado": ""}
+    ficha["campos"]["sesion.exclusiones"] = {"valor": exclusiones, "origen": "profesor", "estado": ""}
+    if sin_bloques:
+        for n in range(1, 5):
+            ficha["campos"][f"lectura.bloque.{n}"] = {"valor": "", "origen": "", "estado": ""}
+    almacen.guardar(carpeta, "sesion", 1, ficha)
+
+
+def test_la_referencia_se_lee_con_archivo_y_paginas(sesion):
+    from app.fichas import referencia
+    manual(sesion)
+    con_referencia(sesion, "Manual.PDF: páginas 2 a 3, 5\nsilabo.pdf")
+    tramos, problemas = referencia.interpretar(sesion, almacen.cargar(sesion, "sesion", 1))
+    assert problemas == []
+    assert [t.describir() for t in tramos] == ["manual.pdf: páginas 2 a 3, 5 (3 páginas)",
+                                               "silabo.pdf: el archivo completo (1 página)"]
+
+
+def test_una_referencia_que_no_existe_no_deja_empezar(sesion):
+    manual(sesion)
+    con_referencia(sesion, "otro.pdf\nmanual.pdf: páginas 4 a 9")
+    faltan = almacen.faltantes_para(sesion, 1, lectura.CLAVE)
+    assert "Material de referencia: «otro.pdf» no es una fuente convertida del curso." in faltan
+    assert "Material de referencia: manual.pdf tiene 5 páginas; revisa las páginas «páginas 4 a 9»." in faltan
+    with pytest.raises(lectura.NoSePuedeEmpezar):
+        asyncio.run(lectura.generar(sesion, "scrum", 1, consulta=consulta_en_secuencia()))
+
+
+def test_con_referencia_no_hacen_falta_bloques_ni_hay_maximo_de_paginas(sesion):
+    manual(sesion)
+    con_referencia(sesion, "manual.pdf: páginas 2 a 4", exclusiones="Tema 3 del manual")
+    assert almacen.faltantes_para(sesion, 1, lectura.CLAVE) == []
+    larga = copy.deepcopy(LIMPIA)
+    larga["bloques"] += copy.deepcopy(LIMPIA["bloques"]) + [copy.deepcopy(LIMPIA["bloques"][0])]   # 5 bloques
+    material, consulta = generar(sesion, larga, contar_paginas=lambda _ruta: 9)
+    assert material["estado"] == "verificada" and material["bloques"] == 5
+    pedido = consulta.llamadas[0]["prompt"]
+    assert "MATERIAL DE REFERENCIA DE LA SESIÓN" in pedido and "- manual.pdf: páginas 2 a 4 (3 páginas)" in pedido
+    assert "- Tema 3 del manual" in pedido and "No hay un máximo de páginas" in pedido
+    assert f"Unas {lectura.PALABRAS_MAX} palabras" not in pedido
+    configuracion = json.loads((almacen.carpeta_sesion(sesion, 1) / "verificacion_lectura.json").read_text(encoding="utf-8"))
+    assert configuracion["limites"] == {}
+    probe = next(s["lineas"] for s in material["entrega"]["secciones"] if s["clave"] == "probe")
+    assert probe[0] == ("Conté las páginas con Word: 9. No hay máximo: la extensión sale del material de referencia "
+                        "(manual.pdf: páginas 2 a 4 (3 páginas)), sin las exclusiones de la ficha: Tema 3 del manual.")
+
+
+def test_sin_referencia_mas_de_cuatro_bloques_es_falla_de_estructura():
+    larga = copy.deepcopy(LIMPIA)
+    larga["bloques"] *= 3
+    contenido, problemas = lectura._validar(larga)
+    assert contenido is None and problemas == ["FALLA · estructura · bloques: tiene 6; sin material de referencia van de 2 a 4."]
+    contenido, problemas = lectura._validar(larga, con_referencia=True)
+    assert contenido is not None and problemas == []
+
+
+# ---------- Decisiones del redactor por tipo (PLAN.md §0, decisión 24) ----------
+
+def test_lo_dicho_sin_fuente_queda_pendiente_y_las_notas_van_al_excel(sesion):
+    contenido = copy.deepcopy(LIMPIA)
+    contenido["decisiones"] = [
+        {"texto": "«Establecer pull» se definió como trabajar a partir de lo que pide el cliente.", "tipo": "sin fuente"},
+        {"texto": "Se dejó fuera el Cynefin Framework.", "tipo": "decisión"},
+        {"texto": "Los ejemplos usan el caso de la ficha.", "tipo": "nota"},
+    ]
+    material, _ = generar(sesion, contenido)
+    assert material["estado"] == "con pendientes"
+    secciones = {s["clave"]: s["lineas"] for s in material["entrega"]["secciones"]}
+    assert secciones["pendientes"] == ["Afirmación sin fuente: «Establecer pull» se definió como trabajar a partir de "
+                                       "lo que pide el cliente."]
+    assert secciones["decidi"] == ["Se dejó fuera el Cynefin Framework."]
+    hoja = openpyxl.load_workbook(lectura.archivos(sesion, 1)["excel"])["Hallazgos"]
+    filas = {(f[3].value, f[4].value) for f in hoja.iter_rows(min_row=2)}
+    assert ("redactor: nota", "Los ejemplos usan el caso de la ficha.") in filas
+    assert material["problemas"][-1].startswith("Afirmación sin fuente")
+
+
+def test_decisiones_de_lecturas_anteriores_siguen_leyendose():
+    anterior = copy.deepcopy(LIMPIA)
+    anterior["decisiones"] = ["Usé una tienda como ejemplo."]
+    assert Lectura.model_validate(anterior).decisiones[0].tipo == "decisión"
+
+
+# ---------- Antes de gastar: la skill completa y la carpeta limpia (propuestas 1 y 6) ----------
+
+def test_si_la_skill_perdio_una_seccion_no_se_gasta_nada(sesion, tmp_path, monkeypatch):
+    sin_revisor = skill.RUTA.read_text(encoding="utf-8").replace("### Revisor independiente", "### Otro título")
+    (tmp_path / "SKILL.md").write_text(sin_revisor, encoding="utf-8")
+    monkeypatch.setattr(skill, "RUTA", tmp_path / "SKILL.md")
+    consulta = consulta_en_secuencia()          # sin respuestas: si se llamara a Claude, fallaría distinto
+    with pytest.raises(KeyError, match="SKILL.md no tiene «Revisor independiente»"):
+        asyncio.run(lectura.generar(sesion, "scrum", 1, consulta=consulta))
+    assert consulta.llamadas == []
+
+
+def test_generar_borra_los_restos_de_la_generacion_anterior(sesion):
+    rutas = lectura.archivos(sesion, 1)
+    viejo = rutas["revision"] / "ronda_1" / "material.txt"
+    viejo.parent.mkdir(parents=True)
+    viejo.write_text("lectura anterior", encoding="utf-8")
+    (rutas["contenido"].parent / "pasada1.json").write_text("{}", encoding="utf-8")
+    rutas["explicaciones"].write_text('{"x": "y"}', encoding="utf-8")
+    generar(sesion, LIMPIA)
+    assert not rutas["revision"].exists()
+    assert not (rutas["contenido"].parent / "pasada1.json").exists()
+    assert not rutas["explicaciones"].exists() or json.loads(rutas["explicaciones"].read_text(encoding="utf-8")) != {"x": "y"}

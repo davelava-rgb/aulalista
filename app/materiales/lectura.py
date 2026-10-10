@@ -15,13 +15,14 @@ Flujo:
 
 import asyncio
 import json
+import shutil
 from datetime import datetime
 from pathlib import Path
 
 from pydantic import ValidationError
 
 from app import agente, entrega, skill, tokens
-from app.fichas import almacen, verificacion
+from app.fichas import almacen, referencia, verificacion
 from app.materiales import docx, estilo
 from app.materiales.contenido import ESQUEMA_LECTURA, Lectura
 from app.validacion import excel, pasada2, revision, revisor, verificador
@@ -31,7 +32,11 @@ MATERIAL = "Lectura"
 CLAVE = "lectura"
 VUELTAS_DEL_VERIFICADOR = 3   # correcciones de fallas mecánicas antes de dejarlas abiertas (PLAN.md §0, decisión 22)
 FICHAS = (FICHA_DEL_CURSO, FICHA_DE_LA_SESION)
-PALABRAS_MAX = 1500  # orientación para no pasar de seis páginas con portada
+PALABRAS_MAX = 1500  # sin material de referencia: orientación para no pasar de seis páginas con portada
+BLOQUES_SIN_REFERENCIA = (2, 4)
+# Secciones de SKILL.md que usa la redacción. Se comprueban antes de gastar tokens, junto con las de la revisión
+# y las del revisor (propuesta 1).
+SECCIONES_DE_LA_SKILL = ("Reglas comunes", "Paso 3 · Vocabulario de la sesión", "Material 1 · Lectura")
 
 ESQUEMA_CORRECCION = {
     "type": "object",
@@ -114,27 +119,43 @@ def _avance(carpeta_curso: Path, sesion: int, texto: str) -> None:
 
 # ---------- Pedidos al agente ----------
 
+def _referencia(carpeta_curso: Path, sesion: int) -> tuple[list[referencia.Tramo], list[str]]:
+    """Tramos del material de referencia y exclusiones de la ficha de la sesión (decisión 23)."""
+    ficha = almacen.cargar(carpeta_curso, "sesion", sesion)
+    return referencia.interpretar(carpeta_curso, ficha)[0], referencia.exclusiones(ficha)
+
+
 def _contexto(carpeta_curso: Path, sesion: int) -> str:
     ficha_curso = almacen.ruta_ficha(carpeta_curso, "curso", extension=".md").read_text(encoding="utf-8")
     ficha_sesion = almacen.ruta_ficha(carpeta_curso, "sesion", sesion, ".md").read_text(encoding="utf-8")
     fuentes = verificacion.fuentes_utilizables(carpeta_curso)
+    tramos, excluir = _referencia(carpeta_curso, sesion)
+    lineas_referencia = []
+    if tramos:
+        lineas_referencia = [
+            "", "MATERIAL DE REFERENCIA DE LA SESIÓN (en los .jsonl, cada pasaje trae su «pagina»):",
+            *[f"- {t.describir()}" for t in tramos],
+            "EXCLUSIONES (no las uses):",
+            *([f"- {e}" for e in excluir] or ["- Ninguna: usa todo el material de referencia."]),
+        ]
     return "\n".join([
         "REGLAS DE LA SKILL (son obligatorias):",
-        skill.secciones("Reglas comunes", "Paso 3 · Vocabulario de la sesión", "Material 1 · Lectura"),
+        skill.secciones(*SECCIONES_DE_LA_SKILL),
         "",
         "FICHA DEL CURSO (confirmada):", ficha_curso,
         "FICHA DE LA SESIÓN (confirmada):", ficha_sesion,
         "FUENTES DEL CURSO que puedes citar (archivos .jsonl de esta carpeta, un pasaje por línea con su ubicación):",
         *([f"- {f}" for f in fuentes] or ["- (ninguna: no cites fuentes)"]),
+        *lineas_referencia,
     ])
 
 
-INSTRUCCIONES_DE_FORMATO = f"""
+FORMATO_COMUN = """
 CÓMO ENTREGAR LA LECTURA
 - Devuelve solo los datos del esquema. Un programa crea el Word: la portada, el encabezado,
   el título «Idea central» y los títulos de los recuadros «Aplícalo así» y «Cuidado con» los pone él.
 - idea_central: de 2 a 3 oraciones.
-- bloques: de 2 a 4, en el orden de la ficha de la sesión. Cada uno con subtítulo, párrafos breves y un ejemplo.
+{bloques}
   El ejemplo usa un caso distinto al de los ejercicios del laboratorio y no da la respuesta de ningún ejercicio.
   Usa «tabla» solo si ayuda a entender; si no, déjala en null. Máximo 4 columnas.
 - aplicalo.plantilla: la técnica o plantilla lista para copiar, una línea por elemento, sin espacios por llenar.
@@ -143,9 +164,14 @@ CÓMO ENTREGAR LA LECTURA
   sostiene, la fuente, la ubicación y en «texto» el pasaje copiado de la fuente, de 40 palabras como máximo.
   Puedes escribir con tus palabras si no cambias el sentido. Deja iguales los nombres del vocabulario,
   las cifras y «debe» o «puede».
-- decisiones: cada dato o decisión que las fichas no definían.
+- decisiones: una entrada por punto, con «texto» y «tipo»:
+  - «sin fuente»: afirmas algo del tema que no está en ninguna fuente ni ficha: una definición, una deducción
+    o una cifra propia. Copia la oración. El profesor decide si queda.
+  - «decisión»: te apartas de las fichas o de las fuentes, o eliges algo que las fichas no definían y que cambia
+    lo que lee el alumno: omites o agregas un tema, cambias el orden, agregas un dato ficticio del caso.
+  - «nota»: solo describes lo que hiciste sin apartarte de las fichas ni de las fuentes.
 - agrupacion: si hubo más temas que bloques, cómo los agrupaste. Si no, texto vacío.
-- Unas {PALABRAS_MAX} palabras como máximo en total, para no pasar de seis páginas con portada.
+{extension}
 - Una idea por oración.
 - Usa los nombres del vocabulario de la sesión tal cual y en su orden. No uses sus variantes.
 - Usa comillas solo para copiar texto tal cual de una fuente.
@@ -154,6 +180,27 @@ CÓMO ENTREGAR LA LECTURA
   No uses «en este curso» para evitar una fuente: úsalo solo en reglas propias del curso o para avisar que resumiste, agrupaste o reordenaste.
 """
 
+SIN_REFERENCIA = {
+    "bloques": "- bloques: de 2 a 4, en el orden de la ficha de la sesión. Cada uno con subtítulo, párrafos breves y un ejemplo.",
+    "extension": f"- Unas {PALABRAS_MAX} palabras como máximo en total, para no pasar de seis páginas con portada.",
+}
+CON_REFERENCIA = {
+    "bloques": ("- bloques: si la ficha de la sesión trae bloques, síguelos en su orden. Si no, agrupa los temas del\n"
+                "  material de referencia en bloques, en el orden de la referencia, y explica la agrupación en «agrupacion».\n"
+                "  Cada bloque con subtítulo, párrafos breves y un ejemplo."),
+    "extension": ("- Cubre todos los temas del material de referencia, menos las exclusiones. No hay un máximo de páginas:\n"
+                  "  la extensión sale de esos temas. Explica cada tema con lo necesario para entenderlo y aplicarlo, sin relleno.\n"
+                  "  Si dejas fuera un tema que no está en las exclusiones, anótalo como «decisión»."),
+}
+
+
+def instrucciones_de_formato(con_referencia: bool) -> str:
+    return FORMATO_COMUN.format(**(CON_REFERENCIA if con_referencia else SIN_REFERENCIA))
+
+
+def _formato(carpeta_curso: Path, sesion: int) -> str:
+    return instrucciones_de_formato(bool(_referencia(carpeta_curso, sesion)[0]))
+
 
 # Los pedidos empiezan siempre con la misma parte fija (reglas, fichas y formato) y terminan con lo que
 # cambia. Claude guarda unos minutos el comienzo de cada pedido y releerlo cuesta un 10 %.
@@ -161,9 +208,10 @@ CÓMO ENTREGAR LA LECTURA
 def pedido_de_redaccion(carpeta_curso: Path, sesion: int) -> str:
     return "\n".join([
         _contexto(carpeta_curso, sesion),
-        INSTRUCCIONES_DE_FORMATO,
+        _formato(carpeta_curso, sesion),
         "TAREA: redacta la lectura de la sesión. Actúa como diseñador instruccional y editor senior.",
         "Antes de redactar, busca con Grep en las fuentes y lee con Read los pasajes que vas a usar.",
+        "Si la sesión tiene material de referencia, lee sus páginas y no uses las exclusiones.",
         "Redacta a partir de esos pasajes, no de memoria. No afirmes sobre el contenido de una fuente nada que no esté en un pasaje copiado.",
         "Antes de entregar, revisa cada bloque: qué puede hacer el alumno con él y qué oración tiene dos lecturas.",
         "Define cada término la primera vez que aparece. Corrige lo que falle.",
@@ -190,7 +238,7 @@ def pedido_de_cambios(carpeta_curso: Path, sesion: int, contenido: dict, problem
     """Corrección barata: devuelve solo las oraciones que cambian."""
     return "\n".join([
         _contexto(carpeta_curso, sesion),
-        INSTRUCCIONES_DE_FORMATO,
+        _formato(carpeta_curso, sesion),
         REGLAS_DE_CORRECCION,
         "CÓMO ENTREGAR LA CORRECCIÓN",
         "- En «cambios», una entrada por oración que cambias: «oracion» copiada tal cual de la lectura y «nueva» con el texto nuevo.",
@@ -208,7 +256,7 @@ def pedido_de_correccion(carpeta_curso: Path, sesion: int, contenido: dict, prob
     """Corrección completa: solo para problemas de estructura o de extensión, que no son de una oración."""
     return "\n".join([
         _contexto(carpeta_curso, sesion),
-        INSTRUCCIONES_DE_FORMATO,
+        _formato(carpeta_curso, sesion),
         REGLAS_DE_CORRECCION,
         "Devuelve la lectura completa con el mismo esquema.",
         "",
@@ -220,11 +268,16 @@ def pedido_de_correccion(carpeta_curso: Path, sesion: int, contenido: dict, prob
     ])
 
 
-def _validar(datos: dict) -> tuple[Lectura | None, list[str]]:
+def _validar(datos: dict, con_referencia: bool = False) -> tuple[Lectura | None, list[str]]:
     try:
-        return Lectura.model_validate(datos), []
+        lectura = Lectura.model_validate(datos)
     except ValidationError as error:
         return None, [f"FALLA · estructura · {'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in error.errors()]
+    minimo, maximo = BLOQUES_SIN_REFERENCIA
+    if not con_referencia and not minimo <= len(lectura.bloques) <= maximo:
+        return None, [f"FALLA · estructura · bloques: tiene {len(lectura.bloques)}; sin material de referencia "
+                      f"van de {minimo} a {maximo}."]
+    return lectura, []
 
 
 
@@ -407,6 +460,10 @@ class _Trabajo:
         self.paginas: int | None = None
         self.carpeta_sesion = almacen.carpeta_sesion(carpeta_curso, sesion)
         self.identidad = estilo.desde_ficha(carpeta_curso)
+        self.tramos, self.exclusiones = _referencia(carpeta_curso, sesion)
+        self.con_referencia = bool(self.tramos)
+        # Con material de referencia no hay máximo de páginas (decisión 23): el verificador no las limita.
+        self.limites = {} if self.con_referencia else None
         self.portada = _portada(carpeta_curso, sesion)
         self.comun = {"curso": curso, "sesion": f"S{sesion}", "material": CLAVE, "cwd": carpeta_curso / "fuentes_texto",
                       "herramientas": ("Read", "Grep", "Glob"), "consulta": consulta}
@@ -438,15 +495,17 @@ class _Trabajo:
         Devuelve True si quedó sin fallas ni avisos por explicar."""
         for intento in range(VUELTAS_DEL_VERIFICADOR + 1):
             self.vuelta += 1
-            contenido, problemas = _validar(self.datos)
+            contenido, problemas = _validar(self.datos, self.con_referencia)
             completa = bool(problemas)            # la estructura solo se arregla con una corrección completa
             _guardar_json(self.rutas["contenido"], self.datos)
             if contenido is not None:
                 self.contenido = contenido
-                configuracion = verificador.configuracion_del_material(self.carpeta_sesion, MATERIAL)
+                configuracion = verificador.configuracion_del_material(self.carpeta_sesion, MATERIAL, limites=self.limites)
                 docx.generar_lectura(contenido, self.identidad, self.portada, self.rutas["word"])
                 self.resultado = verificador.ejecutar(configuracion, [self.rutas["word"]], self.rutas["excel"],
                                                       self.explicaciones, self.contar_paginas)
+                if self.con_referencia:
+                    self.contar_paginas(self.rutas["word"])   # sin límite, pero la entrega dice cuántas son
                 if _explicar_literales(self.resultado, self.explicaciones, self.corpus()):
                     _guardar_json(self.rutas["explicaciones"], self.explicaciones)
                     verificador.anotar_explicaciones(self.rutas["excel"], self.explicaciones)
@@ -512,11 +571,28 @@ def _cambio(antes: dict[str, str], despues: list[pasada2.Bloque], nombre: str) -
     return actual is None or actual.huella != antes.get(nombre)
 
 
+def _limpiar(rutas: dict[str, Path]) -> None:
+    """Borra lo que dejó la generación anterior, para que la carpeta muestre solo la lectura nueva (propuesta 6).
+    Un archivo abierto en Word u OneDrive puede negar el borrado: se deja y la generación lo reescribe."""
+    carpeta = rutas["contenido"].parent
+    for ruta in (rutas["word"], rutas["excel"], rutas["excel"].with_suffix(".json"), rutas["entrega"],
+                 rutas["contenido"], rutas["explicaciones"], carpeta / "pasada1.json"):
+        try:
+            ruta.unlink(missing_ok=True)
+        except OSError:
+            pass
+    shutil.rmtree(rutas["revision"], ignore_errors=True)
+
+
 async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas) -> dict:
     inicio = tokens.lineas(curso)   # para sumar solo lo que gasta esta generación
-    configuracion = verificador.configuracion_del_material(almacen.carpeta_sesion(carpeta_curso, sesion), MATERIAL)
-    verificador.verificar.leer_configuracion(configuracion)  # si falla, falla antes de gastar tokens
+    # Antes de gastar tokens: la skill tiene todo lo que se usará y la configuración del verificador se lee.
+    skill.comprobar(secciones=SECCIONES_DE_LA_SKILL + pasada2.SECCIONES_DE_LA_SKILL + revisor.SECCIONES_DE_LA_SKILL,
+                    subsecciones=revisor.SUBSECCIONES_DE_LA_SKILL)
     trabajo = _Trabajo(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas)
+    configuracion = verificador.configuracion_del_material(trabajo.carpeta_sesion, MATERIAL, limites=trabajo.limites)
+    verificador.verificar.leer_configuracion(configuracion)
+    _limpiar(rutas)
 
     trabajo.avance("Leyendo las fuentes y redactando la lectura.")
     trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion), tarea="redaccion",
@@ -566,18 +642,22 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
                     e.estado, e.resolucion = "pendiente", "No se confirmó: quedaron fallas del verificador."
 
     pendientes = [e for e in errores if e.estado == "pendiente"]
-    estado_final = "con fallas" if trabajo.fallas else ("con pendientes" if pendientes else "verificada")
+    final = trabajo.contenido
+    decisiones = final.decisiones if final else []
+    # Lo que el redactor afirmó sin fuente lo decide el profesor (propuesta 4); sus notas van al Excel (propuesta 5).
+    sin_fuente = [f"Afirmación sin fuente: {d.texto}" for d in decisiones if d.tipo == "sin fuente"]
+    estado_final = "con fallas" if trabajo.fallas else ("con pendientes" if pendientes or sin_fuente else "verificada")
     if trabajo.resultado is not None:
         excel.solo_hallazgos(rutas["excel"])
         excel.agregar_historial(rutas["excel"], [
             {**h, "resolucion": f"Enviado a corrección en la vuelta {h['vuelta']}." + ("" if trabajo.fallas else " Resuelto.")}
-            for h in trabajo.historial] + _filas_de_revision(errores, trabajo.descartados, rutas["word"].name))
-    final = trabajo.contenido
+            for h in trabajo.historial] + _filas_de_revision(errores, trabajo.descartados, rutas["word"].name)
+            + _filas_de_decisiones(decisiones, rutas["word"].name))
     material = _actualizar(
         carpeta_curso, sesion,
         estado=estado_final,
         resumen=trabajo.resultado.resumen() if trabajo.resultado else "",
-        problemas=trabajo.fallas + [e.describir() for e in pendientes],
+        problemas=trabajo.fallas + [e.describir() for e in pendientes] + sin_fuente,
         correcciones=trabajo.correcciones,
         revision={"bloques": revisados, "errores": len(errores), "corregidos": sum(e.estado == "corregido" for e in errores),
                   "pendientes": len(pendientes), "descartados": len(trabajo.descartados)},
@@ -589,7 +669,9 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
                                 if h.nivel == "AVISO" and h.regla in AVISOS_INFORMATIVOS),
         paginas=trabajo.paginas,
         bloques=len(final.bloques) if final else 0,
-        decisiones=(final.decisiones if final else []),
+        decisiones=[d.model_dump() for d in decisiones],
+        referencia=[t.describir() for t in trabajo.tramos],
+        exclusiones=trabajo.exclusiones,
         agrupacion=(final.agrupacion if final else ""),
         archivos={"word": rutas["word"].name, "excel": rutas["excel"].name, "entrega": rutas["entrega"].name},
         costo=tokens.total(curso, sesion=f"S{sesion}", material=CLAVE, desde_linea=inicio),
@@ -597,7 +679,8 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
     )
     _escribir_entrega(carpeta_curso, sesion, material)
     trabajo.avance({"verificada": "Lectura lista para tu aprobación.",
-                    "con pendientes": f"Lectura lista, con {_cuantos(len(pendientes), 'pendiente')} para que decidas.",
+                    "con pendientes": f"Lectura lista, con {_cuantos(len(pendientes) + len(sin_fuente), 'pendiente')} "
+                                      "para que decidas.",
                     "con fallas": "La lectura quedó con fallas del verificador."}[estado_final])
     return _estado(carpeta_curso, sesion)
 
@@ -612,6 +695,14 @@ def _filas_de_revision(errores: list[revision.Error], descartados: list[dict], s
                "regla": f"revisión: {d['tipo']}", "detalle": d["explicacion"],
                "resolucion": f"Descartado por el programa: {d['motivo']}"} for d in descartados]
     return filas
+
+
+def _filas_de_decisiones(decisiones: list, seccion: str) -> list[dict]:
+    """Filas de la hoja Hallazgos con lo que anotó el redactor. Las notas solo quedan aquí (propuesta 5)."""
+    resolucion = {"sin fuente": "Pendiente: decides tú.", "decisión": "En «Qué decidí por mi cuenta».",
+                  "nota": "Informativo."}
+    return [{"nivel": "REDACTOR", "seccion": seccion, "oracion": "", "regla": f"redactor: {d.tipo}",
+             "detalle": d.texto, "resolucion": resolucion[d.tipo]} for d in decisiones]
 
 
 def _escribir_entrega(carpeta_curso: Path, sesion: int, material: dict) -> dict:
@@ -681,15 +772,23 @@ def _entrega(material: dict) -> dict:
     archivos_ = material["archivos"]
     paginas = material.get("paginas")
     limite = verificador.LIMITES[MATERIAL]["paginas_max"]
+    referencia_ = material.get("referencia") or []
     lineas_archivos = [
         f"{archivos_['word']}: la lectura" + (f", {paginas} páginas" if paginas else "")
         + f", con {material['bloques']} bloques.",
         f"{archivos_['excel']}: el archivo de verificación, con la hoja Hallazgos.",
         f"{archivos_['entrega']}: esta entrega, en texto.",
     ]
-    probe = [f"Conté las páginas con Word: {paginas}. El máximo es {limite}." if paginas else
-             "No se pudieron contar las páginas con Word.",
-             "La lectura no tiene ejercicios ni archivos de práctica que ejecutar."]
+    if not paginas:
+        conte = "No se pudieron contar las páginas con Word."
+    elif referencia_:
+        conte = (f"Conté las páginas con Word: {paginas}. No hay máximo: la extensión sale del material de "
+                 f"referencia ({'; '.join(referencia_)})"
+                 + (f", sin las exclusiones de la ficha: {'; '.join(material['exclusiones'])}."
+                    if material.get("exclusiones") else "."))
+    else:
+        conte = f"Conté las páginas con Word: {paginas}. El máximo es {limite}."
+    probe = [conte, "La lectura no tiene ejercicios ni archivos de práctica que ejecutar."]
     c = material["correcciones"]
     r = material.get("revision") or {}
     valide = [f"Verificador: {material['resumen']}." if material["resumen"] else "El verificador no llegó a correr.",
@@ -722,12 +821,15 @@ def _entrega(material: dict) -> dict:
     if not no_pude:
         no_pude.append("Nada: la lectura no tiene ejercicios que ejecutar.")
 
-    decidi = list(material["decisiones"])
+    # Lecturas anteriores a la decisión 24 guardaban texto suelto: cuenta como «decisión».
+    decisiones = [{"texto": d, "tipo": "decisión"} if isinstance(d, str) else d for d in material["decisiones"]]
+    decidi = [d["texto"] for d in decisiones if d["tipo"] == "decisión"]
     if material["agrupacion"]:
         decidi.append(f"Agrupación de temas: {material['agrupacion']}")
     decidi += [f"Dato nuevo del caso, agregado a la ficha del curso: {d}" for d in material["datos_agregados"]]
     if not decidi:
-        decidi.append("Nada: todo salió de las fichas y de las fuentes.")
+        decidi.append("Nada que revisar: todo salió de las fichas y de las fuentes. Las notas del redactor están en "
+                      "la hoja Hallazgos.")
 
     return entrega.componer(archivos=lineas_archivos, probe=probe, valide=valide,
                             pendientes=material["problemas"], no_pude=no_pude, decidi=decidi)

@@ -82,6 +82,11 @@ PEDIDO_DE_LA_SKILL = ("Busca errores en este material. Compara cada oración con
                       "la prueba. No des opiniones de estilo")
 
 
+# Lo que el revisor lee de SKILL.md. La lectura lo comprueba antes de gastar tokens.
+SECCIONES_DE_LA_SKILL = ("Validación en dos pasadas antes de cada entrega",)
+SUBSECCIONES_DE_LA_SKILL = ("Revisor independiente", "Segunda pasada · Revisión del contenido")
+
+
 def pedido_de_la_skill() -> str:
     """El pedido que la skill manda hacer al revisor, copiado tal cual de SKILL.md."""
     texto = skill.subseccion("Revisor independiente")

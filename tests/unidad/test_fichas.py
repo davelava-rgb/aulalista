@@ -155,7 +155,7 @@ def test_ficha_de_la_sesion_revisa_bloques_ejercicios_estaciones_y_preguntas():
     valores.pop("pregunta.1.respuesta")
     ficha = datos.ficha("sesion", valores)
     assert almacen.errores(ficha) == []          # para confirmar no se exigen los datos de los materiales
-    assert almacen.errores_del_material(ficha, "lectura") == ["La lectura necesita de 2 a 4 bloques."]
+    assert almacen.errores_del_material(ficha, "lectura") == ["La lectura necesita de 2 a 4 bloques, o un material de referencia."]
     laboratorio = almacen.errores_del_material(ficha, "laboratorio")
     assert "El laboratorio necesita de 3 a 5 ejercicios; tiene 2." in laboratorio
     assert "Ejercicio 2: falta el problema que trae a propósito." in laboratorio
@@ -176,7 +176,7 @@ def test_la_ficha_de_la_sesion_se_confirma_solo_con_lo_basico():
     basicos = {k: datos.SESION[k] for k in ("sesion.numero_titulo", "sesion.alcance", "vocabulario.conceptos")}
     ficha = datos.ficha("sesion", basicos)
     assert almacen.errores(ficha) == []
-    assert "La lectura necesita de 2 a 4 bloques." in almacen.errores_del_material(ficha, "lectura")
+    assert "La lectura necesita de 2 a 4 bloques, o un material de referencia." in almacen.errores_del_material(ficha, "lectura")
     sin_vocabulario = datos.ficha("sesion", {k: v for k, v in basicos.items() if k != "vocabulario.conceptos"})
     assert almacen.errores(sin_vocabulario) == ["Escribe al menos un concepto clave del vocabulario."]
 

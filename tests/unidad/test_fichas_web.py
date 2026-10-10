@@ -94,7 +94,7 @@ def test_los_temas_de_la_lectura_dicen_que_se_exigen_al_generarla(curso):
     almacen.guardar(curso, "curso", None, datos.ficha("curso", datos.CURSO))
     flujo.confirmar_curso(curso)
     pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
-    assert "Temas que debe cubrir (obligatorio para generar la lectura)" in pagina
+    assert "Temas que debe cubrir (obligatorio para generar la lectura si no hay material de referencia)" in pagina
 
 
 # ---------- Propuesta automática al abrir la ficha (PLAN.md §0, decisión 17) ----------

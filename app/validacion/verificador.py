@@ -35,11 +35,14 @@ LIMITES = {
 }
 
 
-def configuracion_del_material(carpeta_sesion: Path, material: str, carpeta_practica: str | None = None) -> Path:
+def configuracion_del_material(carpeta_sesion: Path, material: str, carpeta_practica: str | None = None,
+                               limites: dict | None = None) -> Path:
     """Copia la base de la sesión con los datos del material. Queda junto a la base, para que
-    las rutas relativas sigan valiendo."""
+    las rutas relativas sigan valiendo. `limites` reemplaza los de LIMITES (por ejemplo, una lectura
+    con material de referencia no tiene máximo de páginas: PLAN.md §0, decisión 23)."""
     base = json.loads((carpeta_sesion / "verificacion.json").read_text(encoding="utf-8"))
-    base.update(material=material, limites=LIMITES.get(material, {}), carpeta_practica=carpeta_practica)
+    base.update(material=material, limites=LIMITES.get(material, {}) if limites is None else limites,
+                carpeta_practica=carpeta_practica)
     ruta = carpeta_sesion / f"verificacion_{material.lower().replace(' ', '_')}.json"
     ruta.write_text(json.dumps(base, ensure_ascii=False, indent=2), encoding="utf-8")
     return ruta

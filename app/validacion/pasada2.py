@@ -82,8 +82,11 @@ APLICA_A = {
 }
 
 
+SECCIONES_DE_LA_SKILL = ("Lista de verificación",)
+
+
 def lista_completa() -> list[str]:
-    return [l[2:].strip() for l in skill.secciones("Lista de verificación").splitlines() if l.startswith("- ")]
+    return [l[2:].strip() for l in skill.secciones(*SECCIONES_DE_LA_SKILL).splitlines() if l.startswith("- ")]
 
 
 def lista_de_verificacion(material: str) -> list[str]:

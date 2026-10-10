@@ -4,6 +4,8 @@ El agente redactor escribe estos datos. Los generadores de archivos los conviert
 PowerPoint, Excel o HTML con el mismo diseño (CLAUDE.md: el agente no escribe Word a mano).
 """
 
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -46,14 +48,34 @@ class Pasaje(BaseModel):
     texto: str
 
 
+# Tipos de decisión del redactor (PLAN.md §0, decisión 24):
+# - «sin fuente»: afirma algo del tema que no está en ninguna fuente ni ficha. Va a «Decisiones pendientes».
+# - «decisión»: se aparta de las fichas o de las fuentes, o cambia lo que lee el alumno. Va a «Qué decidí».
+# - «nota»: solo describe el trabajo. Va a la hoja Hallazgos.
+TIPOS_DE_DECISION = ("sin fuente", "decisión", "nota")
+
+
+class Decision(BaseModel):
+    texto: str
+    tipo: Literal["sin fuente", "decisión", "nota"] = "decisión"
+
+
 class Lectura(BaseModel):
     idea_central: list[str] = Field(min_length=1, max_length=3)
-    bloques: list[Bloque] = Field(min_length=2, max_length=4)
+    # De 2 a 4 sin material de referencia. Con referencia, los que pidan sus temas (decisión 23);
+    # el tope solo frena una respuesta rota.
+    bloques: list[Bloque] = Field(min_length=2, max_length=12)
     aplicalo: Aplicalo
     cuidado: list[str] = Field(min_length=1, max_length=3)
     pasajes: list[Pasaje] = Field(default_factory=list)       # pasajes copiados de las fuentes antes de redactar
-    decisiones: list[str] = Field(default_factory=list)       # lo que las fichas no definían
+    decisiones: list[Decision] = Field(default_factory=list)  # lo que las fichas no definían, con su tipo
     agrupacion: str = ""                                       # si hubo más temas que bloques, cómo se agruparon
+
+    @field_validator("decisiones", mode="before")
+    @classmethod
+    def decisiones_de_texto(cls, valor):
+        """Las lecturas anteriores a la decisión 24 guardaban cada decisión como texto."""
+        return [{"texto": d} if isinstance(d, str) else d for d in (valor or [])]
 
 
 def _objeto(propiedades: dict, requeridas: list[str] | None = None) -> dict:
@@ -81,6 +103,7 @@ ESQUEMA_LECTURA = _objeto({
     "pasajes": {"type": "array", "items": _objeto({
         "oracion": {"type": "string"}, "fuente": {"type": "string"},
         "ubicacion": {"type": "string"}, "texto": {"type": "string"}})},
-    "decisiones": TEXTOS,
+    "decisiones": {"type": "array", "items": _objeto({
+        "texto": {"type": "string"}, "tipo": {"type": "string", "enum": list(TIPOS_DE_DECISION)}})},
     "agrupacion": {"type": "string"},
 })

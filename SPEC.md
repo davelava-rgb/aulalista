@@ -21,7 +21,7 @@ El software tiene un solo usuario: el profesor que lo construye. Es un sistema w
 | Entrada | Cuándo se llena | Contenido |
 |---|---|---|
 | Ficha del curso | Una vez por curso | Curso y sesiones, público, caso ficticio, datos fijos del caso, identidad visual, portada, herramientas, materiales, modelos |
-| Ficha de la sesión | Una vez por sesión | Alcance, bloques de la lectura, vocabulario, ejercicios del laboratorio, estaciones de la práctica, preguntas de la evaluación |
+| Ficha de la sesión | Una vez por sesión | Alcance, material de referencia y exclusiones, bloques de la lectura, vocabulario, ejercicios del laboratorio, estaciones de la práctica, preguntas de la evaluación |
 | Fuentes del curso | Una vez por curso | Sílabos, guías, libros, manuales, normas, programas y materiales de sesiones anteriores. Formatos: PDF, Word, hojas de cálculo e imágenes |
 | Logo y paleta | Una vez por curso | Archivo del logo y hasta tres colores |
 
@@ -42,7 +42,7 @@ Por cada sesión, hasta seis materiales:
 
 | N.º | Material | Formato | Límites |
 |---|---|---|---|
-| 1 | Lectura | Word, A4 | 6 páginas como máximo, de 2 a 4 bloques |
+| 1 | Lectura | Word, A4 | Sin material de referencia: 6 páginas como máximo, de 2 a 4 bloques. Con material de referencia: los temas de esas páginas, menos las exclusiones, sin máximo de páginas (PLAN.md §0, decisión 23) |
 | 2 | Diapositivas | PowerPoint 16:9 | De 14 a 18 diapositivas, con notas del profesor |
 | 3 | Guía de laboratorio y archivos de práctica | Word, más Excel y Word en un .zip | De 3 a 5 ejercicios |
 | 4 | Guía del profesor | Word | Una sección por ejercicio |
