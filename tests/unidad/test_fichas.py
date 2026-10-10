@@ -271,6 +271,16 @@ def test_la_ficha_de_la_sesion_no_se_propone_sin_la_del_curso(curso):
         correr(flujo.proponer(curso, "c", "sesion", 1, consulta=consulta_simulada()))
 
 
+def test_el_estado_de_la_propuesta_se_guarda_aunque_la_pagina_lo_este_leyendo(curso):
+    # En Windows, reemplazar un archivo abierto por otro lector falla. La propuesta no debe quedar «trabajando».
+    import threading
+    flujo.marcar_propuesta_en_curso(curso, "curso")
+    lector = flujo._ruta_propuesta(curso, "curso", None).open(encoding="utf-8")
+    threading.Timer(0.3, lector.close).start()
+    flujo._guardar_estado_propuesta(curso, "curso", None, estado="lista", mensaje="")
+    assert flujo.estado_propuesta(curso, "curso")["estado"] == "lista"
+
+
 # ---------- Confirmación, verificacion.json y materiales desactualizados ----------
 
 def cargar_verificador():
