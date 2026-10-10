@@ -17,7 +17,7 @@ from app import skill
 from app.validacion import verificador
 
 DEFECTOS = ["vacío", "inconsistencia", "ambigüedad", "relleno"]
-RESPUESTAS_LISTA = ["sí", "no", "no aplica"]
+RESPUESTAS_LISTA = ["cumple", "no cumple", "no aplica"]   # no dependen de cómo está escrita la pregunta
 PREGUNTAS = ["¿Qué puede hacer el alumno con esto?", "¿Qué dato necesita y dónde está?",
              "¿Qué oración tiene dos lecturas?", "¿Qué decide si el caso no sale como el ejemplo?"]
 CAMPOS = ["que_puede_hacer", "que_necesita", "dos_lecturas", "si_no_sale"]

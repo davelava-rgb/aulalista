@@ -40,6 +40,7 @@ Términos usados en este plan:
 | 18 | Solo el sentido. Una oración con otras palabras, sinónimos u otro orden coincide con su fuente. Solo es «no coincide» si contradice al pasaje, le agrega una afirmación, cambia una cifra o una cantidad, o cambia «debe» por «puede». La IA ya no compara puntos uno por uno, y una comparación olvidada ya no hace fallar la oración. El programa ubica el pasaje copiado aunque cambien tildes, mayúsculas, signos o una palabra cortada con guion al final de una línea. Reemplaza la decisión 10 a) y b). Se corrigió en SKILL.md; no es una excepción (aprobado en la etapa 5d) |
 | 19 | Se quitan tres avisos del verificador: oración larga, porcentaje y horas. Un porcentaje solo es una falla si pesa en la nota («el 20 % del curso», «vale el 30 %»). Siguen siendo fallas los minutos, segundos, cronómetros, puntos y notas. «Una idea por oración» la revisa el revisor independiente con la lista de verificación. Reemplaza la decisión 10 c) (aprobado en la etapa 5d) |
 | 20 | Preguntas por material. La lectura y las diapositivas responden solo dos de las cuatro preguntas por bloque: «¿Qué puede hacer el alumno con esto?» y «¿Qué oración tiene dos lecturas?». Las otras dos son para ejercicios y pasos. De la lista de verificación, la lectura y las diapositivas reciben solo tres preguntas: si cada sección aporta, si hay frases con dos ideas o con jerga, y si hay contenido de sesiones posteriores. Amplía la decisión 11. Es una excepción a la skill, que hace las cuatro preguntas en todos los materiales (aprobado en la etapa 5d) |
+| 21 | La lista de verificación es informativa. El revisor responde cada pregunta con «cumple», «no cumple» o «no aplica», y no con «sí» o «no»: así la respuesta no depende de cómo está escrita la pregunta. Un «no cumple» queda como AVISO en la hoja Hallazgos, con dónde está el problema, pero no se envía a corrección ni cuenta para lanzar otra ronda. Los hallazgos del revisor con prueba se siguen corrigiendo. Cambia la decisión 7 en lo que dice de la lista (aprobado en la etapa 5d) |
 
 ### Contradicciones encontradas
 
@@ -258,7 +259,7 @@ Cada oración recibe una huella para saber cuáles son nuevas o cambiaron.
 1. El programa lista cada cifra, nombre propio, fecha y término del vocabulario con sus oraciones. Así llena "Datos repetidos". Dos valores para el mismo dato crean un hallazgo de inconsistencia.
 2. El revisor independiente responde las preguntas de su material por cada bloque, ejercicio, estación o pregunta: dos en la lectura y las diapositivas, cuatro en los demás (decisión 20). Así llena "Segunda pasada". Lo que encuentra va como hallazgo, con su prueba.
 3. El ejecutor vuelve a ejecutar cada ejercicio y cada pregunta.
-4. El revisor responde la lista de verificación de su material en JSON (decisión 11). Cada "no" crea un hallazgo.
+4. El revisor responde la lista de verificación de su material en JSON (decisión 11) con «cumple», «no cumple» o «no aplica». Cada «no cumple» queda como aviso informativo en la hoja Hallazgos y no se envía a corrección (decisión 21).
 
 ### 5.4 Revisor independiente (etapa 5d)
 

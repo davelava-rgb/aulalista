@@ -173,8 +173,10 @@ def _pedido(carpeta: Path, bloques: list[pasada2.Bloque], material: str) -> str:
         "  que encuentres va también en «hallazgos». En un vacío, la oración es la que va antes de lo que falta.",
         *(["- La cuarta pregunta se aplica a las instrucciones y pasos que el alumno ejecuta. Un ejemplo ilustra una",
            "  idea: no es un vacío que no cubra otros casos."] if "si_no_sale" in pasada2.campos_de(material) else []),
-        f"- lista: cada pregunta de la LISTA DE VERIFICACIÓN con «sí», «no» o «no aplica», solo para este material ({material}).",
-        "  «no» es para lo que no se puede señalar en una sola oración; si ya está en «hallazgos», responde «sí».",
+        f"- lista: cada pregunta de la LISTA DE VERIFICACIÓN, solo para este material ({material}), con «cumple» si el",
+        "  material está bien en ese punto, «no cumple» si tiene el problema, o «no aplica». No respondas «sí» ni «no»:",
+        "  en «¿Hay contenido de sesiones posteriores?», que no haya es «cumple». En «no cumple», di en «detalle» dónde",
+        "  está el problema. Si ya está en «hallazgos», responde «cumple».",
         "  Juntar dos sujetos con «y» no es tener dos ideas.",
         "",
         "LISTA DE VERIFICACIÓN:",
@@ -221,12 +223,12 @@ class Resultado:
     descartados: list[dict] = field(default_factory=list)
     revisadas: dict[str, int] = field(default_factory=dict)   # huella → ronda
     respuestas: dict[str, dict] = field(default_factory=dict)  # bloque → las cuatro respuestas (hoja Segunda pasada)
-    lista_no: list[dict] = field(default_factory=list)         # preguntas de la lista de verificación sin cumplir
+    lista_no: list[dict] = field(default_factory=list)   # preguntas de la lista que no cumplen: informativas (decisión 21)
 
     @property
     def encontrados(self) -> int:
-        """Hallazgos válidos más puntos de la lista sin cumplir: con tres o más se lanza otro revisor."""
-        return len(self.hallazgos) + len(self.lista_no)
+        """Hallazgos válidos: con tres o más se lanza otro revisor. La lista es informativa (PLAN.md §0, decisión 21)."""
+        return len(self.hallazgos)
 
 
 def _comparable(texto: str) -> str:
@@ -277,7 +279,7 @@ def comprobar(respuesta: dict, ronda: int, oraciones: list[dict], corpus: Corpus
     for nombre in sorted(nombres - set(resultado.respuestas)):
         resultado.respuestas[nombre] = {c: "(sin respuesta)" if c in campos else pasada2.NO_SE_APLICA
                                         for c in pasada2.CAMPOS}
-    resultado.lista_no = [p for p in respuesta.get("lista", []) if p["respuesta"] == "no"]
+    resultado.lista_no = [p for p in respuesta.get("lista", []) if p["respuesta"] == "no cumple"]
     vistos = set()
     for r in respuesta["hallazgos"]:
         oracion = _oracion(r, oraciones)

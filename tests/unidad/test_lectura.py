@@ -421,7 +421,7 @@ def revision(*hallazgos, lista=()):
         bloques = [{"bloque": n, "que_puede_hacer": "Aplicar el concepto.", "que_necesita": "Está en el bloque.",
                     "dos_lecturas": "Ninguna", "si_no_sale": "No aplica."} for n in re.findall(r"\[([^\]]+)\]", linea)]
         return {"hallazgos": list(hallazgos), "bloques": bloques,
-                "lista": [{"pregunta": p, "respuesta": "no", "detalle": d} for p, d in lista]}
+                "lista": [{"pregunta": p, "respuesta": "no cumple", "detalle": d} for p, d in lista]}
     return responder
 
 
@@ -475,14 +475,25 @@ def test_la_lectura_responde_solo_dos_de_las_cuatro_preguntas_por_bloque(sesion)
     assert fila[2] == fila[4] == pasada2.NO_SE_APLICA
 
 
-def test_un_punto_de_la_lista_de_verificacion_sin_cumplir_se_corrige(sesion):
+def test_un_punto_de_la_lista_que_no_cumple_es_informativo(sesion):
     punto = ("¿Hay contenido de sesiones posteriores?", "Menciona los roles.")
-    material, consulta = generar(sesion, LIMPIA, pasada(), revision(lista=[punto]), correccion(), revisor=False)
-    assert "LISTA DE VERIFICACIÓN · ¿Hay contenido de sesiones posteriores?: Menciona los roles." in consulta.llamadas[3]["prompt"]
+    material, consulta = generar(sesion, LIMPIA, pasada(), revision(lista=[punto]), revisor=False)
+    assert len(consulta.llamadas) == 3       # redacción, primera pasada y revisor: sin corrección (decisión 21)
     assert material["estado"] == "verificada"
     assert material["revisor"][0]["lista"] == 1
     valide = next(s["lineas"] for s in material["entrega"]["secciones"] if s["clave"] == "valide")
-    assert any("1 punto de la lista de verificación sin cumplir" in l for l in valide)
+    assert any("1 punto de la lista de verificación que no cumple, informativos" in l for l in valide)
+    hoja = openpyxl.load_workbook(lectura.archivos(sesion, 1)["excel"])["Hallazgos"]
+    fila = next(f for f in hoja.iter_rows(min_row=2, values_only=True) if f[3] == "revisor independiente: lista de verificación")
+    assert fila[0] == "AVISO" and fila[5].startswith("Informativo")
+
+
+def test_el_revisor_responde_la_lista_con_cumple_o_no_cumple(sesion):
+    from app.validacion import pasada2
+    _, consulta = generar(sesion, LIMPIA, pasada())
+    pedido = consulta.llamadas[2]["prompt"]
+    assert pasada2.RESPUESTAS_LISTA == ["cumple", "no cumple", "no aplica"]
+    assert "que no haya es «cumple»" in pedido
 
 
 def test_el_revisor_recibe_las_posibles_inconsistencias(sesion):
@@ -605,16 +616,6 @@ def test_una_oracion_aprobada_nombrada_por_el_revisor_si_se_corrige(sesion):
                           pasada(), revisor=False)
     assert material["cambios_rechazados"] == 0
     assert nueva in lectura.archivos(sesion, 1)["contenido"].read_text(encoding="utf-8")
-
-
-def test_con_un_punto_de_la_lista_la_correccion_puede_tocar_cualquier_oracion(sesion):
-    punto = ("¿Hay contenido de sesiones posteriores?", "Habla de los roles.")
-    nueva = "El Manifiesto Ágil tiene cuatro aspectos, todos de esta sesión."
-    material, _ = generar(sesion, LIMPIA, pasada(), revision(lista=[punto]), correccion((MANIFIESTO, nueva)),
-                          pasada(), revisor=False)
-    assert material["cambios_rechazados"] == 0
-    assert nueva in lectura.archivos(sesion, 1)["contenido"].read_text(encoding="utf-8")
-
 
 
 # ---------- Datos de la lectura: se exigen al generarla (PLAN.md §0, decisión 16) ----------

@@ -603,8 +603,8 @@ class _Ciclo:
 
     def proteger_aprobadas(self, cambios: list[dict], problemas: list[str]) -> tuple[list[dict], list[dict]]:
         """Una oración que ya coincide con su fuente no se cambia si ningún problema la nombra: así una
-        corrección no rompe lo que ya estaba bien. Si algún problema no nombra oraciones (un punto de la lista
-        de verificación), el redactor puede tocar cualquiera. Devuelve (permitidos, rechazados)."""
+        corrección no rompe lo que ya estaba bien. Si algún problema no nombra oraciones, el redactor puede
+        tocar cualquiera. Devuelve (permitidos, rechazados)."""
         if any("«" not in p for p in problemas):
             return cambios, []
         nombradas = _comparable(" ".join(problemas))
@@ -755,10 +755,11 @@ class _Ciclo:
                        "regla": f"revisor independiente: {d['defecto']}",
                        "detalle": f"Ronda {r.ronda}. {d['explicacion']} Prueba: «{d['prueba']}» ({d['donde']}).",
                        "resolucion": f"Descartado por el programa: {d['motivo']}"} for d in r.descartados]
-            filas += [{"nivel": "FALLA", "seccion": self.rutas["word"].name, "oracion": "",
+            filas += [{"nivel": "AVISO", "seccion": self.rutas["word"].name, "oracion": "",
                        "regla": "revisor independiente: lista de verificación",
                        "detalle": f"Ronda {r.ronda}. {p['pregunta']} {p['detalle']}",
-                       "resolucion": f"Enviado a corrección en la ronda {r.ronda}."} for p in r.lista_no]
+                       "resolucion": "Informativo: no se envía a corrección (PLAN.md §0, decisión 21)."}
+                      for p in r.lista_no]
         return filas
 
 
@@ -800,14 +801,14 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
         ciclo.revisadas.update(resultado.revisadas)
         ciclo.respuestas2.update(resultado.respuestas)
         ciclo.avance(f"Revisor independiente, ronda {ronda}: {len(resultado.hallazgos)} hallazgos con prueba, "
-                     f"{len(resultado.lista_no)} puntos de la lista sin cumplir"
+                     f"{len(resultado.lista_no)} puntos de la lista que no cumplen (informativos)"
                      + (f", {len(resultado.descartados)} descartados porque su prueba no existe tal cual."
                         if resultado.descartados else "."))
         if not resultado.encontrados:
             break
         ciclo.hallazgos_del_revisor += resultado.hallazgos
-        lista = [f"LISTA DE VERIFICACIÓN · {p['pregunta']}: {p['detalle']}" for p in resultado.lista_no]
-        limpia = await ciclo.correr(VUELTAS_POR_RONDA, iniciales=[h.describir() for h in resultado.hallazgos] + lista)
+        # La lista de verificación es informativa: queda en el Excel y no se envía a corrección (decisión 21).
+        limpia = await ciclo.correr(VUELTAS_POR_RONDA, iniciales=[h.describir() for h in resultado.hallazgos])
         if not limpia or resultado.encontrados < MINIMO_PARA_OTRA_RONDA:
             break
         if ronda == MAX_RONDAS:
@@ -891,7 +892,8 @@ def _entrega(material: dict) -> dict:
             texto += (f" ({_cuantos(r['resuelto'], 'corregido')}, {_cuantos(r['rechazado'], 'rechazado')} con su pasaje, "
                       f"{_cuantos(r['abierto'], 'abierto')})")
         if r.get("lista"):
-            texto += f" y {r['lista']} {'punto' if r['lista'] == 1 else 'puntos'} de la lista de verificación sin cumplir"
+            texto += (f" y {r['lista']} {'punto' if r['lista'] == 1 else 'puntos'} de la lista de verificación que no "
+                      f"{'cumple' if r['lista'] == 1 else 'cumplen'}, informativos")
         texto += "."
         if r["descartados"]:
             texto += (f" El programa descartó {_cuantos(r['descartados'], 'hallazgo')} más, "
