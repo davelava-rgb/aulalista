@@ -307,6 +307,50 @@ def test_el_word_real_cuenta_sus_paginas_con_word(sesion):
 cliente = TestClient(servidor.app)
 
 
+def test_detener_corta_la_generacion_en_curso(sesion, monkeypatch):
+    import threading
+    import time
+    original = lectura.generar
+
+    async def consulta_lenta(*, prompt, options):
+        await asyncio.sleep(60)          # una llamada a Claude que tarda: el botón Detener la corta
+        yield None
+
+    async def generar_lento(carpeta, curso, numero):
+        return await original(carpeta, curso, numero, consulta=consulta_lenta, contar_paginas=una_pagina)
+
+    monkeypatch.setattr(lectura, "generar", generar_lento)
+    cliente.post("/cursos/scrum/sesiones/1/materiales/lectura", follow_redirects=False)
+    for _ in range(100):
+        if ("scrum", 1, lectura.CLAVE) in servidor._TRABAJOS and lectura.estado(sesion, 1).get("estado") == "trabajando":
+            break
+        time.sleep(0.05)
+    assert lectura.estado(sesion, 1)["estado"] == "trabajando"
+    assert "Detener</button>" in cliente.get("/cursos/scrum/sesiones/1").text
+    r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura/detener", follow_redirects=False)
+    assert r.status_code == 303 and "Deteniendo" in __import__("urllib.parse").parse.unquote(r.headers["location"])
+    for hilo in [h for h in threading.enumerate() if h.daemon]:
+        hilo.join(timeout=10)
+    estado = lectura.estado(sesion, 1)
+    assert estado["estado"] == "detenida"
+    assert "· Detenida por ti." in estado["avance"][-1]
+    assert ("scrum", 1, lectura.CLAVE) not in servidor._TRABAJOS
+    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    assert "Detenida por ti. Puedes generarla de nuevo." in pagina and "Detener</button>" not in pagina
+
+
+def test_detener_libera_una_lectura_que_quedo_trabajando(sesion):
+    # El servidor se cerró a mitad de camino: no hay proceso, pero estado.json dice «trabajando».
+    lectura._actualizar(sesion, 1, estado="trabajando", avance=["Leyendo las fuentes y redactando la lectura."])
+    r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura/detener", follow_redirects=False)
+    assert "Lectura detenida" in __import__("urllib.parse").parse.unquote(r.headers["location"])
+    assert lectura.estado(sesion, 1)["estado"] == "detenida"
+    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    assert "Generar de nuevo" in pagina and "disabled" not in pagina.split("Generar de nuevo")[0].rsplit("<button", 1)[1]
+    r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura/detener", follow_redirects=False)
+    assert "no estaba trabajando" in __import__("urllib.parse").parse.unquote(r.headers["location"])
+
+
 def test_la_pagina_de_la_sesion_genera_y_permite_descargar(sesion, monkeypatch):
     llamadas = []
     original = lectura.generar

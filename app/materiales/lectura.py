@@ -13,6 +13,7 @@ Flujo:
 6. Entrega en el formato del SPEC §8. El profesor la aprueba desde la página.
 """
 
+import asyncio
 import json
 from datetime import datetime
 from pathlib import Path
@@ -293,9 +294,22 @@ async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.
                 entrega={}, aprobada="")
     try:
         return await _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas)
+    except asyncio.CancelledError:
+        marcar_detenida(carpeta_curso, sesion)
+        raise
     except Exception as error:
         _actualizar(carpeta_curso, sesion, estado="error", error=str(error))
         raise
+
+
+def marcar_detenida(carpeta_curso: Path, sesion: int) -> bool:
+    """El profesor detuvo la generación con el botón Detener. También libera una lectura que quedó en
+    «Trabajando» porque el servidor se cerró a mitad de camino. Devuelve False si no estaba trabajando."""
+    if _estado(carpeta_curso, sesion).get("estado") != "trabajando":
+        return False
+    _avance(carpeta_curso, sesion, "Detenida por ti. Lo que se gastó hasta aquí queda en el registro de tokens.")
+    _actualizar(carpeta_curso, sesion, estado="detenida", error="")
+    return True
 
 
 def _titulos(contenido: Lectura) -> set[str]:

@@ -16,6 +16,7 @@
     {% elif lectura.estado == "verificada" %}Verificada: el verificador, las dos pasadas y el revisor independiente terminaron sin problemas abiertos.
     {% elif lectura.estado == "con fallas" %}Con problemas abiertos. No se entrega así.
     {% elif lectura.estado == "error" %}Se detuvo por un error: {{ lectura.error }}
+    {% elif lectura.estado == "detenida" %}Detenida por ti. Puedes generarla de nuevo.
     {% else %}Sin generar.{% endif %}
     {% if lectura.desactualizado %}<strong>Desactualizada: las fichas cambiaron.</strong>{% endif %}
   </p>
@@ -71,6 +72,12 @@
     </button>
     <span class="nota">Gasta tokens. La redacción y las correcciones pueden tardar varios minutos.</span>
   </form>
+  {% if lectura.estado == "trabajando" %}
+  <form method="post" action="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/lectura/detener">
+    <button type="submit">Detener</button>
+    <span class="nota">Corta la generación. Lo que ya se gastó no se recupera.</span>
+  </form>
+  {% endif %}
 </section>
 
 <p class="nota">Gasto de este curso: {{ gasto.llamadas }} llamadas, {{ "%.4f"|format(gasto.costo_usd) }} USD estimados.</p>

@@ -293,13 +293,30 @@ def restaurar_ficha_de_la_sesion(curso: str, sesion: int, version: str = Form(..
 
 # ---------- Sesión y materiales ----------
 
-def _trabajo_en_segundo_plano(funcion, *argumentos) -> threading.Thread:
-    """Corre un material en otro hilo. La página consulta el avance en estado.json."""
+# Trabajos que se pueden detener: (curso, sesión, material) → (bucle del hilo, tarea).
+_TRABAJOS: dict[tuple, tuple[asyncio.AbstractEventLoop, asyncio.Task]] = {}
+_CANDADO = threading.Lock()
+
+
+def _trabajo_en_segundo_plano(funcion, *argumentos, clave: tuple | None = None) -> threading.Thread:
+    """Corre un material en otro hilo. La página consulta el avance en estado.json.
+    Con `clave`, el trabajo queda registrado para que el botón Detener lo pueda cancelar."""
+    async def principal():
+        if clave:
+            with _CANDADO:
+                _TRABAJOS[clave] = (asyncio.get_running_loop(), asyncio.current_task())
+        try:
+            await funcion(*argumentos)
+        finally:
+            if clave:
+                with _CANDADO:
+                    _TRABAJOS.pop(clave, None)
+
     def correr():
         try:
-            asyncio.run(funcion(*argumentos))
-        except Exception:
-            pass  # el error queda escrito en estado.json y la página lo muestra
+            asyncio.run(principal())
+        except (Exception, asyncio.CancelledError):
+            pass  # el error o la detención quedan escritos en estado.json y la página los muestra
     hilo = threading.Thread(target=correr, daemon=True)
     hilo.start()
     return hilo
@@ -331,8 +348,26 @@ def generar_lectura(curso: str, sesion: int):
                                 status_code=303)
     if lectura.estado(carpeta, sesion).get("estado") == "trabajando":
         return RedirectResponse(destino, status_code=303)
-    _trabajo_en_segundo_plano(lectura.generar, carpeta, curso, sesion)
+    _trabajo_en_segundo_plano(lectura.generar, carpeta, curso, sesion, clave=(curso, sesion, lectura.CLAVE))
     return RedirectResponse(destino, status_code=303)
+
+
+@app.post("/cursos/{curso}/sesiones/{sesion}/materiales/lectura/detener")
+def detener_lectura(curso: str, sesion: int):
+    """Cancela la generación en curso. Si no hay ninguna (el servidor se cerró a mitad de camino),
+    libera la lectura que quedó en «Trabajando»."""
+    destino = f"/cursos/{curso}/sesiones/{sesion}"
+    with _CANDADO:
+        trabajo = _TRABAJOS.get((curso, sesion, lectura.CLAVE))
+    if trabajo:
+        bucle, tarea = trabajo
+        bucle.call_soon_threadsafe(tarea.cancel)
+        mensaje = "Deteniendo la lectura. La llamada a Claude en curso se corta."
+    elif lectura.marcar_detenida(_carpeta(curso), sesion):
+        mensaje = "Lectura detenida."
+    else:
+        mensaje = "La lectura no estaba trabajando."
+    return RedirectResponse(destino + "?mensaje=" + quote(mensaje), status_code=303)
 
 
 @app.post("/cursos/{curso}/sesiones/{sesion}/materiales/lectura/aprobar")
