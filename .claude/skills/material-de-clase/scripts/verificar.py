@@ -25,7 +25,7 @@ Las rutas son relativas a la carpeta donde está verificacion.json. Solo "sesion
       "nombre": "Guía de Scrum, capítulo 1",
       "texto": "../../fuentes_texto/guia.pdf.jsonl",   # un pasaje por línea: {"texto", "ubicacion", ...}
       "norma": true,
-      "referencias": {                           # cómo se citan sus cláusulas, controles o láminas
+      "referencias": {                           # cómo se citan sus secciones, cláusulas, láminas o pasos
         "patron": "lámina (\\d+)",               # en el material; el grupo 1 es el número
         "indice": "numero_impreso"               # "numero_impreso", "pagina" o "patron"
         # con "indice": "patron", agregar "patron_indice": "^(\\d+(?:\\.\\d+)*)\\s+(.+)$"
@@ -663,7 +663,7 @@ def revisar_oracion(o: Oracion, cfg: Configuracion, hallazgos: list[Hallazgo]) -
             if numero in fuente.indice:
                 o.fuente = f"{fuente.nombre}, {m.group(0)}: {fuente.indice[numero]}"
             elif not any(numero in f.indice for f in cfg.fuentes if f.patron_referencia):
-                agregar(FALLA, "cláusula inexistente", f"«{m.group(0)}» no existe en «{fuente.nombre}»")
+                agregar(FALLA, "referencia inexistente", f"«{m.group(0)}» no existe en «{fuente.nombre}»")
 
     for problema in revisar_operaciones(o.texto, cfg.separador_decimal):
         agregar(FALLA, "operación", problema)

@@ -49,16 +49,9 @@ tope_usd = 0.60
 max_turns = 10
 esfuerzo = "medium"
 
-# Segunda pasada: las cuatro preguntas por bloque y la lista de verificación, en una sola llamada.
-[pasada2]
-modelo = "claude-sonnet-5-5"
-tope_usd = 0.40
-max_turns = 3
-esfuerzo = "high"
-
-# Segunda pasada sobre los bloques que cambiaron después de una corrección.
-[pasada2_cambios]
-modelo = "claude-sonnet-5-5"
-tope_usd = 0.30
-max_turns = 3
-esfuerzo = "medium"
+# Revisor independiente: sesión nueva, solo lectura sobre su carpeta (material final, fuentes y fichas).
+# Hace también la segunda pasada: las cuatro preguntas por bloque y la lista de verificación.
+[revisor]
+modelo = "claude-opus-5-5"
+tope_usd = 2.00
+max_turns = 30

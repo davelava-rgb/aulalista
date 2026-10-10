@@ -56,16 +56,27 @@ def registrar(
     return fila
 
 
-def total(curso: str, carpeta_cursos: Path | None = None) -> dict:
-    """Suma los tokens y el costo estimado de un curso."""
+def lineas(curso: str, carpeta_cursos: Path | None = None) -> int:
+    """Cuántas llamadas tiene ya el registro. Marca el inicio de un trabajo para sumar solo lo que gastó."""
+    ruta = (carpeta_cursos or config.CARPETA_CURSOS) / curso / "tokens.jsonl"
+    if not ruta.exists():
+        return 0
+    return sum(1 for linea in ruta.read_text(encoding="utf-8").splitlines() if linea.strip())
+
+
+def total(curso: str, carpeta_cursos: Path | None = None, *, sesion: str | None = None,
+          material: str | None = None, desde_linea: int = 0) -> dict:
+    """Suma los tokens y el costo estimado de un curso. Con los filtros, solo de una sesión,
+    de un material o de las llamadas que siguen a `desde_linea` (por ejemplo, las de una generación)."""
     suma = {"llamadas": 0, "tokens_entrada": 0, "tokens_salida": 0, "costo_usd": 0.0}
     ruta = (carpeta_cursos or config.CARPETA_CURSOS) / curso / "tokens.jsonl"
     if not ruta.exists():
         return suma
-    for linea in ruta.read_text(encoding="utf-8").splitlines():
-        if not linea.strip():
-            continue
+    filas = [linea for linea in ruta.read_text(encoding="utf-8").splitlines() if linea.strip()]
+    for linea in filas[desde_linea:]:
         fila = json.loads(linea)
+        if (sesion is not None and fila["sesion"] != sesion) or (material is not None and fila["material"] != material):
+            continue
         suma["llamadas"] += 1
         suma["tokens_entrada"] += fila["tokens_entrada"]
         suma["tokens_salida"] += fila["tokens_salida"]

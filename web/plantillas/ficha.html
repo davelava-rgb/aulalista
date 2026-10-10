@@ -36,6 +36,13 @@
   {% else %}Sin confirmar. Ningún material empieza sin las dos fichas confirmadas.{% endif %}
 </p>
 
+{% if propuesta.estado == "trabajando" %}
+<p class="mensaje" role="status" id="propuesta-en-curso">Leyendo las fuentes y proponiendo la ficha. Puede tardar unos minutos.
+  La página se actualiza sola. No hace falta que hagas nada.</p>
+{% elif propuesta.mensaje and not ficha.confirmada %}
+<p class="mensaje" role="status">{{ propuesta.mensaje }}</p>
+{% endif %}
+
 {% if errores %}
 <section class="mensaje" role="alert">
   <h2>Antes de confirmar</h2>
@@ -75,12 +82,18 @@
   </section>
   {% endfor %}
 
+  {% set ocupada = propuesta.estado == "trabajando" %}
   <div class="acciones">
-    <button type="submit" name="accion" value="guardar">Guardar</button>
-    <button type="submit" name="accion" value="proponer" class="secundario">Proponer desde las fuentes</button>
-    <button type="submit" name="accion" value="confirmar" class="secundario">Confirmar ficha</button>
+    {% if hay_propuestos and not ficha.confirmada %}
+    <button type="submit" name="accion" value="aceptar" {% if ocupada %}disabled{% endif %}>Aceptar lo propuesto y confirmar</button>
+    {% endif %}
+    <button type="submit" name="accion" value="guardar" {% if hay_propuestos and not ficha.confirmada %}class="secundario"{% endif %} {% if ocupada %}disabled{% endif %}>Guardar</button>
+    <button type="submit" name="accion" value="proponer" class="secundario" {% if ocupada %}disabled{% endif %}>Proponer desde las fuentes</button>
+    <button type="submit" name="accion" value="confirmar" class="secundario" {% if ocupada %}disabled{% endif %}>Confirmar ficha</button>
   </div>
-  <p class="nota">«Proponer desde las fuentes» solo llena campos vacíos y gasta tokens. «Confirmar» guarda primero lo que escribiste.</p>
+  <p class="nota">Con fuentes convertidas, la ficha se propone sola la primera vez que la abres. «Proponer desde las fuentes»
+    solo llena campos vacíos y gasta tokens. «Aceptar lo propuesto y confirmar» guarda lo que corregiste, acepta lo
+    marcado «Propuesto» y confirma.</p>
 </form>
 
 {% if versiones %}
@@ -99,6 +112,10 @@
 
 {% block scripts %}
 <script>
+  // Mientras la ficha se propone sola, la página se actualiza cada 5 segundos.
+  if (document.getElementById("propuesta-en-curso")) {
+    setTimeout(() => location.reload(), 5000);
+  }
   document.getElementById("form-ficha").addEventListener("submit", (evento) => {
     const boton = evento.submitter;
     if (boton && boton.value !== "guardar") {

@@ -64,13 +64,13 @@ FICHA_DEL_CURSO = (
             _c("curso.sesiones", "Sesiones (obligatorio). Una línea por sesión: número, título y alcance.",
                tipo="lista", dos_puntos=False, vacio=("1.", "2.", "3.")),
         )),
-        Seccion("2. Público (obligatorio)", (
+        Seccion("2. Público", (
             _c("publico.quienes", "Quiénes son"),
             _c("publico.saben", "Qué saben ya del tema"),
             _c("publico.valoran", "Qué valoran"),
         )),
         Seccion("3. Caso del curso", (
-            _c("caso.empresa", "Empresa o institución ficticia y rubro (obligatorio)"),
+            _c("caso.empresa", "Empresa o institución ficticia y rubro"),
             _c("caso.areas", "Áreas entre las que rotan los ejemplos"),
             _c("caso.moneda", "Moneda y país de los casos"),
         )),
@@ -271,7 +271,9 @@ def vista(tipo: str, campos: dict) -> list[dict]:
                     ]})
                 elementos.append({"repetible": True, "nombre": elemento.prefijo, "encabezado": elemento.encabezado.lstrip("- "), "bloques": bloques})
             elif elemento.tipo == "grupo":
-                elementos.append({"grupo": True, "etiqueta": elemento.etiqueta,
+                # Desde la decisión 16, los temas de la lectura se exigen al generarla, no al confirmar la ficha.
+                etiqueta = elemento.etiqueta.replace("(obligatorio)", "(obligatorio para generar la lectura)")
+                elementos.append({"grupo": True, "etiqueta": etiqueta,
                                   "campos": [dato(s, s.id, seccion) | {"obligatorio": False} for s in elemento.subcampos]})
             else:
                 elementos.append(dato(elemento, elemento.id, seccion))

@@ -12,39 +12,47 @@
   <h2>1. Lectura</h2>
   <p class="estado-material">
     {% if lectura.estado == "trabajando" %}Trabajando…
-    {% elif lectura.estado == "verificada" %}Verificada: el verificador terminó sin fallas.
+    {% elif lectura.estado == "aprobada" %}Aprobada por ti el {{ lectura.aprobada[:10] }}.
+    {% elif lectura.estado == "verificada" %}Verificada: el verificador, las dos pasadas y el revisor independiente terminaron sin problemas abiertos.
     {% elif lectura.estado == "con fallas" %}Con problemas abiertos. No se entrega así.
     {% elif lectura.estado == "error" %}Se detuvo por un error: {{ lectura.error }}
     {% else %}Sin generar.{% endif %}
     {% if lectura.desactualizado %}<strong>Desactualizada: las fichas cambiaron.</strong>{% endif %}
   </p>
 
-  {% if lectura.resumen %}<p>Verificador: {{ lectura.resumen }}</p>{% endif %}
-
-  {% if lectura.archivos and lectura.estado != "trabajando" %}
+  {% if lectura.entrega and lectura.estado != "trabajando" %}
+  <h3>Entrega</h3>
+  {% for s in lectura.entrega.secciones %}
+  <h4>{{ s.titulo }}</h4>
+  {% if s.clave == "archivos" %}
   <ul class="lista">
-    <li><a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/descargar/{{ lectura.archivos.word }}">{{ lectura.archivos.word }}</a>: la lectura.</li>
-    <li><a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/descargar/{{ lectura.archivos.excel }}">{{ lectura.archivos.excel }}</a>: el archivo de verificación.</li>
+    {% for l in s.lineas %}{% set archivo, resto = l.split(": ", 1) %}
+    <li><a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/descargar/{{ archivo }}">{{ archivo }}</a>: {{ resto }}</li>
+    {% endfor %}
   </ul>
+  {% else %}
+  <ul class="lista">{% for l in s.lineas %}<li>{{ l }}</li>{% endfor %}</ul>
   {% endif %}
-
+  {% endfor %}
   {% if lectura.eliminadas_por_el_programa %}
-  <h3>Oraciones que eliminó el programa al llegar al tope de vueltas</h3>
-  <ul>{% for o in lectura.eliminadas_por_el_programa %}<li>{{ o }}</li>{% endfor %}</ul>
-  {% endif %}
-  {% if lectura.problemas %}
-  <h3>Decisiones pendientes</h3>
-  <ul>{% for p in lectura.problemas %}<li>{{ p }}</li>{% endfor %}</ul>
+  <details>
+    <summary>Oraciones que eliminó el programa al llegar al tope de vueltas</summary>
+    <ul>{% for o in lectura.eliminadas_por_el_programa %}<li>{{ o }}</li>{% endfor %}</ul>
+  </details>
   {% endif %}
   {% if lectura.avisos_de_diseno %}
-  <h3>Avisos de diseño</h3>
+  <h4>Avisos de diseño</h4>
   <ul>{% for a in lectura.avisos_de_diseno %}<li>{{ a }}</li>{% endfor %}</ul>
   {% endif %}
-  {% if lectura.decisiones %}
-  <h3>Qué decidió el redactor por su cuenta</h3>
-  <ul>{% for d in lectura.decisiones %}<li>{{ d }}</li>{% endfor %}</ul>
+  {% if lectura.estado == "verificada" and not lectura.desactualizado %}
+  <form method="post" action="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/lectura/aprobar" class="aprobar">
+    <p><strong>{{ lectura.entrega.pregunta }}</strong></p>
+    <button type="submit">Aprobar la lectura</button>
+  </form>
+  {% elif lectura.estado == "con fallas" %}
+  <p><strong>No se puede aprobar: tiene decisiones pendientes.</strong> Genera la lectura de nuevo después de resolverlas en las fichas.</p>
   {% endif %}
-  {% if lectura.agrupacion %}<p>Agrupación de temas: {{ lectura.agrupacion }}</p>{% endif %}
+  {% endif %}
 
   {% if lectura.avance %}
   <details {% if lectura.estado == "trabajando" %}open{% endif %}>
@@ -53,8 +61,12 @@
   </details>
   {% endif %}
 
+  {% if faltan_lectura %}
+  <p><strong>Para generar la lectura, completa en la <a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">ficha de la sesión</a>:</strong></p>
+  <ul>{% for f in faltan_lectura %}<li>{{ f }}</li>{% endfor %}</ul>
+  {% endif %}
   <form method="post" action="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/lectura">
-    <button type="submit" {% if not puede_empezar or lectura.estado == "trabajando" %}disabled{% endif %}>
+    <button type="submit" {% if not puede_empezar or faltan_lectura or lectura.estado == "trabajando" %}disabled{% endif %}>
       {{ 'Generar de nuevo' if lectura.estado else 'Generar lectura' }}
     </button>
     <span class="nota">Gasta tokens. La redacción y las correcciones pueden tardar varios minutos.</span>

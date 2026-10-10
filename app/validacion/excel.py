@@ -36,6 +36,24 @@ def llenar_oraciones(ruta: Path, oraciones: list[dict], filas_por_huella: dict[s
     return llenas
 
 
+def anotar_reglas(ruta: Path, reglas: tuple[str, ...], nota: str) -> None:
+    """«Cómo se resolvió» en la hoja Hallazgos para los avisos de estas reglas que no tienen nota todavía."""
+    libro = openpyxl.load_workbook(ruta)
+    for fila in libro["Hallazgos"].iter_rows(min_row=2):
+        if fila[0].value == "AVISO" and fila[3].value in reglas and not fila[5].value:
+            fila[5].value = nota
+    libro.save(ruta)
+
+
+def llenar_revisor(ruta: Path, por_numero: dict[int, str]) -> None:
+    """Columna «Revisor independiente» de la hoja Oraciones, una nota por fila (PLAN.md §5.6)."""
+    libro = openpyxl.load_workbook(ruta)
+    for fila in libro["Oraciones"].iter_rows(min_row=2):
+        if fila[0].value in por_numero:
+            fila[8].value = por_numero[fila[0].value]
+    libro.save(ruta)
+
+
 def agregar_historial(ruta: Path, historial: list[dict]) -> None:
     """historial: [{nivel, seccion, oracion, regla, detalle, resolucion}]"""
     if not historial:

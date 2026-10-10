@@ -68,8 +68,8 @@ Termina un material, haz la validación doble, entrégalo y espera la aprobació
 - Prefiere un ejemplo concreto antes que una explicación larga.
 - No inventes cifras reales, estudios ni funciones de herramientas.
 - Antes de redactar, abre las fuentes del curso y copia los pasajes que vas a usar. Redacta a partir de esos pasajes, no de memoria.
-- No afirmes sobre una norma nada que no esté en un pasaje copiado. Si la fuente no está en el proyecto, no la cites.
-- Si agrupas, resumes o cambias el orden de lo que dice una norma, dilo en el texto: "en este curso".
+- No afirmes sobre el contenido de una fuente nada que no esté en un pasaje copiado. Puedes decirlo con tus palabras si no cambias su sentido. Si la fuente no está en el proyecto, no la cites.
+- Si agrupas, resumes o cambias el orden de lo que dice una fuente, dilo en el texto: "en este curso".
 - Todos los datos del caso son ficticios y cuadran entre sí y con los datos fijos.
 - Ningún material contiene datos personales reales. Nombra a las personas por su cargo. Si hace falta un nombre propio, usa uno ficticio.
 - Los casos se entienden sin conocer una profesión específica, salvo que el curso sea de esa profesión.
@@ -256,7 +256,7 @@ Qué significa cada defecto:
 2. Cuando el material esté terminado, ejecuta:
    `python3 scripts/verificar.py --config verificacion.json --salida S[sesión]_[material]_Verificacion.xlsx [archivos del material]`
 3. El programa extrae el texto del archivo final, lo separa en oraciones y crea la tabla con una fila por oración. Revisa sin ayuda:
-   - que cada número de cláusula o de control exista en la norma citada, y anota el título que tiene en la norma;
+   - que cada número de referencia (sección, cláusula, lámina o paso) exista en la fuente citada, y anota el título que tiene en ella;
    - que cada cita entre comillas aparezca tal cual en una fuente;
    - que cada operación escrita dé el resultado escrito;
    - que cada dato fijo use el valor de la ficha;
@@ -274,14 +274,14 @@ El programa no entiende el significado. Por eso siguen las dos pasadas.
 
 Llena estas columnas en cada fila de la tabla que creó el programa:
 
-- Tipo de oración. Elige uno solo: norma, dato del caso, cálculo, regla del curso, instrucción o sin afirmación.
-- Pasaje de la fuente: el pasaje copiado tal cual, en su idioma original, con su cláusula o página. Encuéntralo con una búsqueda en el archivo, no de memoria.
+- Tipo de oración. Elige uno solo: contenido de una fuente, dato del caso, cálculo, regla del curso, instrucción o sin afirmación.
+- Pasaje de la fuente: el pasaje copiado tal cual, en su idioma original, con su página, sección o lámina. Encuéntralo con una búsqueda en el archivo, no de memoria.
 - Veredicto: coincide, no coincide o sin fuente.
 
 Reglas por tipo:
 
-- Norma: la oración no puede decir más ni menos que el pasaje. Compara una por una estas siete cosas: el número de cláusula o de control, el nombre del término, las cantidades ("las siete opciones"), el orden ("la segunda"), quién hace la acción, si es obligación o posibilidad ("debe" o "puede") y las palabras que generalizan ("todos", "solo", "siempre", "las mismas"). Una sola diferencia es "no coincide".
-- Norma traducida por ti: si la fuente está en otro idioma, la oración dice que el nombre es una traducción del curso.
+- Contenido de una fuente: la oración no puede decir más ni menos que el pasaje. Puede decirlo con otras palabras si no cambia su sentido. Compara una por una estas siete cosas: el número de referencia (sección, cláusula, lámina o paso), el nombre del término, las cantidades ("las siete opciones"), el orden ("la segunda"), quién hace la acción, si es obligación o posibilidad ("debe" o "puede") y las palabras que generalizan ("todos", "solo", "siempre", "las mismas"). Una sola diferencia es "no coincide".
+- Contenido traducido por ti: si la fuente está en otro idioma, la oración dice que el nombre es una traducción del curso.
 - Regla del curso: es una regla que ninguna fuente dice. La oración lleva escrito "en este curso". Si no lo lleva, es "no coincide".
 - Dato del caso: coincide con los datos fijos de la ficha del curso y con las demás apariciones del mismo dato.
 - Cálculo: rehazlo con un programa a partir de los datos del archivo.
@@ -365,13 +365,13 @@ FICHA DEL CURSO
   2.
   3.
 
-2. Público (obligatorio)
+2. Público
 - Quiénes son:
 - Qué saben ya del tema:
 - Qué valoran:
 
 3. Caso del curso
-- Empresa o institución ficticia y rubro (obligatorio):
+- Empresa o institución ficticia y rubro:
 - Áreas entre las que rotan los ejemplos:
 - Moneda y país de los casos:
 
@@ -407,7 +407,7 @@ FICHA DEL CURSO
 
 ## Plantilla · Ficha de la sesión
 
-Se llena una vez por sesión. Los campos con (obligatorio) no se pueden dejar vacíos.
+Se llena una vez por sesión. Los campos con (obligatorio) no se pueden dejar vacíos. Los datos de cada material se exigen al producir ese material.
 
 ```
 FICHA DE LA SESIÓN

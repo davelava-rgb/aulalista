@@ -17,7 +17,7 @@ from app.fichas import almacen, flujo
 from app.materiales import docx as generador
 from app.materiales import estilo, lectura
 from app.materiales.contenido import Lectura
-from tests.conftest import consulta_en_secuencia, consulta_simulada, pasada, segunda
+from tests.conftest import consulta_en_secuencia, consulta_simulada, pasada
 from tests.fixtures import fichas as datos
 from tests.unidad.test_fichas import con_fuente
 
@@ -73,8 +73,13 @@ def sesion(entorno):
     return carpeta
 
 
-def generar(sesion, *salidas, contar_paginas=una_pagina):
-    consulta = consulta_en_secuencia(*salidas)
+SIN_HALLAZGOS = {"hallazgos": []}   # respuesta del revisor independiente cuando no encuentra errores
+
+
+def generar(sesion, *salidas, contar_paginas=una_pagina, revisor=True):
+    """revisor=True agrega al final la respuesta del revisor sin hallazgos. Si la lectura no termina
+    limpia, el revisor no corre y esa respuesta queda sin usar."""
+    consulta = consulta_en_secuencia(*salidas, *([SIN_HALLAZGOS] if revisor else []))
     material = asyncio.run(lectura.generar(sesion, "scrum", 1, consulta=consulta, contar_paginas=contar_paginas))
     return material, consulta
 
@@ -188,12 +193,13 @@ def test_sin_fichas_confirmadas_no_empieza(entorno):
 
 
 def test_lectura_limpia_queda_verificada_en_una_vuelta(sesion):
-    material, consulta = generar(sesion, LIMPIA, pasada(), segunda())
+    material, consulta = generar(sesion, LIMPIA, pasada())
     rutas = lectura.archivos(sesion, 1)
     assert material["estado"] == "verificada"
     assert material["resumen"].endswith("Fallas: 0 · Avisos: 0")
     assert rutas["word"].exists() and rutas["excel"].exists()
-    assert len(consulta.llamadas) == 3
+    assert len(consulta.llamadas) == 3   # redacción, primera pasada y revisor independiente (dos jueces)
+    assert "Busca errores en este material." in consulta.llamadas[2]["prompt"]
     opciones = consulta.llamadas[0]["options"]
     assert opciones.model == "claude-opus-5-5" and opciones.tools == ["Read", "Grep", "Glob"]
     assert "## Material 1 · Lectura" in consulta.llamadas[0]["prompt"]
@@ -203,10 +209,10 @@ def test_lectura_limpia_queda_verificada_en_una_vuelta(sesion):
 
 def test_una_falla_se_corrige_y_se_verifica_de_nuevo(sesion):
     material, consulta = generar(sesion, con_error("Lee este bloque en 10 minutos."),
-                                 cambios(("Lee este bloque en 10 minutos.", "")), pasada(), segunda())
+                                 cambios(("Lee este bloque en 10 minutos.", "")), pasada())
     assert material["estado"] == "verificada"
     assert len(consulta.llamadas) == 4
-    assert material["correcciones"] == {"verificador": 1, "primera pasada": 0, "segunda pasada": 0}
+    assert material["correcciones"] == {"verificador": 1, "primera pasada": 0}
     correccion = consulta.llamadas[1]["options"]
     assert (correccion.model, correccion.max_budget_usd, correccion.effort) == ("claude-sonnet-5-5", 0.60, "medium")
     contenido = lectura.archivos(sesion, 1)["contenido"].read_text(encoding="utf-8")
@@ -216,23 +222,39 @@ def test_una_falla_se_corrige_y_se_verifica_de_nuevo(sesion):
     assert pedido.rstrip().endswith("FALLA · tiempo · «Lee este bloque en 10 minutos.»: dice «minutos»")
 
 
+LARGA = ("Cada viernes el equipo revisa su tablero, conversa con los clientes de la tienda, anota lo que aprendió "
+         "en una hoja compartida y decide qué cambia para el viernes siguiente sin esperar el cierre.")
+
+
 def test_un_aviso_explicado_queda_anotado_en_el_excel(sesion):
-    oracion = "Algunas tiendas revisan su tablero cada día."
-    material, consulta = generar(sesion, con_error(oracion), pasada(), segunda(), cambios(explicaciones=[
-        {"regla": "palabra imprecisa", "oracion": oracion, "explicacion": "El caso no dice cuántas tiendas."}]))
+    material, consulta = generar(sesion, con_error(LARGA), pasada(), cambios(explicaciones=[
+        {"regla": "oración larga", "oracion": LARGA, "explicacion": "Es una sola acción con sus pasos."}]))
     assert len(consulta.llamadas) == 4  # el aviso va en la corrección de la pasada: no gasta una vuelta propia
     assert material["estado"] == "verificada"
     hoja = openpyxl.load_workbook(lectura.archivos(sesion, 1)["excel"])["Hallazgos"]
     filas = [[c.value for c in f] for f in hoja.iter_rows(min_row=2)]
-    assert filas[0] == ["AVISO", "S1_Lectura.docx · Pilares de Scrum", oracion, "palabra imprecisa", "algunas",
-                        "El caso no dice cuántas tiendas."]
+    assert filas[0][:4] == ["AVISO", "S1_Lectura.docx · Pilares de Scrum", LARGA, "oración larga"]
+    assert filas[0][5] == "Es una sola acción con sus pasos."
     assert filas[1][-1] == "Enviado a corrección en la vuelta 1. Resuelto."  # el historial de la vuelta 1
+
+
+def test_relleno_y_palabras_imprecisas_son_avisos_informativos(sesion):
+    oracion = "Algunas tiendas revisan básicamente su tablero cada día."
+    material, consulta = generar(sesion, con_error(oracion), pasada())
+    assert material["estado"] == "verificada"
+    assert len(consulta.llamadas) == 3          # sin corrección: no obligan a corregir ni a explicar
+    hoja = openpyxl.load_workbook(lectura.archivos(sesion, 1)["excel"])["Hallazgos"]
+    filas = {f[3]: f for f in hoja.iter_rows(min_row=2, values_only=True)}
+    assert filas["palabra imprecisa"][5] == lectura.NOTA_INFORMATIVA
+    assert filas["relleno"][5] == lectura.NOTA_INFORMATIVA
+    valide = next(s["lineas"] for s in material["entrega"]["secciones"] if s["clave"] == "valide")
+    assert any(l.startswith("Avisos informativos de relleno o palabras imprecisas: 2.") for l in valide)
 
 
 def test_mas_de_seis_paginas_es_falla_y_se_pide_acortar(sesion):
     paginas = iter([7, 5])
     material, consulta = generar(sesion, LIMPIA, {"lectura": LIMPIA, "explicaciones": [], "datos_nuevos": []},
-                                 pasada(), segunda(), contar_paginas=lambda _: next(paginas))
+                                 pasada(), contar_paginas=lambda _: next(paginas))
     assert "FALLA · páginas · S1_Lectura.docx: tiene 7 páginas; el máximo es 6" in consulta.llamadas[1]["prompt"]
     assert material["estado"] == "verificada"
 
@@ -240,7 +262,7 @@ def test_mas_de_seis_paginas_es_falla_y_se_pide_acortar(sesion):
 def test_una_estructura_invalida_se_pide_corregir(sesion):
     sin_bloques = copy.deepcopy(LIMPIA)
     sin_bloques["bloques"] = sin_bloques["bloques"][:1]
-    material, consulta = generar(sesion, sin_bloques, {"lectura": LIMPIA, "explicaciones": [], "datos_nuevos": []}, pasada(), segunda())
+    material, consulta = generar(sesion, sin_bloques, {"lectura": LIMPIA, "explicaciones": [], "datos_nuevos": []}, pasada())
     assert "FALLA · estructura · bloques" in consulta.llamadas[1]["prompt"]
     assert material["estado"] == "verificada"
 
@@ -257,15 +279,15 @@ def test_despues_del_tope_de_correcciones_queda_con_fallas(sesion):
 def test_cada_llamada_queda_en_el_registro_de_tokens(sesion):
     from app import tokens
     generar(sesion, con_error("Lee este bloque en 10 minutos."), cambios(("Lee este bloque en 10 minutos.", "")),
-            pasada(), segunda())
+            pasada())
     lineas = (sesion / "tokens.jsonl").read_text(encoding="utf-8").splitlines()
     etapas = [__import__("json").loads(l)["etapa"] for l in lineas]
-    assert etapas[-4:] == ["redacción", "corrección 1", "primera pasada", "segunda pasada"]
+    assert etapas[-4:] == ["redacción", "corrección 1", "primera pasada", "revisor independiente 1"]
     assert tokens.total("scrum")["llamadas"] >= 2
 
 
 def test_el_word_real_cuenta_sus_paginas_con_word(sesion):
-    material, _ = generar(sesion, LIMPIA, pasada(), segunda(), contar_paginas=None)
+    material, _ = generar(sesion, LIMPIA, pasada(), contar_paginas=None)
     assert material["estado"] == "verificada"
 
 
@@ -280,7 +302,7 @@ def test_la_pagina_de_la_sesion_genera_y_permite_descargar(sesion, monkeypatch):
 
     async def generar_simulado(carpeta, curso, numero):
         llamadas.append(numero)
-        return await original(carpeta, curso, numero, consulta=consulta_en_secuencia(LIMPIA, pasada(), segunda()), contar_paginas=una_pagina)
+        return await original(carpeta, curso, numero, consulta=consulta_en_secuencia(LIMPIA, pasada(), SIN_HALLAZGOS), contar_paginas=una_pagina)
 
     monkeypatch.setattr(lectura, "generar", generar_simulado)
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura", follow_redirects=False)
@@ -316,12 +338,11 @@ def test_una_configuracion_rota_se_detecta_antes_de_gastar_tokens(sesion):
 
 
 def test_un_aviso_explicado_con_la_oracion_copiada_con_diferencias_no_vuelve(sesion):
-    oracion = "Algunas tiendas revisan su tablero cada día."
-    material, consulta = generar(sesion, con_error(oracion), pasada(), segunda(), cambios(explicaciones=[
-        {"regla": "Palabra imprecisa", "oracion": "«algunas tiendas revisan su tablero cada dia»",
-         "explicacion": "El caso no dice cuántas tiendas."}]))
+    copiada = "«" + LARGA.lower().replace("decide qué", "decide que") + "»"
+    material, consulta = generar(sesion, con_error(LARGA), pasada(), cambios(explicaciones=[
+        {"regla": "Oración larga", "oracion": copiada, "explicacion": "El caso no dice cuántas tiendas."}]))
     assert material["estado"] == "verificada"
-    assert len(consulta.llamadas) == 4  # redacción, las dos pasadas juntas y una corrección
+    assert len(consulta.llamadas) == 4  # redacción, primera pasada, una corrección y el revisor
     hoja = openpyxl.load_workbook(lectura.archivos(sesion, 1)["excel"])["Hallazgos"]
     assert hoja["F2"].value == "El caso no dice cuántas tiendas."
 
@@ -354,7 +375,7 @@ def test_borrar_una_celda_no_descuadra_la_tabla_ni_toca_los_pasajes():
 def test_un_problema_del_documento_entero_pide_la_correccion_completa(sesion):
     paginas = iter([7, 5])
     material, consulta = generar(sesion, LIMPIA, {"lectura": LIMPIA, "explicaciones": [], "datos_nuevos": []},
-                                 pasada(), segunda(), contar_paginas=lambda _: next(paginas))
+                                 pasada(), contar_paginas=lambda _: next(paginas))
     assert consulta.llamadas[1]["options"].model == "claude-opus-5-5"
     assert material["estado"] == "verificada"
 
@@ -369,71 +390,124 @@ def test_la_explicacion_vale_aunque_la_regla_venga_con_su_nivel():
 
 
 
-# ---------- Segunda pasada dentro de la lectura ----------
+# ---------- Segunda pasada: la hace el revisor independiente (PLAN.md §0, decisión 12) ----------
 
-def test_un_defecto_de_la_segunda_pasada_se_corrige_y_llena_su_hoja(sesion):
-    relleno = "Los pilares de Scrum son tres."
-    defecto = {"tipo": "relleno", "bloque": "Pilares de Scrum", "oracion": relleno,
-               "detalle": "Repite lo que dice el título."}
-    material, consulta = generar(sesion, LIMPIA, pasada(), segunda(defectos=[defecto]),
-                                 cambios((relleno, "Los pilares sostienen el trabajo del equipo.")), pasada(), segunda())
+RELLENO = "Los pilares de Scrum son tres."
+
+
+def hallazgo(oracion: str, defecto: str = "relleno", prueba: str | None = None, donde: str = "material.txt",
+             n: int = 0) -> dict:
+    """Un hallazgo del revisor. Por defecto, la prueba es la misma oración, copiada del material."""
+    return {"n": n, "oracion": oracion, "defecto": defecto, "prueba": prueba or oracion, "donde": donde,
+            "explicacion": f"{defecto} en la oración."}
+
+
+def revision(*hallazgos, lista=()):
+    """Respuesta simulada del revisor: sus hallazgos, la lista sin cumplir y las cuatro respuestas de cada
+    bloque que el pedido nombra en «BLOQUES:»."""
+    def responder(prompt):
+        linea = next((l for l in prompt.splitlines() if l.startswith("BLOQUES: ")), "")
+        bloques = [{"bloque": n, "que_puede_hacer": "Aplicar el concepto.", "que_necesita": "Está en el bloque.",
+                    "dos_lecturas": "Ninguna", "si_no_sale": "No aplica."} for n in re.findall(r"\[([^\]]+)\]", linea)]
+        return {"hallazgos": list(hallazgos), "bloques": bloques,
+                "lista": [{"pregunta": p, "respuesta": "no", "detalle": d} for p, d in lista]}
+    return responder
+
+
+def correccion(*pares, rechazos=None) -> dict:
+    """Respuesta simulada de una corrección con hallazgos del revisor."""
+    return {**cambios(*pares), "rechazos": rechazos or []}
+
+
+def test_el_revisor_hace_la_segunda_pasada_y_llena_su_hoja(sesion):
+    nueva = "Los pilares sostienen el trabajo del equipo."
+    material, consulta = generar(sesion, LIMPIA, pasada(), revision(hallazgo(RELLENO)), correccion((RELLENO, nueva)),
+                                 pasada(), revisor=False)
     assert material["estado"] == "verificada"
-    assert material["correcciones"]["segunda pasada"] == 1
-    assert "SEGUNDA PASADA · relleno · «Los pilares de Scrum son tres.»" in consulta.llamadas[3]["prompt"]
-    assert consulta.llamadas[5]["prompt"].rstrip().endswith("BLOQUES A REVISAR: [Pilares de Scrum]")  # solo el bloque que cambió
-    assert consulta.llamadas[2]["options"].effort == "high"     # primera revisión de la lectura completa
-    assert consulta.llamadas[5]["options"].effort == "medium"   # revisión de un bloque cambiado
+    assert len(consulta.llamadas) == 5      # redacción, primera pasada, revisor, corrección y primera pasada
+    pedido = consulta.llamadas[2]["prompt"]
+    assert "BLOQUES: [Idea central], [El Manifiesto Ágil], [Pilares de Scrum], [Aplícalo así], [Cuidado con]" in pedido
+    assert "### Segunda pasada · Valor y funcionamiento" in pedido
+    assert "[Pilares de Scrum]\n" in pedido   # el material va agrupado por bloque, con sus números
+    assert "REVISOR INDEPENDIENTE · relleno · «Los pilares de Scrum son tres.»" in consulta.llamadas[3]["prompt"]
     libro = openpyxl.load_workbook(lectura.archivos(sesion, 1)["excel"])
     filas = list(libro["Segunda pasada"].iter_rows(min_row=2, values_only=True))
     assert [f[0] for f in filas] == ["Idea central", "El Manifiesto Ágil", "Pilares de Scrum", "Aplícalo así", "Cuidado con"]
     assert all(f[1] and f[2] and f[3] and f[4] for f in filas)
-    historial = [f for f in libro["Hallazgos"].iter_rows(min_row=2, values_only=True)]
-    assert historial[0][3] == "segunda pasada: relleno"
+    reglas = [f[3] for f in libro["Hallazgos"].iter_rows(min_row=2, values_only=True)]
+    assert "revisor independiente: relleno" in reglas
 
 
-def test_un_defecto_que_cita_una_oracion_inexistente_se_descarta(sesion):
-    inventado = {"tipo": "vacío", "bloque": "Pilares de Scrum", "oracion": "Esta oración no está.", "detalle": "x"}
-    material, consulta = generar(sesion, LIMPIA, pasada(), segunda(defectos=[inventado]))
-    assert material["estado"] == "verificada"
-    assert len(consulta.llamadas) == 3
+def test_la_lectura_recibe_solo_su_parte_de_la_lista_de_verificacion(sesion):
+    _, consulta = generar(sesion, LIMPIA, pasada())
+    pedido = consulta.llamadas[2]["prompt"]
+    lista = pedido.split("LISTA DE VERIFICACIÓN:\n", 1)[1].split("\n\n", 1)[0]
+    assert "¿Hay contenido de sesiones posteriores?" in lista
+    assert "¿Algún material da la respuesta de un ejercicio?" in lista
+    assert "En el laboratorio" not in lista and "En la evaluación" not in lista
+    assert "¿Ejecutaste cada ejercicio" not in lista and "¿El diseño es uniforme?" not in lista
+    assert "minutos, puntos, notas" not in lista      # lo revisa el verificador, sin IA
 
 
 def test_un_punto_de_la_lista_de_verificacion_sin_cumplir_se_corrige(sesion):
-    punto = {"pregunta": "¿Hay contenido de sesiones posteriores?", "respuesta": "no", "detalle": "Menciona los roles."}
-    material, consulta = generar(sesion, LIMPIA, pasada(), segunda(lista_no=[punto]), cambios(), segunda())
+    punto = ("¿Hay contenido de sesiones posteriores?", "Menciona los roles.")
+    material, consulta = generar(sesion, LIMPIA, pasada(), revision(lista=[punto]), correccion(), revisor=False)
     assert "LISTA DE VERIFICACIÓN · ¿Hay contenido de sesiones posteriores?: Menciona los roles." in consulta.llamadas[3]["prompt"]
     assert material["estado"] == "verificada"
+    assert material["revisor"][0]["lista"] == 1
+    valide = next(s["lineas"] for s in material["entrega"]["secciones"] if s["clave"] == "valide")
+    assert any("1 punto de la lista de verificación sin cumplir" in l for l in valide)
 
 
-def test_la_segunda_pasada_recibe_las_posibles_inconsistencias(sesion):
+def test_el_revisor_recibe_las_posibles_inconsistencias(sesion):
     doble = copy.deepcopy(LIMPIA)
     doble["bloques"][0]["parrafos"].append("El Sprint dura dos semanas.")
     doble["bloques"][1]["parrafos"].append("El Sprint dura tres semanas.")
-    _, consulta = generar(sesion, doble, pasada(), segunda())
+    _, consulta = generar(sesion, doble, pasada())
     pedido = consulta.llamadas[2]["prompt"]
     assert "- semanas: «dos semanas» en:" in pedido and "«tres semanas» en:" in pedido
 
+
+def test_un_relleno_que_sigue_abierto_al_tope_de_la_ronda_lo_elimina_el_programa(sesion):
+    relleno = "Tres pilares sostienen ese trabajo."
+    material, _ = generar(sesion, LIMPIA, pasada(), revision(hallazgo(relleno)), correccion(), correccion(),
+                          revisor=False)
+    assert material["estado"] == "verificada"
+    assert material["eliminadas_por_el_programa"] == [relleno]
+    assert relleno not in lectura.archivos(sesion, 1)["contenido"].read_text(encoding="utf-8")
+    assert material["revisor"][0]["resuelto"] == 1
+
+
+def test_el_programa_no_borra_la_unica_oracion_de_un_bloque(sesion):
+    # «Los pilares de Scrum son tres.» es el único párrafo de su bloque: borrarla dejaría el bloque vacío.
+    material, _ = generar(sesion, LIMPIA, pasada(), revision(hallazgo(RELLENO)), correccion(), correccion(),
+                          revisor=False)
+    assert material["estado"] == "con fallas"
+    assert material["eliminadas_por_el_programa"] == []
+    assert RELLENO in lectura.archivos(sesion, 1)["contenido"].read_text(encoding="utf-8")
+    assert len(material["problemas"]) == 1
+    assert material["problemas"][0].startswith("REVISOR INDEPENDIENTE · relleno · «Los pilares de Scrum son tres.»")
 
 
 def test_desde_la_tercera_vuelta_la_veracidad_pide_copiar_o_eliminar(sesion):
     mala = "El Manifiesto Ágil tiene cinco aspectos."
     datos = con_error(mala)
-    falla = pasada({mala: {"tipo": "norma", "veredicto": "sin fuente", "pasaje": ""}})
-    material, consulta = generar(sesion, datos, falla, segunda(), cambios(), falla, cambios(), falla,
-                                 cambios((mala, "")), segunda())
-    assert lectura.ULTIMO_INTENTO not in consulta.llamadas[3]["prompt"]
-    assert lectura.ULTIMO_INTENTO in consulta.llamadas[7]["prompt"]
+    falla = pasada({mala: {"tipo": "contenido de una fuente", "veredicto": "sin fuente", "pasaje": ""}})
+    material, consulta = generar(sesion, datos, falla, cambios(), falla, cambios(), falla,
+                                 cambios((mala, "")))
+    assert lectura.ULTIMO_INTENTO not in consulta.llamadas[2]["prompt"]
+    assert lectura.ULTIMO_INTENTO in consulta.llamadas[6]["prompt"]
     assert material["estado"] == "verificada"
 
 
 def test_al_llegar_al_tope_el_programa_elimina_lo_que_sigue_sin_coincidir(sesion):
     mala = "El Manifiesto Ágil tiene cinco aspectos."
-    falla = pasada({mala: {"tipo": "norma", "veredicto": "sin fuente", "pasaje": ""}})
-    secuencia = [con_error(mala), falla, segunda()]
+    falla = pasada({mala: {"tipo": "contenido de una fuente", "veredicto": "sin fuente", "pasaje": ""}})
+    secuencia = [con_error(mala), falla]
     for _ in range(lectura.MAX_CORRECCIONES):
         secuencia += [cambios(), falla]
     material, consulta = generar(sesion, *secuencia)
-    assert len(consulta.llamadas) == len(secuencia)   # después del cierre no hay otra segunda pasada
+    assert len(consulta.llamadas) == len(secuencia) + 1   # después del cierre, el revisor
     assert material["estado"] == "verificada"
     assert material["eliminadas_por_el_programa"] == [mala]
     assert mala not in lectura.archivos(sesion, 1)["contenido"].read_text(encoding="utf-8")
@@ -442,14 +516,11 @@ def test_al_llegar_al_tope_el_programa_elimina_lo_que_sigue_sin_coincidir(sesion
 
 
 def test_un_vacio_al_llegar_al_tope_queda_como_decision_pendiente(sesion):
-    vacio = {"tipo": "vacío", "bloque": "Pilares de Scrum", "oracion": "Los pilares de Scrum son tres.",
-             "detalle": "No dice cuáles son."}
-    secuencia = [LIMPIA, pasada(), segunda(defectos=[vacio])]
-    for _ in range(lectura.MAX_CORRECCIONES):
-        secuencia += [cambios(), segunda(defectos=[vacio])]
-    material, _ = generar(sesion, *secuencia)
+    vacio = hallazgo(RELLENO, "vacío")
+    material, _ = generar(sesion, LIMPIA, pasada(), revision(vacio), correccion(), correccion(), revisor=False)
     assert material["estado"] == "con fallas"
-    assert material["problemas"] == ["SEGUNDA PASADA · vacío · «Los pilares de Scrum son tres.»: No dice cuáles son."]
+    assert len(material["problemas"]) == 1
+    assert material["problemas"][0].startswith("REVISOR INDEPENDIENTE · vacío · «Los pilares de Scrum son tres.»")
     assert material["eliminadas_por_el_programa"] == []
 
 
@@ -469,12 +540,89 @@ def test_un_aviso_en_una_oracion_literal_de_la_fuente_lo_explica_el_programa(ses
 
 def test_un_vacio_que_el_cierre_no_puede_borrar_sigue_pendiente(sesion):
     mala = "El Manifiesto Ágil tiene cinco aspectos."
-    vacio = {"tipo": "vacío", "bloque": "Pilares de Scrum", "oracion": "Los pilares de Scrum son tres.", "detalle": "No dice cuáles."}
-    falla = pasada({mala: {"tipo": "norma", "veredicto": "sin fuente", "pasaje": ""}})
-    secuencia = [con_error(mala), falla, segunda(defectos=[vacio])]
+    falla = pasada({mala: {"tipo": "contenido de una fuente", "veredicto": "sin fuente", "pasaje": ""}})
+    secuencia = [con_error(mala), falla]
     for _ in range(lectura.MAX_CORRECCIONES):
-        secuencia += [cambios(), falla, segunda(defectos=[vacio])]
-    material, _ = generar(sesion, *secuencia)
+        secuencia += [cambios(), falla]
+    secuencia += [revision(hallazgo(RELLENO, "vacío")), correccion(), correccion()]
+    material, _ = generar(sesion, *secuencia, revisor=False)
     assert material["eliminadas_por_el_programa"] == [mala]
     assert material["estado"] == "con fallas"
-    assert material["problemas"] == ["SEGUNDA PASADA · vacío · «Los pilares de Scrum son tres.»: No dice cuáles."]
+    assert material["problemas"][0].startswith("REVISOR INDEPENDIENTE · vacío · «Los pilares de Scrum son tres.»")
+
+
+def test_una_oracion_larga_que_sigue_a_su_pasaje_de_norma_se_explica_sola():
+    from app.validacion.pasajes import Corpus, Fuente
+    from app.validacion import verificador
+    norma = "El Product Owner es responsable de maximizar el valor del producto resultante del trabajo del Scrum Team."
+    larga = ("El Product Owner es responsable de maximizar el valor del producto que resulta del trabajo del "
+             "Scrum Team, y lo hace sin dejar de ser una sola persona dentro del equipo.")
+    corpus = Corpus([Fuente("guia.pdf", [{"texto": norma, "ubicacion": "página 9"}])])
+    hallazgo = verificador.verificar.Hallazgo("AVISO", "S1_Lectura.docx · x", larga, "oración larga", "27 palabras")
+    resultado = verificador.verificar.Resultado(hallazgos=[hallazgo])
+    anclas = [{"oracion": larga, "fuente": "guia.pdf", "ubicacion": "página 9", "texto": norma}]
+    explicaciones = {}
+    assert lectura._explicar_literales(resultado, explicaciones, corpus, anclas) is True
+    assert "Sigue a su pasaje (guia.pdf, página 9)" in verificador.buscar_explicacion(
+        "oración larga", larga, explicaciones)
+    # Sin un pasaje que exista tal cual, el aviso no se explica solo.
+    inventada = [{**anclas[0], "texto": "El Product Owner decide todo."}]
+    assert lectura._explicar_literales(resultado, {}, corpus, inventada) is False
+    # Una palabra imprecisa no se explica por tener pasaje: solo si la oración es literal.
+    imprecisa = verificador.verificar.Hallazgo("AVISO", "x", larga, "palabra imprecisa", "algunas")
+    assert lectura._explicar_literales(verificador.verificar.Resultado(hallazgos=[imprecisa]), {}, corpus, anclas) is False
+
+
+# ---------- Protección de oraciones aprobadas ----------
+
+MANIFIESTO = "El Manifiesto Ágil tiene cuatro aspectos."
+
+
+def test_una_correccion_no_puede_cambiar_una_oracion_aprobada_que_nadie_nombra(sesion):
+    mala = "El Manifiesto Ágil tiene cinco aspectos."
+    nueva = "El Manifiesto Ágil tiene cuatro valores."
+    falla = pasada({mala: {"tipo": "contenido de una fuente", "veredicto": "sin fuente", "pasaje": ""}})
+    material, consulta = generar(sesion, con_error(mala), falla,
+                                 cambios((mala, nueva), (MANIFIESTO, "El manifiesto se firmó en 2001.")), pasada())
+    contenido = lectura.archivos(sesion, 1)["contenido"].read_text(encoding="utf-8")
+    assert nueva in contenido and mala not in contenido          # la oración nombrada se corrigió
+    assert MANIFIESTO in contenido and "2001" not in contenido   # la aprobada que nadie nombró no se tocó
+    assert material["estado"] == "verificada"
+    assert material["cambios_rechazados"] == 1
+    assert any("rechazó 1 cambios a oraciones ya aprobadas" in a for a in material["avance"])
+    valide = next(s["lineas"] for s in material["entrega"]["secciones"] if s["clave"] == "valide")
+    assert any(l.startswith("El programa rechazó 1 cambios") for l in valide)
+    assert "No cambies una oración que ningún problema nombra" in consulta.llamadas[2]["prompt"]
+
+
+def test_una_oracion_aprobada_nombrada_por_el_revisor_si_se_corrige(sesion):
+    nueva = "Los pilares sostienen el trabajo del equipo."
+    material, _ = generar(sesion, LIMPIA, pasada(), revision(hallazgo(RELLENO)), correccion((RELLENO, nueva)),
+                          pasada(), revisor=False)
+    assert material["cambios_rechazados"] == 0
+    assert nueva in lectura.archivos(sesion, 1)["contenido"].read_text(encoding="utf-8")
+
+
+def test_con_un_punto_de_la_lista_la_correccion_puede_tocar_cualquier_oracion(sesion):
+    punto = ("¿Hay contenido de sesiones posteriores?", "Habla de los roles.")
+    nueva = "El Manifiesto Ágil tiene cuatro aspectos, todos de esta sesión."
+    material, _ = generar(sesion, LIMPIA, pasada(), revision(lista=[punto]), correccion((MANIFIESTO, nueva)),
+                          pasada(), revisor=False)
+    assert material["cambios_rechazados"] == 0
+    assert nueva in lectura.archivos(sesion, 1)["contenido"].read_text(encoding="utf-8")
+
+
+
+# ---------- Datos de la lectura: se exigen al generarla (PLAN.md §0, decisión 16) ----------
+
+def test_sin_bloques_la_lectura_no_empieza_y_la_pagina_dice_que_falta(sesion):
+    ficha = almacen.cargar(sesion, "sesion", 1)
+    ficha["campos"]["lectura.bloque.2"] = {"valor": "", "origen": "", "estado": ""}
+    almacen.guardar(sesion, "sesion", 1, ficha)          # la ficha sigue confirmada
+    with pytest.raises(lectura.NoSePuedeEmpezar, match="La lectura necesita de 2 a 4 bloques"):
+        asyncio.run(lectura.generar(sesion, "scrum", 1, consulta=consulta_en_secuencia()))
+    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    assert "Para generar la lectura, completa en la" in pagina and "La lectura necesita de 2 a 4 bloques." in pagina
+    r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura", follow_redirects=True)
+    assert "Falta en la ficha de la sesión: La lectura necesita de 2 a 4 bloques." in r.text
+    assert lectura.estado(sesion, 1).get("estado") is None   # no empezó: no gastó tokens

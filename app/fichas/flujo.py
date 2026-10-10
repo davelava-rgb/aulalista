@@ -8,6 +8,7 @@ Reglas de la skill (Paso 1 y Paso 2):
 """
 
 import hashlib
+import json
 import unicodedata
 from pathlib import Path
 
@@ -78,9 +79,18 @@ def _dice_literal(carpeta_curso: Path, archivo: str, texto: str) -> bool:
     return bool(renglones) and all(r in fuente for r in renglones)
 
 
+# Campos que la propuesta no llena: la identidad visual, que AulaLista resuelve con su paleta, y los modelos de
+# diseño, que elige el profesor. El docente y el contacto son datos de personas reales: solo se toman si la fuente
+# los dice tal cual; nunca se proponen.
+NO_SE_PROPONEN = ("visual.", "modelos.")
+SOLO_TAL_CUAL = ("portada.",)
+
+
 def campos_vacios(ficha: dict) -> list[tuple[str, str]]:
     vacios = []
     for campo, _ in plantillas.campos_de(ficha["tipo"]):
+        if campo.id.startswith(NO_SE_PROPONEN):
+            continue
         dato = ficha["campos"].get(campo.id) or {}
         if not dato.get("valor") and dato.get("estado") != almacen.CONFLICTO:
             vacios.append((campo.id, campo.etiqueta))
@@ -95,7 +105,7 @@ def pedido_de_propuesta(carpeta_curso: Path, tipo: str, sesion: int | None, fich
         "a texto: una línea por pasaje, con su texto y su ubicación.",
         "Fuentes que puedes usar (el nombre del .jsonl es el nombre de la fuente más «.jsonl»):",
         *[f"- {f}" for f in fuentes],
-        "Busca con Grep y lee con Read. No uses tu memoria. No inventes datos para llenar un vacío.",
+        "Busca con Grep y lee con Read. Lo que dice la fuente se toma de la fuente, no de tu memoria.",
         "",
         "Campos vacíos que debes intentar llenar (id: etiqueta):",
         *[f"- {campo_id}: {etiqueta}" for campo_id, etiqueta in campos_vacios(ficha)],
@@ -104,7 +114,14 @@ def pedido_de_propuesta(carpeta_curso: Path, tipo: str, sesion: int | None, fich
         "- Por cada dato devuelve id, valor, origen y literal. El origen es el nombre exacto de la fuente.",
         "- literal = true solo si la fuente dice el dato con esas mismas palabras. Si lo deduces, literal = false.",
         "- Si dos fuentes dicen cosas distintas sobre el mismo dato, no elijas: devuélvelo en «conflictos» con las dos versiones.",
-        "- Si ninguna fuente dice un dato y no se puede deducir con seguridad, no lo devuelvas.",
+        "- Propón todos los campos de la lista, aunque la fuente no los diga (PLAN.md §0, decisión 17). El profesor",
+        "  solo revisa y confirma. Lo que deduces o propones va con literal = false y queda marcado «(propuesto)».",
+        "- Deduce del contenido de la fuente lo que se pueda: las sesiones (una por capítulo o tema principal, en el",
+        "  orden de la fuente), el público y lo que ya sabe, el idioma, los temas y el vocabulario.",
+        "- Los datos del caso son ficticios: propón una empresa o institución ficticia que encaje con el tema, sus",
+        "  áreas, la moneda y el país, la fecha de referencia y las cifras fijas, coherentes entre sí.",
+        "- No inventes hechos del mundo real: ni cifras reales, ni estudios, ni personas reales. El docente y los",
+        "  datos de contacto solo van si la fuente los dice tal cual; si no, no los devuelvas.",
         "- En los campos de varias líneas, escribe un elemento por línea.",
         "- Escribe en el idioma del curso, en oraciones cortas y claras.",
     ]
@@ -146,12 +163,14 @@ def aplicar_propuesta(carpeta_curso: Path, ficha: dict, propuesta: dict) -> dict
     for dato in propuesta.get("campos", []):
         campo_id, texto = dato["id"], dato["valor"].strip()
         origen = dato["origen"].removesuffix(".jsonl").strip()
-        if campo_id not in validos or not texto or not vacio(campo_id):
+        if campo_id not in validos or campo_id.startswith(NO_SE_PROPONEN) or not texto or not vacio(campo_id):
             resumen["descartados"] += 1
             continue
         if origen in permitidas and dato["literal"] and _dice_literal(carpeta_curso, origen, texto):
             ficha["campos"][campo_id] = {"valor": texto, "origen": origen, "estado": ""}
             resumen["de_las_fuentes"] += 1
+        elif campo_id.startswith(SOLO_TAL_CUAL):
+            resumen["descartados"] += 1     # una persona real no se propone
         else:
             ficha["campos"][campo_id] = {
                 "valor": texto, "origen": origen if origen in permitidas else "deducido", "estado": almacen.PROPUESTO,
@@ -194,6 +213,76 @@ async def proponer(carpeta_curso: Path, curso: str, tipo: str, sesion: int | Non
     resumen = aplicar_propuesta(carpeta_curso, ficha, propuesta)
     almacen.guardar(carpeta_curso, tipo, sesion, ficha, "propuesta desde las fuentes")
     return resumen
+
+
+# ---------- Propuesta automática al abrir la ficha (PLAN.md §0, decisión 17) ----------
+
+def _ruta_propuesta(carpeta_curso: Path, tipo: str, sesion: int | None) -> Path:
+    return almacen.ruta_ficha(carpeta_curso, tipo, sesion).with_name(f"propuesta_{tipo}.json")
+
+
+def estado_propuesta(carpeta_curso: Path, tipo: str, sesion: int | None = None) -> dict:
+    """{estado: trabajando, lista o error; mensaje}. Vacío si nunca se propuso sola."""
+    ruta = _ruta_propuesta(carpeta_curso, tipo, sesion)
+    if not ruta.exists():
+        return {}
+    try:
+        return json.loads(ruta.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {"estado": "trabajando", "mensaje": ""}   # se está escribiendo justo ahora
+
+
+def _guardar_estado_propuesta(carpeta_curso: Path, tipo: str, sesion: int | None, **estado) -> None:
+    ruta = _ruta_propuesta(carpeta_curso, tipo, sesion)
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    # Se escribe aparte y se reemplaza de una vez: la página nunca lee el archivo a medio escribir.
+    temporal = ruta.with_suffix(".tmp")
+    temporal.write_text(json.dumps(estado, ensure_ascii=False), encoding="utf-8")
+    temporal.replace(ruta)
+
+
+def debe_proponer_sola(carpeta_curso: Path, tipo: str, sesion: int | None = None) -> bool:
+    """Una ficha sin confirmar, con campos vacíos y con fuentes convertidas se propone sola, una sola vez.
+    Sin fuentes, el profesor la llena a mano."""
+    if estado_propuesta(carpeta_curso, tipo, sesion):
+        return False
+    if not verificacion.fuentes_utilizables(carpeta_curso):
+        return False
+    if tipo == "sesion" and not almacen.cargar(carpeta_curso, "curso")["confirmada"]:
+        return False
+    ficha = almacen.cargar(carpeta_curso, tipo, sesion)
+    return not ficha["confirmada"] and bool(campos_vacios(ficha))
+
+
+def marcar_propuesta_en_curso(carpeta_curso: Path, tipo: str, sesion: int | None = None) -> None:
+    """Se marca antes de empezar, para que recargar la página no lance otra propuesta."""
+    _guardar_estado_propuesta(carpeta_curso, tipo, sesion, estado="trabajando", mensaje="")
+
+
+async def proponer_sola(carpeta_curso: Path, curso: str, tipo: str, sesion: int | None = None,
+                        consulta=agente.query) -> dict:
+    try:
+        resumen = await proponer(carpeta_curso, curso, tipo, sesion, consulta=consulta)
+    except Exception as error:   # la página muestra el motivo; el botón «Proponer» sigue disponible
+        _guardar_estado_propuesta(carpeta_curso, tipo, sesion, estado="error",
+                                  mensaje=f"No se pudo proponer la ficha desde las fuentes: {error}")
+        raise
+    _guardar_estado_propuesta(
+        carpeta_curso, tipo, sesion, estado="lista",
+        mensaje=(f"AulaLista llenó la ficha desde las fuentes. Datos tomados tal cual: {resumen['de_las_fuentes']}. "
+                 f"Propuestos: {resumen['propuestos']}. Con dos versiones: {resumen['conflictos']}. "
+                 "Revisa lo marcado «Propuesto» y confirma."))
+    return resumen
+
+
+def aceptar_propuestos(ficha: dict) -> int:
+    """«Aceptar lo propuesto»: los datos propuestos quedan como datos del profesor. Devuelve cuántos."""
+    aceptados = 0
+    for dato in ficha["campos"].values():
+        if dato and dato.get("estado") == almacen.PROPUESTO and dato.get("valor"):
+            dato["estado"] = ""
+            aceptados += 1
+    return aceptados
 
 
 # ---------- Revisión de los ejercicios ----------

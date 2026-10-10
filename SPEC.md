@@ -22,7 +22,7 @@ El software tiene un solo usuario: el profesor que lo construye. Es un sistema w
 |---|---|---|
 | Ficha del curso | Una vez por curso | Curso y sesiones, público, caso ficticio, datos fijos del caso, identidad visual, portada, herramientas, materiales, modelos |
 | Ficha de la sesión | Una vez por sesión | Alcance, bloques de la lectura, vocabulario, ejercicios del laboratorio, estaciones de la práctica, preguntas de la evaluación |
-| Fuentes del curso | Una vez por curso | Sílabos, normas, programas y materiales de sesiones anteriores. Formatos: PDF, Word, hojas de cálculo e imágenes |
+| Fuentes del curso | Una vez por curso | Sílabos, guías, libros, manuales, normas, programas y materiales de sesiones anteriores. Formatos: PDF, Word, hojas de cálculo e imágenes |
 | Logo y paleta | Una vez por curso | Archivo del logo y hasta tres colores |
 
 Las plantillas de las dos fichas están al final de `SKILL.md`. El software las usa sin cambiar los campos.
@@ -74,7 +74,7 @@ Estas reglas se convierten en pruebas automáticas del proyecto.
 - **Sin tiempos ni puntajes.** Ningún material muestra minutos, cronómetros, puntos, notas ni porcentajes.
 - **Lenguaje claro.** Una idea por oración. Sin jerga. Todo término inevitable se define la primera vez.
 - **Sin datos inventados.** El software no inventa cifras reales, estudios ni funciones de herramientas.
-- **Fuentes copiadas.** Toda afirmación sobre una norma sale de un pasaje copiado de una fuente del curso.
+- **Fuentes copiadas.** Toda afirmación sobre el contenido de una fuente sale de un pasaje copiado de una fuente del curso. Se puede decir con otras palabras si no cambia el sentido.
 - **"En este curso".** Toda regla propia del curso lleva escritas esas palabras.
 - **Datos ficticios y coherentes.** Los datos del caso cuadran entre sí y con los datos fijos de la ficha.
 - **Sin datos personales reales.** Las personas se nombran por su cargo o con un nombre ficticio.
@@ -117,7 +117,7 @@ La validación tiene tres partes. El programa revisa lo que se puede comprobar d
 
 **a. Programa verificador.** Recibe `verificacion.json` y los archivos del material. Separa el texto en oraciones y crea una tabla con una fila por oración. Revisa:
 
-- que cada cláusula citada exista en la norma;
+- que cada número de referencia citado (sección, cláusula, lámina o paso) exista en su fuente;
 - que cada cita entre comillas aparezca tal cual en una fuente;
 - que cada operación escrita dé el resultado escrito;
 - que cada dato fijo use el valor de la ficha;
@@ -142,7 +142,7 @@ Después de cada corrección se repite la validación. El ciclo termina cuando u
 | Material | Qué se valida |
 |---|---|
 | Lectura | Cada oración contra las fuentes del curso |
-| Diapositivas | Cada frase contra la lectura ya validada, más las notas del profesor. Una frase que cita una norma se compara otra vez con la norma |
+| Diapositivas | Cada frase contra la lectura ya validada, más las notas del profesor. Una frase que cita una fuente del curso se compara otra vez con esa fuente |
 | Laboratorio y archivos | Datos del caso, cálculos, nombres de archivo y ejecución de cada ejercicio |
 | Guía del profesor | Que cada respuesta sea la que sale al ejecutar el ejercicio |
 | Práctica interactiva | Que cada caso tenga una sola respuesta y que la página funcione |

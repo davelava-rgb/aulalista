@@ -37,7 +37,7 @@ Cada regla tiene una prueba automática. Si una regla no tiene prueba, la etapa 
 - Sin tiempos ni puntajes en ningún material.
 - Lenguaje claro: una idea por oración, sin jerga, término inevitable definido la primera vez.
 - Sin datos inventados: ni cifras reales, ni estudios, ni funciones de herramientas.
-- Toda afirmación sobre una norma sale de un pasaje copiado de una fuente del curso.
+- Toda afirmación sobre el contenido de una fuente sale de un pasaje copiado de una fuente del curso. Se puede decir con otras palabras si no cambia el sentido (`PLAN.md` §0, decisión 15).
 - Toda regla propia del curso lleva "en este curso".
 - Datos del caso ficticios y coherentes con los datos fijos de la ficha.
 - Sin datos personales reales.
@@ -50,7 +50,7 @@ Cada regla tiene una prueba automática. Si una regla no tiene prueba, la etapa 
 
 ## Validación
 
-- Ningún material se entrega con una FALLA abierta. Un AVISO se corrige o se explica.
+- Ningún material se entrega con una FALLA abierta. Un AVISO se corrige o se explica, salvo los de relleno y palabras imprecisas, que son informativos (`PLAN.md` §0, decisión 13).
 - Ninguna fila del Excel de verificación queda sin pasaje y veredicto. Ninguna queda "sin fuente".
 - El pasaje que copia la IA se comprueba con un programa contra la fuente.
 - El revisor independiente es una sesión nueva del SDK, sin acceso a borradores ni a la tabla. Máximo tres rondas.
