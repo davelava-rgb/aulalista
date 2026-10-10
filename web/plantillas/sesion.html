@@ -63,6 +63,10 @@
   </details>
   {% endif %}
 
+  {% if gasto_corrida %}
+  <p class="nota">Gasto desde la última vez que pulsaste Generar: {{ gasto_corrida.llamadas }} {{ "llamada" if gasto_corrida.llamadas == 1 else "llamadas" }}, {{ "%.4f"|format(gasto_corrida.costo_usd) }} USD estimados.{% if lectura.revisor %} Incluye el revisor independiente.{% endif %}</p>
+  {% endif %}
+
   {% if faltan_lectura %}
   <p><strong>Para generar la lectura, completa en la <a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">ficha de la sesión</a>:</strong></p>
   <ul>{% for f in faltan_lectura %}<li>{{ f }}</li>{% endfor %}</ul>
@@ -81,7 +85,7 @@
   {% endif %}
 </section>
 
-<p class="nota">Gasto de este curso: {{ gasto.llamadas }} llamadas, {{ "%.4f"|format(gasto.costo_usd) }} USD estimados.</p>
+<p class="nota">Gasto total de este curso, con todas las corridas: {{ gasto.llamadas }} llamadas, {{ "%.4f"|format(gasto.costo_usd) }} USD estimados.</p>
 {% endblock %}
 
 {% block scripts %}

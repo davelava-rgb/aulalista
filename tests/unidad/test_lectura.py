@@ -321,6 +321,25 @@ def test_cada_llamada_queda_en_el_registro_de_tokens(sesion):
     assert tokens.total("scrum")["llamadas"] >= 2
 
 
+def test_la_pagina_muestra_el_gasto_de_la_ultima_corrida_aunque_falle(sesion):
+    from app import tokens
+    generar(sesion, LIMPIA)                                   # una corrida anterior: no debe sumarse
+    antes = tokens.total("scrum")["llamadas"]
+    with pytest.raises(IndexError):                           # la revisión no tiene respuesta: la corrida se detiene
+        generar(sesion, LIMPIA, revisar=False)
+    assert lectura.estado(sesion, 1)["estado"] == "error"
+    gasto = lectura.gasto_de_la_corrida(sesion, "scrum", 1)
+    assert gasto["llamadas"] == tokens.total("scrum")["llamadas"] - antes == 1
+    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    assert "Gasto desde la última vez que pulsaste Generar: 1 llamada," in pagina
+    assert "Gasto total de este curso, con todas las corridas:" in pagina
+
+
+def test_sin_generar_no_muestra_gasto_de_corrida(sesion):
+    assert lectura.gasto_de_la_corrida(sesion, "scrum", 1) is None
+    assert "Gasto desde la última vez" not in cliente.get("/cursos/scrum/sesiones/1").text
+
+
 def test_el_word_real_cuenta_sus_paginas_con_word(sesion):
     material, _ = generar(sesion, LIMPIA, contar_paginas=None)
     assert material["estado"] == "verificada"

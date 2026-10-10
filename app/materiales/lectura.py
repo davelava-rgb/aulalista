@@ -252,7 +252,7 @@ async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.
     rutas = archivos(carpeta_curso, sesion)
     rutas["contenido"].parent.mkdir(parents=True, exist_ok=True)
     _actualizar(carpeta_curso, sesion, estado="trabajando", previo="", avance=[], error="", desactualizado=False,
-                entrega={}, aprobada="", revisor={})
+                entrega={}, aprobada="", revisor={}, corrida_desde=tokens.lineas(curso))
     try:
         return await _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas)
     except asyncio.CancelledError:
@@ -261,6 +261,15 @@ async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.
     except Exception as error:
         _actualizar(carpeta_curso, sesion, estado="error", error=str(error))
         raise
+
+
+def gasto_de_la_corrida(carpeta_curso: Path, curso: str, sesion: int) -> dict | None:
+    """Lo que gastó la lectura desde que se pulsó Generar por última vez, aunque se haya detenido o
+    terminado con error. Incluye el revisor independiente si se pidió después. None si nunca se generó."""
+    desde = _estado(carpeta_curso, sesion).get("corrida_desde")
+    if desde is None:
+        return None
+    return tokens.total(curso, sesion=f"S{sesion}", material=CLAVE, desde_linea=desde)
 
 
 def marcar_detenida(carpeta_curso: Path, sesion: int) -> bool:

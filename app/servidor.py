@@ -332,6 +332,7 @@ def ver_sesion(request: Request, curso: str, sesion: int, mensaje: str = ""):
         "faltan_lectura": almacen.faltantes_para(carpeta, sesion, lectura.CLAVE)
         if almacen.puede_empezar_material(carpeta, sesion) else [],
         "lectura": lectura.estado(carpeta, sesion),
+        "gasto_corrida": lectura.gasto_de_la_corrida(carpeta, curso, sesion),
         "gasto": tokens.total(curso),
     })
 
