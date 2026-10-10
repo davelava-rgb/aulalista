@@ -312,3 +312,22 @@ def test_si_la_skill_cambia_el_pedido_del_revisor_el_programa_se_detiene(sesion,
     monkeypatch.setattr(revisor, "pedido_de_la_skill", lambda: "Otro pedido.")
     with pytest.raises(KeyError, match="decisión 12"):
         generar(sesion, LIMPIA, pasada())
+
+
+def test_la_carpeta_del_revisor_se_libera_aunque_windows_no_deje_borrarla(sesion, tmp_path, monkeypatch):
+    from app.validacion import revisor as modulo
+    carpeta = tmp_path / "revisor" / "ronda_1"
+    (carpeta / "fuentes").mkdir(parents=True)
+    (carpeta / "fuentes" / "viejo.txt").write_text("de la generación anterior", encoding="utf-8")
+    oraciones = [{"n": 1, "huella": "h1", "texto": "Scrum tiene tres pilares."}]
+    # Caso normal: la carpeta vieja se mueve, se borra y la nueva queda con el mismo nombre.
+    usada = modulo.preparar_carpeta(carpeta, sesion, 1, oraciones)
+    assert usada == carpeta and not (carpeta / "fuentes" / "viejo.txt").exists()
+    assert list(carpeta.parent.glob("ronda_1.borrar-*")) == []
+    # Windows no deja mover la carpeta (la tiene abierta otro programa): se usa una carpeta nueva.
+    def sin_permiso(self, destino):
+        raise PermissionError(5, "Acceso denegado")
+    monkeypatch.setattr(type(carpeta), "rename", sin_permiso)
+    usada = modulo.preparar_carpeta(carpeta, sesion, 1, oraciones)
+    assert usada != carpeta and usada.name.startswith("ronda_1-")
+    assert (usada / "material.txt").read_text(encoding="utf-8").startswith("1. Scrum tiene tres pilares.")

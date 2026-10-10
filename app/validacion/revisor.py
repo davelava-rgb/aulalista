@@ -13,6 +13,7 @@
 
 import re
 import shutil
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -97,12 +98,31 @@ def definiciones_de_defectos() -> str:
 
 # ---------- Carpeta de trabajo ----------
 
+def _carpeta_libre(carpeta: Path) -> Path:
+    """Una carpeta vacía para el revisor. En Windows, borrar una carpeta y crearla de nuevo con el mismo
+    nombre puede fallar con «Acceso denegado»: OneDrive, el antivirus o un proceso anterior la tienen abierta
+    y el borrado queda pendiente. Por eso la carpeta vieja se mueve a otro nombre antes de borrarla, y si
+    Windows no deja moverla, el revisor usa una carpeta nueva con otro nombre."""
+    for vieja in carpeta.parent.glob(f"{carpeta.name}.borrar-*"):
+        shutil.rmtree(vieja, ignore_errors=True)       # restos de generaciones anteriores
+    if not carpeta.exists():
+        return carpeta
+    marca = time.strftime("%Y%m%d-%H%M%S")
+    vieja = carpeta.with_name(f"{carpeta.name}.borrar-{marca}")
+    try:
+        carpeta.rename(vieja)
+    except OSError:
+        return carpeta.with_name(f"{carpeta.name}-{marca}")
+    shutil.rmtree(vieja, ignore_errors=True)
+    return carpeta
+
+
 def preparar_carpeta(carpeta: Path, carpeta_curso: Path, sesion: int, oraciones: list[dict],
                      bloques: list[pasada2.Bloque] | None = None) -> Path:
-    """Crea la carpeta del revisor desde cero con solo el material final, las fuentes y las fichas."""
-    if carpeta.exists():
-        shutil.rmtree(carpeta)
-    (carpeta / CARPETA_FUENTES).mkdir(parents=True)
+    """Crea una carpeta vacía para el revisor con solo el material final, las fuentes y las fichas.
+    Devuelve la carpeta que usó: puede tener otro nombre si Windows no dejó liberar la anterior."""
+    carpeta = _carpeta_libre(carpeta)
+    (carpeta / CARPETA_FUENTES).mkdir(parents=True, exist_ok=True)
     (carpeta / MATERIAL).write_text(texto_por_bloques(oraciones, bloques or []), encoding="utf-8")
     shutil.copyfile(almacen.ruta_ficha(carpeta_curso, "curso", extension=".md"), carpeta / ARCHIVO_FICHA_CURSO)
     shutil.copyfile(almacen.ruta_ficha(carpeta_curso, "sesion", sesion, ".md"), carpeta / ARCHIVO_FICHA_SESION)
@@ -304,7 +324,7 @@ async def ejecutar(oraciones: list[dict], *, ronda: int, carpeta: Path, carpeta_
     material: la clave para el registro de tokens; nombre_material: el nombre para la lista de verificación."""
     bloques = bloques or []
     campos = pasada2.campos_de(nombre_material)
-    preparar_carpeta(carpeta, carpeta_curso, sesion, oraciones, bloques)
+    carpeta = preparar_carpeta(carpeta, carpeta_curso, sesion, oraciones, bloques)
     corpus = Corpus.del_curso(carpeta_curso, sesion)
     servidor, _ = herramientas.servidor_del_revisor(carpeta, corpus)
     respuesta = await agente.consultar(
