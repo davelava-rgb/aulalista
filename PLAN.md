@@ -363,7 +363,7 @@ Además:
 | La IA inventa un pasaje | El programa comprueba que el pasaje exista tal cual |
 | Controlar Office desde Python falla o deja programas abiertos | Prueba de apertura y cierre en la etapa 2 |
 | El ciclo no converge | Tres correcciones del verificador, una de la revisión, y lo abierto queda pendiente |
-| El costo por material es alto | En la etapa 5d se reporta el costo real de una lectura antes de seguir |
+| El costo por material es alto | En la etapa 5d se reporta el costo real de una lectura antes de seguir. Reportado al cerrar la 5d: la lectura de la sesión 1 de Scrum, con 10 páginas de material de referencia, costó 0,71 USD (redacción 0,63 y revisión del contenido 0,08) |
 | El verificador marca errores falsos | Control limpio y revisión de los avisos del modelo |
 | El Agent SDK cambia | Versión fija en `requirements.txt`. Todo el uso del SDK está en `agente.py` |
 | La ejecución con Claude no es igual a la del alumno | La guía del profesor lo dice en "diferencias con otra herramienta" |
