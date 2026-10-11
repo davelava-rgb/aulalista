@@ -9,6 +9,7 @@ Reglas de la skill (Paso 1 y Paso 2):
 
 import hashlib
 import json
+import time
 import unicodedata
 from pathlib import Path
 
@@ -84,6 +85,7 @@ def _dice_literal(carpeta_curso: Path, archivo: str, texto: str) -> bool:
 # los dice tal cual; nunca se proponen.
 NO_SE_PROPONEN = ("visual.", "modelos.", "sesion.exclusiones")   # las exclusiones las decide el profesor (decisión 23)
 SOLO_TAL_CUAL = ("portada.",)
+_INTENTOS_DE_REEMPLAZO = 40   # 40 × 0,05 s: unos dos segundos
 
 
 def campos_vacios(ficha: dict) -> list[tuple[str, str]]:
@@ -241,7 +243,15 @@ def _guardar_estado_propuesta(carpeta_curso: Path, tipo: str, sesion: int | None
     # Se escribe aparte y se reemplaza de una vez: la página nunca lee el archivo a medio escribir.
     temporal = ruta.with_suffix(".tmp")
     temporal.write_text(json.dumps(estado, ensure_ascii=False), encoding="utf-8")
-    temporal.replace(ruta)
+    # En Windows el reemplazo falla mientras la página lee el archivo. Se reintenta unos instantes.
+    for intento in range(_INTENTOS_DE_REEMPLAZO):
+        try:
+            temporal.replace(ruta)
+            return
+        except PermissionError:
+            if intento == _INTENTOS_DE_REEMPLAZO - 1:
+                raise
+            time.sleep(0.05)
 
 
 def debe_proponer_sola(carpeta_curso: Path, tipo: str, sesion: int | None = None) -> bool:
