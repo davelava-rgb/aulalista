@@ -11,6 +11,10 @@ Flujo (el mismo de la lectura, PLAN.md §0, decisión 22):
 6. Segunda pasada: la revisión del contenido compara cada frase con la lectura aprobada y, si cita una fuente
    del curso, con esa fuente (SPEC §7). Una sola corrección y la confirmación de lo que cambió.
 7. Entrega en el formato del SPEC §8. El profesor la aprueba desde la página.
+
+Sin lectura en la sesión (PLAN.md §0, decisión 26), los pasos 1, 2, 3 y 6 cambian: las diapositivas salen del material
+de referencia y de las fichas, el programa comprueba que las diapositivas de cada bloque vayan juntas y la revisión las
+compara con las fuentes y las fichas, como a la lectura.
 """
 
 import asyncio
@@ -98,6 +102,12 @@ def marcar_detenida(carpeta_curso: Path, sesion: int) -> bool:
     return comun.marcar_detenida(carpeta_curso, sesion, CLAVE)
 
 
+def usa_lectura(carpeta_curso: Path, sesion: int) -> bool:
+    """Si la sesión produce la lectura, las diapositivas salen de ella. Si no, de la referencia y de las fichas
+    (PLAN.md §0, decisión 26)."""
+    return lectura.CLAVE in almacen.materiales_de_la_sesion(almacen.cargar(carpeta_curso, "sesion", sesion))
+
+
 def _lectura_lista(carpeta_curso: Path, sesion: int) -> list[str]:
     material = lectura.estado(carpeta_curso, sesion)
     if material.get("estado") != "aprobada":
@@ -111,8 +121,10 @@ def _lectura_lista(carpeta_curso: Path, sesion: int) -> list[str]:
 
 def faltan(carpeta_curso: Path, sesion: int) -> dict[str, list[str]]:
     """Lo que falta para generar las diapositivas: en «ficha», lo que se completa en la ficha de la sesión;
-    en «otros», la lectura aprobada (SKILL.md, Paso 4: cada material usa el anterior como fuente)."""
-    return {"ficha": almacen.faltantes_para(carpeta_curso, sesion, CLAVE), "otros": _lectura_lista(carpeta_curso, sesion)}
+    en «otros», la lectura aprobada si la sesión la produce (SKILL.md, Paso 4, y PLAN.md §0, decisión 26)."""
+    ficha = almacen.faltantes_para(carpeta_curso, sesion, CLAVE)
+    otros = _lectura_lista(carpeta_curso, sesion) if not ficha and usa_lectura(carpeta_curso, sesion) else []
+    return {"ficha": ficha, "otros": otros}
 
 
 def lectura_aprobada(carpeta_curso: Path, sesion: int) -> Lectura:
@@ -152,89 +164,153 @@ def _texto_de_la_lectura(contenido: Lectura) -> str:
 
 # ---------- Pedidos al agente ----------
 
-def _contexto(carpeta_curso: Path, sesion: int, contenido_lectura: Lectura) -> str:
+def _contexto(carpeta_curso: Path, sesion: int, contenido_lectura: Lectura | None) -> str:
     ficha_curso = almacen.ruta_ficha(carpeta_curso, "curso", extension=".md").read_text(encoding="utf-8")
     ficha_sesion = almacen.ruta_ficha(carpeta_curso, "sesion", sesion, ".md").read_text(encoding="utf-8")
     fuentes = verificacion.fuentes_utilizables(carpeta_curso)
-    return "\n".join([
+    partes = [
         "REGLAS DE LA SKILL (son obligatorias):",
         skill.secciones(*SECCIONES_DE_LA_SKILL),
         "",
         "FICHA DEL CURSO (confirmada):", ficha_curso,
         "FICHA DE LA SESIÓN (confirmada):", ficha_sesion,
-        "LECTURA APROBADA POR EL PROFESOR. Es la fuente de las diapositivas, parte por parte y en este orden:",
-        _texto_de_la_lectura(contenido_lectura),
-        "",
-        "FUENTES DEL CURSO (archivos .jsonl de esta carpeta, un pasaje por línea con su ubicación). Úsalas solo para",
-        "copiar el pasaje de una frase que cita una fuente:",
-        *([f"- {f}" for f in fuentes] or ["- (ninguna)"]),
+    ]
+    if contenido_lectura is not None:
+        return "\n".join(partes + [
+            "LECTURA APROBADA POR EL PROFESOR. Es la fuente de las diapositivas, parte por parte y en este orden:",
+            _texto_de_la_lectura(contenido_lectura),
+            "",
+            "FUENTES DEL CURSO (archivos .jsonl de esta carpeta, un pasaje por línea con su ubicación). Úsalas solo para",
+            "copiar el pasaje de una frase que cita una fuente:",
+            *([f"- {f}" for f in fuentes] or ["- (ninguna)"]),
+        ])
+    tramos, excluir = lectura._referencia(carpeta_curso, sesion)
+    referencia_ = [
+        "", "MATERIAL DE REFERENCIA DE LA SESIÓN (en los .jsonl, cada pasaje trae su «pagina»):",
+        *[f"- {t.describir()}" for t in tramos],
+        "EXCLUSIONES (no las uses):",
+        *([f"- {e}" for e in excluir] or ["- Ninguna: usa todo el material de referencia."]),
+    ] if tramos else []
+    return "\n".join(partes + [
+        "ESTA SESIÓN NO TIENE LECTURA. Las diapositivas salen del material de referencia y de las fichas.",
+        "FUENTES DEL CURSO que puedes citar (archivos .jsonl de esta carpeta, un pasaje por línea con su ubicación):",
+        *([f"- {f}" for f in fuentes] or ["- (ninguna: no cites fuentes)"]),
+        *referencia_,
     ])
 
 
-FORMATO = f"""
+FORMATO_COMUN = f"""
 CÓMO ENTREGAR LAS DIAPOSITIVAS
 - Devuelve solo los datos del esquema. Un programa crea el PowerPoint 16:9 con el diseño común: la portada con
   el curso y la sesión, los títulos «Idea central», «Aplícalo así» y «Cuidado con», los recuadros y las notas.
 - En total van de {LIMITES['diapositivas_min']} a {LIMITES['diapositivas_max']} diapositivas. El programa pone {FIJAS} fijas
   (portada, idea central, «Aplícalo así» y «Cuidado con»), así que «diapositivas» trae de
   {LIMITES['diapositivas_min'] - FIJAS} a {LIMITES['diapositivas_max'] - FIJAS}.
-- diapositivas: una por concepto y una idea por diapositiva, en el orden de la lectura. En «bloque» copia tal cual el
-  subtítulo del bloque de la lectura al que pertenece. Cada bloque de la lectura tiene al menos una diapositiva.
+{{orden}}
 - tipo y lo que lleva cada uno (deja vacío lo que el tipo no usa y «tabla» en null si no es una tabla):
   - «frases»: de 1 a 5 frases cortas.
   - «pasos»: pasos numerados, uno por frase.
   - «columnas»: dos columnas comparativas, cada una con su título y sus frases.
   - «tabla»: una tabla de 4 columnas y 6 filas como máximo; en «frases», una línea de introducción o nada.
-  - «ejemplo»: un ejemplo de la lectura, en un recuadro legible a distancia.
+  - «ejemplo»: un ejemplo en un recuadro legible a distancia.
 - Frases cortas, no párrafos: una idea por frase, que se lea de un vistazo.
-- Los ejemplos son los mismos de la lectura. Si uno no cabe, divídelo en dos diapositivas o muestra una parte y
-  remite a la lectura en las notas.
-- No agregues contenido que la lectura no tenga. Las diapositivas resumen la lectura; no la amplían.
+{{contenido}}
 - notas: en todas, también en la portada, la idea central, «Aplícalo así» y «Cuidado con». En «destacar», qué
-  destacar; en «preguntar», qué preguntar al grupo. Las notas tampoco agregan contenido que la lectura no tenga.
-- idea_central.frases: de 1 a 3 frases que resumen la idea central de la lectura.
-- aplicalo.plantilla: la técnica o plantilla de «Aplícalo así» de la lectura, una línea por elemento.
-  aplicalo.frases: de 0 a 2 frases de introducción.
-- cuidado.riesgos: los riesgos de «Cuidado con» de la lectura, de 1 a 3.
+  destacar; en «preguntar», qué preguntar al grupo. Las notas tampoco agregan contenido sin fuente.
+{{cierre}}
 - Sin diapositivas de relleno como «Preguntas» o «Gracias».
-- pasajes: para cada frase que dice algo del tema, «oracion» con la frase, «fuente» «{FUENTE_LECTURA}», en «ubicacion»
-  la parte de la lectura (por ejemplo, el subtítulo del bloque) y en «texto» la oración de la lectura copiada tal cual.
-  Si una frase cita una fuente del curso, agrega también el pasaje copiado de esa fuente con su ubicación.
-- decisiones: una entrada por punto, con «texto» y «tipo»:
-  - «sin fuente»: afirmas algo del tema que la lectura no dice. Copia la frase. El profesor decide si queda.
-  - «decisión»: te apartas de la lectura en algo que cambia lo que ve el alumno: omites un tema, cambias el orden
-    o divides un ejemplo.
-  - «nota»: solo describes lo que hiciste sin apartarte de la lectura.
+{{pasajes}}
 - Usa los nombres del vocabulario de la sesión tal cual y en su orden. No uses sus variantes.
 - Usa comillas solo para copiar texto tal cual de una fuente.
-- Si una regla es propia del curso, escribe «en este curso», igual que la lectura.
+- Si una regla es propia del curso, escribe «en este curso».
 """
 
-REGLAS_PROPIAS = """EN LAS DIAPOSITIVAS
+CON_LECTURA = {
+    "orden": ("- diapositivas: una por concepto y una idea por diapositiva, en el orden de la lectura. En «bloque» copia\n"
+              "  tal cual el subtítulo del bloque de la lectura al que pertenece. Cada bloque de la lectura tiene al menos\n"
+              "  una diapositiva."),
+    "contenido": ("- Los ejemplos son los mismos de la lectura. Si uno no cabe, divídelo en dos diapositivas o muestra una\n"
+                  "  parte y remite a la lectura en las notas.\n"
+                  "- No agregues contenido que la lectura no tenga. Las diapositivas resumen la lectura; no la amplían."),
+    "cierre": ("- idea_central.frases: de 1 a 3 frases que resumen la idea central de la lectura.\n"
+               "- aplicalo.plantilla: la técnica o plantilla de «Aplícalo así» de la lectura, una línea por elemento.\n"
+               "  aplicalo.frases: de 0 a 2 frases de introducción.\n"
+               "- cuidado.riesgos: los riesgos de «Cuidado con» de la lectura, de 1 a 3."),
+    "pasajes": (f"- pasajes: para cada frase que dice algo del tema, «oracion» con la frase, «fuente» «{FUENTE_LECTURA}», en\n"
+                "  «ubicacion» la parte de la lectura (por ejemplo, el subtítulo del bloque) y en «texto» la oración de la\n"
+                "  lectura copiada tal cual. Si una frase cita una fuente del curso, agrega también el pasaje copiado de esa\n"
+                "  fuente con su ubicación.\n"
+                "- decisiones: una entrada por punto, con «texto» y «tipo»:\n"
+                "  - «sin fuente»: afirmas algo del tema que la lectura no dice. Copia la frase. El profesor decide si queda.\n"
+                "  - «decisión»: te apartas de la lectura en algo que cambia lo que ve el alumno: omites un tema, cambias el\n"
+                "    orden o divides un ejemplo.\n"
+                "  - «nota»: solo describes lo que hiciste sin apartarte de la lectura."),
+}
+SIN_LECTURA = {
+    "orden": ("- diapositivas: una por concepto y una idea por diapositiva. Si la ficha de la sesión trae bloques de temas,\n"
+              "  síguelos en su orden y escribe en «bloque» el nombre de cada uno. Si no, agrupa los temas del material de\n"
+              "  referencia en bloques, en el orden de la referencia, y dales un nombre corto. Las diapositivas de un mismo\n"
+              "  bloque van juntas."),
+    "contenido": ("- Cubre los temas del material de referencia, menos las exclusiones, o los temas de la ficha si no hay\n"
+                  "  referencia. Usa el ejemplo y el caso de las fichas. Si un ejemplo no cabe, divídelo en dos diapositivas.\n"
+                  "- Para afirmar algo de una fuente, apóyate en su pasaje: di lo mismo, con sus palabras o con otras más claras."),
+    "cierre": ("- idea_central.frases: de 1 a 3 frases con la idea central de la sesión.\n"
+               "- aplicalo.plantilla: el contenido de «Aplícalo así» de la ficha de la sesión, como técnica o plantilla lista\n"
+               "  para usar, una línea por elemento. aplicalo.frases: de 0 a 2 frases de introducción.\n"
+               "- cuidado.riesgos: los riesgos de «Cuidado con» de la ficha de la sesión, de 1 a 3."),
+    "pasajes": ("- pasajes: los pasajes de las fuentes que usaste, para que la revisión los compare: «oracion» de las\n"
+                "  diapositivas que sostiene, la fuente, la ubicación y en «texto» el pasaje copiado de la fuente, de 40\n"
+                "  palabras como máximo.\n"
+                "- decisiones: una entrada por punto, con «texto» y «tipo»:\n"
+                "  - «sin fuente»: afirmas algo del tema que no está en ninguna fuente ni ficha. Copia la frase.\n"
+                "  - «decisión»: te apartas de las fichas o de las fuentes, o eliges algo que cambia lo que ve el alumno.\n"
+                "  - «nota»: solo describes lo que hiciste sin apartarte de las fichas ni de las fuentes."),
+}
+
+
+def instrucciones_de_formato(con_lectura: bool) -> str:
+    return FORMATO_COMUN.format(**(CON_LECTURA if con_lectura else SIN_LECTURA))
+
+
+REGLAS_PROPIAS_CON_LECTURA = """EN LAS DIAPOSITIVAS
 - La fuente de las diapositivas es la lectura aprobada. Si una frase dice algo que la lectura no dice, elimínala o
   reescríbela con lo que dice la lectura.
 - Las diapositivas no agregan datos del caso: deja «datos_nuevos» vacío.
 - Un texto que no cabe en su recuadro (FALLA · desborde) se arregla con frases más cortas, con menos frases o
   dividiendo la diapositiva en dos, sin pasar del total de diapositivas.
 """
+REGLAS_PROPIAS_SIN_LECTURA = """EN LAS DIAPOSITIVAS
+- Esta sesión no tiene lectura: las diapositivas salen del material de referencia y de las fichas.
+- Un texto que no cabe en su recuadro (FALLA · desborde) se arregla con frases más cortas, con menos frases o
+  dividiendo la diapositiva en dos, sin pasar del total de diapositivas.
+"""
 
 
-def pedido_de_redaccion(carpeta_curso: Path, sesion: int, contenido_lectura: Lectura) -> str:
+def pedido_de_redaccion(carpeta_curso: Path, sesion: int, contenido_lectura: Lectura | None) -> str:
+    if contenido_lectura is not None:
+        tarea = ["TAREA: prepara las diapositivas de la sesión a partir de la lectura aprobada. Actúa como diseñador",
+                 "instruccional y diseñador de materiales. Resume cada parte de la lectura en frases cortas, en su orden."]
+    else:
+        tarea = ["TAREA: prepara las diapositivas de la sesión a partir del material de referencia y de las fichas.",
+                 "Actúa como diseñador instruccional y diseñador de materiales.",
+                 "Antes de redactar, busca con Grep en las fuentes y lee con Read los pasajes que vas a usar.",
+                 "Si la sesión tiene material de referencia, lee sus páginas y no uses las exclusiones.",
+                 "No afirmes sobre el contenido de una fuente nada que no esté en un pasaje copiado."]
     return "\n".join([
         _contexto(carpeta_curso, sesion, contenido_lectura),
-        FORMATO,
-        "TAREA: prepara las diapositivas de la sesión a partir de la lectura aprobada. Actúa como diseñador",
-        "instruccional y diseñador de materiales. Resume cada parte de la lectura en frases cortas, en su orden.",
+        instrucciones_de_formato(contenido_lectura is not None),
+        *tarea,
         "Antes de entregar, revisa cada diapositiva: qué puede hacer el alumno con ella y qué frase tiene dos lecturas.",
     ])
 
 
 def _pedido_con_problemas(carpeta_curso, sesion, contenido_lectura, datos, problemas, como_entregar) -> str:
+    con_lectura = contenido_lectura is not None
     return "\n".join([
         _contexto(carpeta_curso, sesion, contenido_lectura),
-        FORMATO,
+        instrucciones_de_formato(con_lectura),
         comun.REGLAS_DE_CORRECCION,
-        REGLAS_PROPIAS,
+        REGLAS_PROPIAS_CON_LECTURA if con_lectura else REGLAS_PROPIAS_SIN_LECTURA,
         *como_entregar,
         "",
         "DIAPOSITIVAS ACTUALES:",
@@ -260,13 +336,14 @@ def pedido_de_correccion(carpeta_curso, sesion, contenido_lectura, datos: dict, 
                                  ["Devuelve las diapositivas completas con el mismo esquema."])
 
 
-# ---------- Estructura: cantidad y orden de la lectura ----------
+# ---------- Estructura: cantidad y orden ----------
 
 def _clave_de_bloque(texto: str) -> str:
     return re.sub(r"[^\w ]", "", normal(texto)).strip()
 
 
-def _validar(datos: dict, contenido_lectura: Lectura) -> tuple[Diapositivas | None, list[str]]:
+def _validar(datos: dict, contenido_lectura: Lectura | None) -> tuple[Diapositivas | None, list[str]]:
+    """Cantidad de diapositivas y orden: el de los bloques de la lectura o, sin lectura, cada bloque junto."""
     try:
         contenido = Diapositivas.model_validate(datos)
     except ValidationError as error:
@@ -276,6 +353,28 @@ def _validar(datos: dict, contenido_lectura: Lectura) -> tuple[Diapositivas | No
     if not minimo <= contenido.total <= maximo:
         problemas.append(f"FALLA · estructura · diapositivas: hay {contenido.total} con las {FIJAS} fijas; "
                          f"deben ser de {minimo} a {maximo}.")
+    if contenido_lectura is None:
+        problemas += _bloques_juntos(contenido)
+    else:
+        problemas += _orden_de_la_lectura(contenido, contenido_lectura)
+    return (None if problemas else contenido), problemas
+
+
+def _bloques_juntos(contenido: Diapositivas) -> list[str]:
+    """Sin lectura (decisión 26): las diapositivas de un bloque no se separan."""
+    problemas, vistos, actual = [], set(), None
+    for numero, d in enumerate(contenido.diapositivas, start=3):
+        clave = _clave_de_bloque(d.bloque)
+        if clave != actual and clave in vistos:
+            problemas.append(f"FALLA · estructura · diapositiva {numero} («{d.titulo}»): las diapositivas del bloque "
+                             f"«{d.bloque}» no van juntas.")
+        vistos.add(clave)
+        actual = clave
+    return problemas
+
+
+def _orden_de_la_lectura(contenido: Diapositivas, contenido_lectura: Lectura) -> list[str]:
+    problemas = []
     orden = [_clave_de_bloque(b.subtitulo) for b in contenido_lectura.bloques]
     anterior = 0
     for numero, d in enumerate(contenido.diapositivas, start=3):
@@ -292,7 +391,7 @@ def _validar(datos: dict, contenido_lectura: Lectura) -> tuple[Diapositivas | No
     for b in contenido_lectura.bloques:
         if _clave_de_bloque(b.subtitulo) not in usados:
             problemas.append(f"FALLA · estructura · el bloque «{b.subtitulo}» de la lectura no tiene diapositivas.")
-    return (None if problemas else contenido), problemas
+    return problemas
 
 
 def titulos(contenido: Diapositivas) -> list[str]:
@@ -325,7 +424,9 @@ class _Trabajo:
         self.carpeta_sesion = almacen.carpeta_sesion(carpeta_curso, sesion)
         self.identidad = estilo.desde_ficha(carpeta_curso)
         self.portada = replace(lectura._portada(carpeta_curso, sesion), material=MATERIAL)
-        self.lectura = lectura_aprobada(carpeta_curso, sesion)
+        # Sin lectura en la sesión, la base son el material de referencia y las fichas (decisión 26).
+        self.lectura = lectura_aprobada(carpeta_curso, sesion) if usa_lectura(carpeta_curso, sesion) else None
+        self.datos_agregados: list[str] = []
         self.comun = {"curso": curso, "sesion": f"S{sesion}", "material": CLAVE, "cwd": carpeta_curso / "fuentes_texto",
                       "herramientas": ("Read", "Grep", "Glob"), "consulta": consulta}
         self.datos: dict = {}
@@ -343,7 +444,8 @@ class _Trabajo:
         _avance(self.carpeta_curso, self.sesion, texto)
 
     def corpus(self) -> Corpus:
-        return Corpus.del_curso(self.carpeta_curso, self.sesion, extras=[fuente_de_la_lectura(self.lectura)])
+        extras = [fuente_de_la_lectura(self.lectura)] if self.lectura is not None else []
+        return Corpus.del_curso(self.carpeta_curso, self.sesion, extras=extras)
 
     async def verificar(self) -> bool:
         """Genera el PowerPoint, lo mide y corre el verificador. Corrige sus fallas hasta VUELTAS_DEL_VERIFICADOR
@@ -385,7 +487,8 @@ class _Trabajo:
         resultado = await revision.ejecutar(
             bloques, corpus=self.corpus(), anclas=[p.model_dump() for p in self.contenido.pasajes],
             curso=self.curso, sesion=self.sesion, material=CLAVE, nombre_material=MATERIAL, etapa=etapa,
-            indicaciones=INDICACIONES_DE_REVISION, consulta=self.consulta)
+            indicaciones=INDICACIONES_DE_REVISION if self.lectura is not None else INDICACIONES_SIN_LECTURA,
+            consulta=self.consulta)
         self.descartados += resultado.descartados
         return resultado
 
@@ -408,8 +511,16 @@ class _Trabajo:
         for e in respuesta["explicaciones"]:
             self.explicaciones[verificador.clave_de_hallazgo(e["regla"], e["oracion"])] = e["explicacion"]
         comun.guardar_json(self.rutas["explicaciones"], self.explicaciones)
-        if respuesta.get("datos_nuevos"):
+        if respuesta.get("datos_nuevos") and self.lectura is not None:
             self.avance("La corrección propuso datos nuevos del caso. No se agregan: las diapositivas salen de la lectura.")
+        elif respuesta.get("datos_nuevos"):
+            # Sin lectura, las diapositivas son el primer material: un dato del caso que falta va a la ficha del curso.
+            nuevos = almacen.agregar_datos_fijos(self.carpeta_curso, respuesta["datos_nuevos"], f"Diapositivas S{self.sesion}")
+            if nuevos:
+                self.datos_agregados += nuevos
+                for numero in almacen.sesiones_confirmadas(self.carpeta_curso):
+                    verificacion.escribir(self.carpeta_curso, numero)
+                self.avance(f"Datos nuevos del caso agregados a la ficha del curso: {len(nuevos)}.")
 
 
 INDICACIONES_DE_REVISION = (
@@ -418,6 +529,12 @@ INDICACIONES_DE_REVISION = (
     "afirmación sobre el tema que la lectura no dice, aunque esté en otra fuente del curso: las diapositivas no "
     "agregan contenido. Una frase que cita una fuente del curso se compara también con esa fuente. Las notas del "
     "profesor («Qué destacar», «Qué preguntar al grupo») se revisan igual; una pregunta al grupo no es una afirmación.")
+
+
+INDICACIONES_SIN_LECTURA = (
+    "Esta sesión no tiene lectura: las diapositivas salen del material de referencia y de las fichas. Una frase corta "
+    "que resume una fuente no es un error. Las notas del profesor («Qué destacar», «Qué preguntar al grupo») se revisan "
+    "igual; una pregunta al grupo no es una afirmación.")
 
 
 def bloques_de(contenido: Diapositivas) -> list[pasada2.Bloque]:
@@ -470,7 +587,7 @@ async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.
     rutas["contenido"].parent.mkdir(parents=True, exist_ok=True)
     _actualizar(carpeta_curso, sesion, estado="trabajando", previo="", avance=[], error="", desactualizado=False,
                 entrega={}, aprobada="", revisor={}, corrida_desde=tokens.lineas(curso),
-                lectura_fecha=lectura.estado(carpeta_curso, sesion).get("fecha", ""))
+                lectura_fecha=lectura.estado(carpeta_curso, sesion).get("fecha", "") if usa_lectura(carpeta_curso, sesion) else "")
     try:
         return await _generar(carpeta_curso, curso, sesion, rutas, consulta, medir)
     except asyncio.CancelledError:
@@ -528,6 +645,9 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, medir) -> dict
         desbordes=len(medicion.desbordes) if medicion else 0,
         imagenes=len(medicion.imagenes) if medicion else 0,
         decisiones=[d.model_dump() for d in decisiones],
+        base="lectura" if trabajo.lectura is not None else "fuentes",
+        referencia=[t.describir() for t in lectura._referencia(carpeta_curso, sesion)[0]] if trabajo.lectura is None else [],
+        datos_agregados=trabajo.datos_agregados,
         archivos={"pptx": rutas["pptx"].name, "excel": rutas["excel"].name, "entrega": rutas["entrega"].name},
         carpeta_imagenes=str(rutas["imagenes"].relative_to(carpeta_curso)),
         costo=tokens.total(curso, sesion=f"S{sesion}", material=CLAVE, desde_linea=inicio),
@@ -621,7 +741,8 @@ def _entrega(material: dict) -> dict:
                  "Están en la hoja Hallazgos; no obligan a corregir."] if material.get("avisos_informativos") else []),
               f"Fallas del verificador y de la medición corregidas: {c['verificador']}."]
     if r.get("bloques"):
-        texto = (f"Revisión del contenido contra la lectura aprobada: {comun.cuantos(r['bloques'], 'bloque')}, "
+        contra = "la lectura aprobada" if material.get("base", "lectura") == "lectura" else "las fuentes y las fichas"
+        texto = (f"Revisión del contenido contra {contra}: {comun.cuantos(r['bloques'], 'bloque')}, "
                  f"{comun.cuantos(r['errores'], 'error')} con prueba")
         if r["errores"]:
             texto += f" ({comun.cuantos(r['corregidos'], 'corregido')} y {comun.cuantos(r['pendientes'], 'pendiente')})"
@@ -645,7 +766,13 @@ def _entrega(material: dict) -> dict:
     if not no_pude:
         no_pude.append("Nada: las diapositivas no tienen ejercicios que ejecutar.")
 
-    decidi = [d["texto"] for d in material["decisiones"] if d["tipo"] == "decisión"]
+    decidi = []
+    if material.get("base") == "fuentes":
+        origen = "; ".join(material.get("referencia") or []) or "los temas de la ficha de la sesión"
+        decidi.append(f"La sesión no tiene lectura: las diapositivas salen de {origen} y de las fichas "
+                      "(PLAN.md §0, decisión 26).")
+    decidi += [d["texto"] for d in material["decisiones"] if d["tipo"] == "decisión"]
+    decidi += [f"Dato nuevo del caso, agregado a la ficha del curso: {d}" for d in material.get("datos_agregados", [])]
     if not decidi:
         decidi.append("Nada que revisar: todo salió de la lectura aprobada. Las notas del redactor están en "
                       "la hoja Hallazgos.")

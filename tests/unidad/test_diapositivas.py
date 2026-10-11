@@ -299,3 +299,62 @@ def test_revisor_independiente_deja_pendientes_y_se_pueden_aprobar(con_lectura):
     assert any(frase in l for l in pendientes)
     diapositivas.aprobar(con_lectura, 1)
     assert diapositivas.estado(con_lectura, 1)["estado"] == "aprobada"
+
+
+# ---------- Sin lectura en la sesión (PLAN.md §0, decisión 26) ----------
+
+@pytest.fixture
+def sin_lectura(entorno):
+    """Curso con una fuente y una sesión que produce las diapositivas, pero no la lectura."""
+    from app.fichas import almacen, flujo
+    from tests.fixtures import fichas as datos
+    from tests.unidad.test_fichas import con_fuente
+    entorno["env"].write_text("ANTHROPIC_API_KEY=sk-ant-de-prueba\n", encoding="utf-8")
+    carpeta = entorno["cursos"] / "scrum"
+    (carpeta / "fuentes").mkdir(parents=True)
+    (carpeta / "curso.json").write_text('{"nombre": "Scrum"}', encoding="utf-8")
+    con_fuente(carpeta)
+    almacen.guardar(carpeta, "curso", None, datos.ficha("curso", datos.CURSO))
+    flujo.confirmar_curso(carpeta)
+    almacen.guardar(carpeta, "sesion", 1, datos.ficha("sesion", {**datos.SESION, "materiales.cuales": "diapositivas"}))
+    revisor_de_ejercicios = consulta_en_secuencia({"ejercicios": [
+        {"numero": n, "funciona_solo": True, "sin_llenar_a_mano": True, "motivo": "Cumple"} for n in (1, 2, 3)]})
+    asyncio.run(flujo.confirmar_sesion(carpeta, "scrum", 1, consulta=revisor_de_ejercicios))
+    return carpeta
+
+
+def test_sin_lectura_salen_de_las_fuentes_y_las_fichas(sin_lectura):
+    assert diapositivas.usa_lectura(sin_lectura, 1) is False
+    assert diapositivas.faltan(sin_lectura, 1) == {"ficha": [], "otros": []}
+    material, consulta = generar(sin_lectura, LIMPIAS)
+    assert material["estado"] == "verificada", material.get("problemas")
+    redaccion = consulta.llamadas[0]["prompt"]
+    assert "ESTA SESIÓN NO TIENE LECTURA" in redaccion and "LECTURA APROBADA" not in redaccion
+    assert "busca con Grep en las fuentes" in redaccion
+    revision_ = consulta.llamadas[1]["prompt"]
+    assert diapositivas.INDICACIONES_SIN_LECTURA in revision_ and diapositivas.FUENTE_LECTURA not in revision_
+    entrega = {s["clave"]: s["lineas"] for s in material["entrega"]["secciones"]}
+    assert any("contra las fuentes y las fichas" in l for l in entrega["valide"])
+    assert any("La sesión no tiene lectura" in l and "decisión 26" in l for l in entrega["decidi"])
+    assert not material.get("desactualizado") and material["lectura_fecha"] == ""
+
+
+def test_sin_lectura_las_diapositivas_de_un_bloque_van_juntas():
+    separadas = copy.deepcopy(LIMPIAS["diapositivas"])
+    separadas[2], separadas[6] = separadas[6], separadas[2]
+    _, problemas = diapositivas._validar(con(diapositivas=separadas), None)
+    assert any("del bloque «El Manifiesto Ágil» no van juntas" in p for p in problemas)
+    contenido, problemas = diapositivas._validar(LIMPIAS, None)
+    assert contenido is not None and problemas == []
+
+
+def test_sin_lectura_la_ficha_pide_temas_o_referencia_y_riesgos():
+    from app.fichas import almacen
+    from tests.fixtures import fichas as datos
+    vacia = {**datos.SESION, "materiales.cuales": "diapositivas", "lectura.bloque.1": "", "lectura.bloque.2": "",
+             "lectura.cuidado": ""}
+    errores = almacen.errores_del_material(datos.ficha("sesion", vacia), "diapositivas")
+    assert "Sin lectura, las diapositivas necesitan de 2 a 4 bloques, o un material de referencia." in errores
+    assert "«Cuidado con» necesita de 1 a 3 riesgos, uno por línea." in errores
+    con_lectura_ = {**vacia, "materiales.cuales": "lectura y diapositivas"}
+    assert almacen.errores_del_material(datos.ficha("sesion", con_lectura_), "diapositivas") == []
