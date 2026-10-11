@@ -35,12 +35,12 @@ modelo = "claude-opus-5-5"
 tope_usd = 1.50
 max_turns = 20
 
-# Primera pasada: veracidad, oración por oración, en grupos de unas 20 oraciones.
-[pasada1]
+# Revisión del contenido, por bloque: errores reales con su prueba (PLAN.md §0, decisión 22).
+[revision]
 modelo = "claude-sonnet-5-5"
-tope_usd = 1.00
+tope_usd = 0.80
 max_turns = 12
-esfuerzo = "low"
+esfuerzo = "medium"
 
 # Corrección de oraciones sueltas: devuelve solo las oraciones que cambian.
 [correccion_oraciones]
@@ -49,8 +49,8 @@ tope_usd = 0.60
 max_turns = 10
 esfuerzo = "medium"
 
-# Revisor independiente: sesión nueva, solo lectura sobre su carpeta (material final, fuentes y fichas).
-# Hace también la segunda pasada: las cuatro preguntas por bloque y la lista de verificación.
+# Revisor independiente opcional: lo lanza el profesor con un botón. Sesión nueva, solo lectura sobre su
+# carpeta (material final, fuentes y fichas). No corrige: lo que encuentra queda pendiente.
 [revisor]
 modelo = "claude-opus-5-5"
 tope_usd = 2.00

@@ -33,3 +33,21 @@ def subseccion(titulo: str) -> str:
     if coincidencia is None:
         raise KeyError(f"SKILL.md no tiene la subsección «{titulo}».")
     return coincidencia.group(0).strip()
+
+
+def comprobar(secciones: tuple[str, ...] = (), subsecciones: tuple[str, ...] = ()) -> None:
+    """Comprueba de una vez que SKILL.md tiene todas las secciones que usará un trabajo.
+    Se llama antes de gastar tokens: si la skill cambió, el trabajo no empieza (propuesta 1)."""
+    faltan = []
+    for titulo in secciones:
+        try:
+            globals()["secciones"](titulo)
+        except KeyError:
+            faltan.append(f"«{titulo}»")
+    for titulo in subsecciones:
+        try:
+            subseccion(titulo)
+        except KeyError:
+            faltan.append(f"«{titulo}»")
+    if faltan:
+        raise KeyError(f"SKILL.md no tiene {', '.join(faltan)}. Revisa la skill antes de generar.")

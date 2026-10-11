@@ -46,7 +46,6 @@ Las rutas son relativas a la carpeta donde está verificacion.json. Solo "sesion
     "conteos": [{"nombre": "ejercicios", "patron": "^Ejercicio \\d+", "min": 3, "max": 5}],
     "titulos_con": [{"patron": "^Mejora el resultado", "debe_contener": "(opcional)"}]
   },
-  "oracion_larga": 25,                           # más palabras que esto es un AVISO
   "cita_min_palabras": 5,                        # las citas más cortas no se buscan en las fuentes
   "separador_decimal": ",",
   "listas": {                                    # por omisión, las de config/ del proyecto
@@ -411,7 +410,6 @@ class Configuracion:
     permitidos: list[str]
     carpeta_practica: Path | None
     limites: dict
-    oracion_larga: int
     cita_min_palabras: int
     separador_decimal: str
     lenguaje_ia: list[str]
@@ -504,7 +502,6 @@ def leer_configuracion(ruta: Path) -> Configuracion:
         permitidos=datos.get("permitidos", ["notas del profesor"]),
         carpeta_practica=_ruta(carpeta, practica) if practica else None,
         limites=datos.get("limites", {}),
-        oracion_larga=int(datos.get("oracion_larga", 25)),
         cita_min_palabras=int(datos.get("cita_min_palabras", 5)),
         separador_decimal=datos.get("separador_decimal", ","),
         lenguaje_ia=lista("lenguaje_ia"),
@@ -518,10 +515,11 @@ def leer_configuracion(ruta: Path) -> Configuracion:
 TIEMPOS_Y_PUNTAJES = [
     (FALLA, "tiempo", re.compile(r"\bminutos?\b|\d+\s*min\b|\bcronometr|\bcuenta regresiva\b|\btemporizador")),
     (FALLA, "tiempo", re.compile(r"\d+\s*(?:segundos?|seg)\b")),
-    (AVISO, "tiempo", re.compile(r"\d+\s*(?:horas?|h)\b")),
     (FALLA, "puntaje", re.compile(r"\bpuntajes?\b|\bpuntuacion|\d+\s*(?:puntos?|pts?)\b|\bcalificacion|\bcalificar\b")),
     (FALLA, "puntaje", re.compile(r"\bnotas?\s+(?:final|finales|maxima|minima|aprobatoria|del alumno|de la evaluacion)\b")),
-    (AVISO, "porcentaje", re.compile(r"%|\bpor\s*ciento\b|\bporcentajes?\b")),
+    # Un porcentaje es un puntaje solo si pesa en la nota. «El 20 % de los pedidos» es un dato del caso.
+    (FALLA, "puntaje", re.compile(r"(?:%|\bpor\s*ciento\b)\s+(?:de\s+la\s+(?:nota|calificacion|evaluacion)|del\s+(?:curso|promedio))\b"
+                                  r"|\bvale\s+(?:el\s+)?\d+\s*(?:%|por\s*ciento)")),
 ]
 EMOJI = re.compile("[\U0001F000-\U0001FAFF☀-➿\U0001F1E6-\U0001F1FF⭐⭕⌚⌛⏩-⏺️]")
 CITA = re.compile(r"«([^»]+)»|“([^”]+)”|\"([^\"]+)\"")
@@ -674,10 +672,6 @@ def revisar_oracion(o: Oracion, cfg: Configuracion, hallazgos: list[Hallazgo]) -
             agregar(FALLA, "nombre de archivo", f"«{nombre}» no es de la sesión {cfg.sesion}")
         if cfg.carpeta_practica is None or not (cfg.carpeta_practica / nombre).exists():
             agregar(FALLA, "archivo inexistente", f"«{nombre}» no está en la carpeta de práctica")
-
-    total = palabras(o.texto)
-    if total > cfg.oracion_larga:
-        agregar(AVISO, "oración larga", f"{total} palabras")
 
     for frase in cfg.relleno:
         if patron_frase(frase).search(normal):

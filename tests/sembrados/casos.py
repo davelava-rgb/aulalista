@@ -9,11 +9,11 @@ CASOS_POR_ORACION = [
     ("minutos", "Resuelve el ejercicio en 10 minutos.", "FALLA", "tiempo"),
     ("cronometro", "Activa el cronómetro antes de empezar.", "FALLA", "tiempo"),
     ("segundos", "Espera 30 segundos y vuelve a enviar el pedido.", "FALLA", "tiempo"),
-    ("horas", "La revisión dura 2 horas.", "AVISO", "tiempo"),
     ("puntos", "Esta pregunta vale 5 puntos.", "FALLA", "puntaje"),
     ("puntaje", "El puntaje se suma al final.", "FALLA", "puntaje"),
     ("nota final", "La nota final sale de las tres preguntas.", "FALLA", "puntaje"),
-    ("porcentaje", "El ejercicio representa el 20 % del curso.", "AVISO", "porcentaje"),
+    ("porcentaje de la nota", "El ejercicio representa el 20 % del curso.", "FALLA", "puntaje"),
+    ("vale un porcentaje", "El informe vale el 30 % y se entrega al final.", "FALLA", "puntaje"),
     ("emoji", "Revisa el registro con cuidado ✅", "FALLA", "emoji"),
     ("nunca se incluye", "Objetivos de aprendizaje de la sesión.", "FALLA", "lo que nunca se incluye"),
     ("variante", "El equipo trabaja según el enfoque Agile.", "FALLA", "variante de un concepto"),
@@ -25,10 +25,6 @@ CASOS_POR_ORACION = [
     ("porcentaje mal calculado", "El 10 % de 200 es 30.", "FALLA", "operación"),
     ("archivo inexistente", "Adjunta el archivo S1_E9_no-existe.xlsx.", "FALLA", "archivo inexistente"),
     ("archivo de otra sesion", "Adjunta el archivo S2_E1_registro.xlsx.", "FALLA", "nombre de archivo"),
-    ("oracion larga",
-     "El equipo revisa cada pedido del almacén con el jefe del área y con el Scrum Master para "
-     "decidir qué cambios hace antes del cierre del Sprint y cómo avisa a los clientes del retraso.",
-     "AVISO", "oración larga"),
     ("relleno", "A continuación se presenta el registro del Sprint.", "AVISO", "relleno"),
     ("imprecisa", "Algunas situaciones contradicen el Manifiesto Ágil.", "AVISO", "palabra imprecisa"),
     ("lenguaje de IA", "Es importante destacar que el tablero se actualiza cada día.", "FALLA", "lenguaje de IA"),
@@ -36,6 +32,11 @@ CASOS_POR_ORACION = [
 
 # Oraciones correctas: el verificador no debe marcar nada en ellas (control limpio).
 ORACIONES_LIMPIAS = [
+    # Ya no son avisos (PLAN.md §0, decisión 19): un dato con horas o porcentaje y una oración larga.
+    "La revisión dura 2 horas.",
+    "El 20 % de los pedidos llega tarde.",
+    "El equipo revisa cada pedido del almacén con el jefe del área y con el Scrum Master para "
+    "decidir qué cambios hace antes del cierre del Sprint y cómo avisa a los clientes del retraso.",
     "Scrum tiene tres pilares.",
     "La guía dice «Scrum es gratuito y se aplica completo en cada equipo».",
     "Lo explica la lámina 43 del capítulo.",

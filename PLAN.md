@@ -29,14 +29,22 @@ Términos usados en este plan:
 | 7 | Al llegar al tope de cinco vueltas, el programa elimina las oraciones que siguen sin coincidir con su fuente o que la segunda pasada marcó como relleno o ambiguas, y valida de nuevo. Un vacío, una inconsistencia o un punto de la lista de verificación que siga abierto queda en «Decisiones pendientes» y el material no se entrega (aprobado en la etapa 5c) |
 | 8 | Ahorro aprobado en la etapa 5b: correcciones por oración con Sonnet, pedidos con la parte fija primero, primera pasada en grupos de 40 con esfuerzo bajo, segunda pasada con esfuerzo alto solo en su primera revisión. La lectura se mantiene en 1.500 palabras como máximo (decisión del profesor en la etapa 5c) |
 | 9 | Las pasadas tienen su tope de cinco vueltas. Después, cada ronda del revisor independiente tiene hasta dos vueltas para corregir sus hallazgos y lo que esa corrección rompa. Peor caso: 5 + 3 × 2 = 11 vueltas (aprobado en la etapa 5d) |
-| 10 | Reglas aflojadas en la etapa 5d. Son excepciones a la skill. a) En el contenido de una fuente se comparan cuatro cosas: número de referencia, término, cantidades y "debe" o "puede". El orden, quién hace la acción y las palabras que generalizan ya no se comparan una por una; una oración que contradice al pasaje o le agrega una afirmación sigue siendo "no coincide". b) Un resumen de una norma que dice "en este curso" se juzga solo por si contradice o agrega algo. Igual necesita su pasaje copiado tal cual. c) Una oración de más de 25 palabras que sigue a su pasaje de una norma no se parte. Si su pasaje existe tal cual, el programa explica el aviso solo |
-| 11 | La lista de verificación de la skill se aplica por material. Cada material recibe solo las preguntas que le corresponden: la lectura recibe 8 de 14. Las preguntas que ya revisa un programa (diseño uniforme; minutos, puntos y porcentajes) no van a la IA. Si la skill agrega una pregunta, el programa se detiene hasta repartirla (aprobado en la etapa 5d) |
+| 10 | Reglas aflojadas en la etapa 5d. Son excepciones a la skill. a) En el contenido de una fuente se comparan cuatro cosas: número de referencia, término, cantidades y "debe" o "puede". El orden, quién hace la acción y las palabras que generalizan ya no se comparan una por una; una oración que contradice al pasaje o le agrega una afirmación sigue siendo "no coincide". b) Un resumen de una norma que dice "en este curso" se juzga solo por si contradice o agrega algo. Igual necesita su pasaje copiado tal cual. c) Una oración de más de 25 palabras que sigue a su pasaje de una norma no se parte. Si su pasaje existe tal cual, el programa explica el aviso solo. Reemplazada por las decisiones 18 y 19 |
+| 11 | La lista de verificación de la skill se aplica por material. Cada material recibe solo las preguntas que le corresponden: la lectura y las diapositivas reciben 3 de 14 (decisión 20). Las preguntas que ya revisa un programa (diseño uniforme; minutos, puntos y porcentajes) no van a la IA. Si la skill agrega una pregunta, el programa se detiene hasta repartirla (aprobado en la etapa 5d) |
 | 12 | Dos jueces con IA, no tres. La primera pasada revisa la veracidad en cada vuelta. El revisor independiente hace también la segunda pasada: las cuatro preguntas por bloque, la lista de verificación y los errores que solo se ven al leer el documento completo. Ya no compara oración por oración con las fuentes. Es una excepción a la skill, que pide una segunda pasada propia y un revisor que compare cada oración con las fuentes (aprobado en la etapa 5d) |
 | 13 | Los avisos de relleno y de palabras imprecisas se mantienen en la hoja Hallazgos, pero son informativos: no obligan a corregir ni a explicar (aprobado en la etapa 5d) |
 | 14 | Oraciones aprobadas protegidas. En una corrección por oraciones, el programa rechaza el cambio a una oración que ya coincide con su fuente si ningún problema la nombra. Si algún problema no nombra oraciones (un punto de la lista de verificación), la protección no se aplica en esa corrección. La corrección completa del documento tampoco se protege. La entrega dice cuántos cambios se rechazaron (aprobado en la etapa 5d) |
 | 15 | La skill es agnóstica al tipo de fuente. «Norma» pasa a ser «contenido de una fuente», y «cláusula o control» pasa a ser «número de referencia» (sección, cláusula, lámina o paso). El contenido de una fuente se puede decir con otras palabras si no cambia su sentido: el juez compara el sentido, no las palabras. Quedan exactos el pasaje que se cita como prueba, las citas entre comillas, los nombres del vocabulario, las cifras y «debe» o «puede». Se corrigió en SKILL.md, en el verificador y en AulaLista; no es una excepción (aprobado en la etapa 5d) |
 | 16 | Campos de las fichas. En la ficha del curso, «Público» y «Empresa o institución ficticia y rubro» son opcionales; siguen obligatorios el nombre del curso y las sesiones. La ficha de la sesión se confirma con número y título, alcance y vocabulario. Los datos de cada material (bloques y riesgos de la lectura, ejercicios, estaciones, preguntas) se exigen al generar ese material, y la página dice qué falta. Se corrigió también en las plantillas de SKILL.md (aprobado en la etapa 5d) |
 | 17 | Fichas desde las fuentes. Si el curso tiene fuentes convertidas, una ficha sin confirmar se propone sola la primera vez que se abre, en segundo plano. La propuesta llena todos los campos: lo que la fuente dice, tal cual y con su archivo; lo que deduce (sesiones por capítulo, público, temas, vocabulario) y los datos ficticios del caso, marcados «Propuesto». No propone la identidad visual ni los modelos, y el docente y el contacto solo se toman si la fuente los dice tal cual. El botón «Aceptar lo propuesto y confirmar» confirma en un paso. Sin fuentes, la ficha se llena a mano. Amplía la decisión 4 (aprobado en la etapa 5d) |
+| 18 | Solo el sentido. Una oración con otras palabras, sinónimos u otro orden coincide con su fuente. Solo es «no coincide» si contradice al pasaje, le agrega una afirmación, cambia una cifra o una cantidad, o cambia «debe» por «puede». La IA ya no compara puntos uno por uno, y una comparación olvidada ya no hace fallar la oración. El programa ubica el pasaje copiado aunque cambien tildes, mayúsculas, signos o una palabra cortada con guion al final de una línea. Reemplaza la decisión 10 a) y b). Se corrigió en SKILL.md; no es una excepción (aprobado en la etapa 5d) |
+| 19 | Se quitan tres avisos del verificador: oración larga, porcentaje y horas. Un porcentaje solo es una falla si pesa en la nota («el 20 % del curso», «vale el 30 %»). Siguen siendo fallas los minutos, segundos, cronómetros, puntos y notas. «Una idea por oración» la revisa el revisor independiente con la lista de verificación. Reemplaza la decisión 10 c) (aprobado en la etapa 5d) |
+| 20 | Preguntas por material. La lectura y las diapositivas responden solo dos de las cuatro preguntas por bloque: «¿Qué puede hacer el alumno con esto?» y «¿Qué oración tiene dos lecturas?». Las otras dos son para ejercicios y pasos. De la lista de verificación, la lectura y las diapositivas reciben solo tres preguntas: si cada sección aporta, si hay frases con dos ideas o con jerga, y si hay contenido de sesiones posteriores. Amplía la decisión 11. Es una excepción a la skill, que hace las cuatro preguntas en todos los materiales (aprobado en la etapa 5d) |
+| 21 | La lista de verificación es informativa. El revisor responde cada pregunta con «cumple», «no cumple» o «no aplica», y no con «sí» o «no»: así la respuesta no depende de cómo está escrita la pregunta. Un «no cumple» queda como AVISO en la hoja Hallazgos, con dónde está el problema, pero no se envía a corrección ni cuenta para lanzar otra ronda. Los hallazgos del revisor con prueba se siguen corrigiendo. Cambia la decisión 7 en lo que dice de la lista (aprobado en la etapa 5d) |
+| 22 | Validación en dos pasadas. 1) El verificador, sin IA: sus fallas se corrigen hasta tres veces y una falla abierta no deja aprobar. 2) Una revisión del contenido con IA (Sonnet), por bloque y no por oración: recibe cada bloque con los pasajes de las fuentes y de las fichas que elige el programa, y reporta solo errores reales (contradice la fuente, dato inventado, vacío, ambigüedad, inconsistencia). Decir lo mismo con otras palabras nunca es un error. La prueba de una contradicción o de una inconsistencia se comprueba con un programa; sin prueba real, el error se descarta. Una sola corrección de esos errores; después, el verificador otra vez y la revisión solo de los bloques que cambiaron. Lo que quede abierto va a la entrega como pendiente y el profesor puede aprobar igual. El revisor independiente (Opus) pasa a ser opcional: lo lanza el profesor con un botón y no corrige. El Excel queda solo con la hoja Hallazgos. Reemplaza las decisiones 1, 2, 7, 9, 12, 14, 18 (en lo que dice de la primera pasada) y 21 (en lo que dice de las rondas). Se corrigió en SKILL.md, SPEC.md y CLAUDE.md; no es una excepción (aprobado en la etapa 5d) |
+| 23 | Material de referencia por sesión. La ficha de la sesión tiene dos campos nuevos: «Material de referencia» (una línea por archivo de las fuentes, con sus páginas del PDF; sin páginas, el archivo completo) y «Exclusiones» (temas o páginas que no se usan; vacío, se usa todo). Con material de referencia, la lectura cubre todos sus temas menos las exclusiones, su extensión sale de esos temas y no tiene máximo de páginas ni de 2 a 4 bloques; los temas de la ficha son opcionales y, si se llenan, mandan. Sin material de referencia, siguen los temas obligatorios, de 2 a 4 bloques, seis páginas y unas 1.500 palabras. Un archivo que no es fuente del curso o unas páginas que no existen no dejan generar. Cambia la decisión 8 en lo que dice de las 1.500 palabras. Se corrigió en SKILL.md y SPEC.md; no es una excepción (aprobado en la etapa 5d) |
+| 24 | Decisiones del redactor por tipo. El redactor anota cada decisión como «sin fuente» (afirma algo del tema que no está en ninguna fuente ni ficha), «decisión» (se aparta de las fichas o de las fuentes, o cambia lo que lee el alumno) o «nota» (solo describe el trabajo). Lo «sin fuente» va a «Decisiones pendientes» y deja la lectura «con pendientes»; el profesor puede aprobar igual. «Qué decidí por mi cuenta» muestra solo las «decisión». Las tres quedan en la hoja Hallazgos. No gasta tokens. Se corrigió en SKILL.md («Formato de cada entrega»); no es una excepción (aprobado en la etapa 5d) |
+| 25 | Antes de gastar tokens, la lectura comprueba que SKILL.md tiene todas las secciones que usarán la redacción, la revisión y el revisor, y borra los archivos de la generación anterior (Word, Excel, entrega, contenido, explicaciones y la carpeta del revisor). Un archivo abierto que no se deja borrar se reescribe después (aprobado en la etapa 5d) |
 
 ### Contradicciones encontradas
 
@@ -58,7 +66,7 @@ Defectos del Excel modelo que no se copian:
 1. **Pagar con el plan Max.** La documentación del SDK dice: *"Anthropic does not allow third party developers to offer claude.ai login or rate limits for their products, including agents built on the Claude Agent SDK."* Se resolvió con la decisión 3.
 2. **"Créditos mensuales del plan Max".** No hay documentación de créditos de API incluidos en el plan Max. El profesor debe revisar la facturación en la consola de Anthropic.
 3. **Ejecutar cada ejercicio "como un alumno".** Se ejecutan los prompts en una conversación nueva con Claude, sin herramientas. Se ejecutan las fórmulas de Excel con el Excel instalado. Los comandos y otros programas quedan en "Qué no pude probar".
-4. **Ciclo sin fin.** El ciclo de corrección tiene un tope de cinco vueltas. Después, el software se detiene y muestra lo que queda abierto.
+4. **Ciclo sin fin.** El verificador tiene un tope de tres correcciones y la revisión del contenido, una sola (decisión 22). Después, el software muestra lo que queda abierto.
 5. **"El profesor no tiene que buscar ningún error".** La validación con IA no lo garantiza al 100 %. El plan mide cuántos errores puestos a propósito detecta.
 
 ## 1. Arquitectura
@@ -227,12 +235,11 @@ El programa extrae el texto de Word (párrafos, tablas, recuadros, encabezado y 
 | La cita es exacta | Busca el texto entre comillas en las fuentes. Solo cambia espacios y tipos de comilla | FALLA |
 | La operación es correcta | Detecta "a + b = c", "×", "÷" y "%" con cifras, y recalcula. Lee números escritos hasta "cien" | FALLA |
 | El dato fijo usa su valor | Si aparece la etiqueta de un dato fijo con otro valor, lo marca | FALLA |
-| Sin tiempos, puntajes ni emojis | Busca minutos, horas de actividad, cronómetros, puntos, notas, porcentajes y emojis. "Notas del profesor" está permitido | FALLA |
+| Sin tiempos, puntajes ni emojis | Busca minutos, segundos, cronómetros, puntos, notas, porcentajes que pesan en la nota y emojis. "Notas del profesor" está permitido. Las horas y los demás porcentajes son datos (decisión 19) | FALLA |
 | Sin lo que nunca se incluye | Busca títulos como "Objetivos de aprendizaje", "Requisitos previos" y "Glosario" | FALLA |
 | Sin variantes de un concepto | Busca cada variante prohibida | FALLA |
 | El archivo mencionado existe | Busca nombres `S#_E#_` y `S#_P#_` y comprueba que existan. Comprueba también que cada archivo de la carpeta se mencione | FALLA |
 | Límites del material | Cuenta páginas en Word, diapositivas, ejercicios, estaciones y preguntas. Revisa 250 palabras, 15 filas y "(opcional)" | FALLA |
-| Oración larga | Más de 25 palabras, como en el modelo | AVISO |
 | Relleno | Frases de `relleno.txt` | AVISO |
 | Palabra imprecisa | Palabras de `imprecisas.txt` | AVISO |
 | Lenguaje de IA | Frases de `lenguaje_ia.txt`. Dentro de una cita literal de una fuente baja a AVISO | FALLA |
@@ -240,79 +247,48 @@ El programa extrae el texto de Word (párrafos, tablas, recuadros, encabezado y 
 Última línea impresa: `Oraciones: N · Fallas: F · Avisos: A`. Si hay fallas, termina con código 1.
 Cada oración recibe una huella para saber cuáles son nuevas o cambiaron.
 
-### 5.2 Primera pasada, veracidad (etapa 5b)
+### 5.2 Primera pasada: el verificador (decisión 22)
 
-1. El programa busca para cada oración los tres pasajes más parecidos en `fuentes_texto` y en las fichas. En las diapositivas busca además en la lectura validada.
-2. La IA recibe grupos de unas 20 oraciones con sus pasajes, no las fuentes completas.
-3. Por cada oración, la IA responde en JSON: tipo, pasaje copiado, ubicación, veredicto y motivo.
-4. En el contenido de una fuente, la IA compara el sentido, no las palabras, y cuatro cosas: número, término, cantidades y "debe" o "puede" (decisión 10). Son campos obligatorios del JSON. Un resumen con "en este curso" no se compara punto por punto.
-5. El programa comprueba que el pasaje copiado exista tal cual en esa ubicación. Si no existe, la oración queda "sin fuente".
-6. Comprobaciones sin IA: regla del curso con "en este curso", dato del caso igual a la ficha, cálculo rehecho con los datos del archivo.
-7. Si los candidatos no sirven, la IA usa la herramienta `buscar_en_fuentes`.
-8. "No coincide": el redactor reescribe la oración. "Sin fuente": la borra o la convierte en regla del curso.
+1. Corre sobre el Word generado (§5.1). Sus fallas y los avisos sin explicar se corrigen: por oración, o el documento completo si el problema es de estructura o de páginas.
+2. Tope: tres correcciones. Si queda una FALLA, la lectura queda «con fallas», la revisión con IA no corre y no se puede aprobar.
 
-### 5.3 Segunda pasada, valor y funcionamiento (etapa 5c; desde la 5d la hace el revisor, decisión 12)
+### 5.3 Segunda pasada: la revisión del contenido, por bloque (decisión 22)
 
-1. El programa lista cada cifra, nombre propio, fecha y término del vocabulario con sus oraciones. Así llena "Datos repetidos". Dos valores para el mismo dato crean un hallazgo de inconsistencia.
-2. El revisor independiente responde las cuatro preguntas por cada bloque, ejercicio, estación o pregunta. Así llena "Segunda pasada". Lo que encuentra va como hallazgo, con su prueba.
-3. El ejecutor vuelve a ejecutar cada ejercicio y cada pregunta.
-4. El revisor responde la lista de verificación de su material en JSON (decisión 11). Cada "no" crea un hallazgo.
+1. El programa elige para cada bloque los pasajes de las fuentes y de las fichas más parecidos a sus oraciones, más los que el redactor dijo usar. Hasta doce por bloque.
+2. Una sola llamada a Sonnet recibe todos los bloques con sus pasajes y las posibles inconsistencias de cifras que encontró el programa. Puede buscar más pasajes con `buscar_en_fuentes`.
+3. Reporta solo errores reales: contradice la fuente, dato inventado, vacío, ambigüedad o inconsistencia. Decir lo mismo con otras palabras, sinónimos, otro orden o un resumen no es un error. El estilo tampoco.
+4. El programa comprueba cada error. La oración tiene que estar en su bloque. La prueba de una contradicción o de una inconsistencia tiene que existir en una fuente, en una ficha o en el material. Si no, el error se descarta y queda anotado.
 
-### 5.4 Revisor independiente (etapa 5d)
+### 5.4 Corrección y confirmación (decisión 22)
 
-1. Es una sesión nueva del SDK. No continúa la sesión del redactor.
-2. Su carpeta de trabajo tiene solo el texto del material final con oraciones numeradas, `fuentes_texto` y las dos fichas.
-3. Puede leer y buscar en esa carpeta. No puede escribir. Lo hace con cuatro herramientas propias: listar, leer, buscar un texto y buscar pasajes parecidos. Ninguna sale de la carpeta. No usa Read ni Grep de Claude Code, porque esas pueden leer cualquier archivo de la computadora, también los borradores.
-4. Recibe el pedido de la skill, adaptado por la decisión 12: lee el documento completo y no repite la comparación oración por oración, que ya hizo la primera pasada. También hace la segunda pasada (§5.3). Responde en JSON: número de oración, defecto y prueba, las cuatro respuestas por bloque y la lista de verificación.
-5. El programa comprueba que cada prueba citada exista.
-6. El redactor corrige el hallazgo o lo rechaza con el pasaje que lo contradice. El programa comprueba que ese pasaje exista tal cual. Si no existe, el hallazgo sigue abierto. Se anota en la columna "Revisor independiente".
-7. Con tres hallazgos válidos o más, se corrige y se lanza un revisor nuevo. Máximo tres rondas.
-8. Si la tercera ronda encuentra tres hallazgos o más, sus correcciones se validan con el verificador y la primera pasada, pero no se lanza un cuarto revisor. La entrega lo avisa en "Qué no pude probar".
-9. Un hallazgo que sigue abierto al terminar sus dos vueltas queda en "Decisiones pendientes" y la lectura no se entrega. Si es relleno o ambigüedad, el programa elimina la oración, salvo que eso deje vacía una parte obligatoria de la lectura.
+1. Los errores de la revisión se corrigen en una sola llamada, por oración.
+2. El verificador corre otra vez, con su tope de tres correcciones.
+3. La revisión se repite solo en los bloques que cambiaron. Un error es «corregido» si su bloque cambió y la confirmación no lo encuentra otra vez.
+4. Lo que sigue, lo que la corrección no tocó y lo que aparece en la confirmación queda «pendiente». La lectura queda «con pendientes»: la entrega los lista en «Decisiones pendientes» y el profesor puede aprobarla igual.
 
-### 5.5 Ciclo de corrección (etapa 5d)
+### 5.5 Revisor independiente opcional (decisión 22)
 
-Después de cada cambio:
-
-1. Se generan los archivos de nuevo.
-2. El verificador corre completo.
-3. La primera pasada revisa solo las oraciones con huella nueva.
-4. Los ejercicios que cambiaron se vuelven a ejecutar. Una corrección no puede cambiar una oración aprobada que ningún problema nombra (decisión 14). La segunda pasada no corre en cada vuelta: la hace el revisor (decisión 12).
-5. Si la corrección vino de un revisor con tres hallazgos o más, se lanza un revisor nuevo.
-
-El ciclo termina cuando una vuelta completa no cambia ninguna oración: cero fallas, avisos explicados (salvo los informativos), ninguna oración "no coincide" ni "sin fuente" y un revisor con menos de tres hallazgos. Tope: cinco vueltas, y dos por cada ronda del revisor (decisión 9).
+1. No corre solo. El profesor lo lanza con el botón «Pedir revisor independiente» sobre una lectura sin fallas.
+2. Es una sesión nueva de Opus. Su carpeta tiene solo el material final con oraciones numeradas, el texto de las fuentes y las dos fichas. Lee y busca con cuatro herramientas propias que no salen de esa carpeta. No puede escribir.
+3. El programa comprueba que cada prueba exista. Lo que encuentra no se corrige: queda pendiente y el profesor decide. Si la lectura ya estaba aprobada y el revisor encuentra algo, vuelve a «con pendientes».
 
 ### 5.6 Cómo se llena el Excel
 
 Formato del modelo: Arial 10, texto ajustado arriba, encabezado en negrita blanca sobre el color 0F4C5C, primera fila fija y los mismos anchos de columna.
 
-**Hoja Oraciones**
+El Excel de la lectura queda solo con la hoja **Hallazgos** (Nivel, Sección, Oración, Regla, Detalle, Cómo se resolvió):
 
-| Columna | Quién la llena |
-|---|---|
-| N | Verificador |
-| Diapositiva o sección | Verificador: "archivo · sección" o "archivo · diapositiva N" |
-| Parte | Verificador: texto, tabla o recuadro, celda o notas |
-| Oración | Verificador |
-| Tipo de oración | Primera pasada: contenido de una fuente, dato del caso, cálculo, regla del curso, instrucción o sin afirmación |
-| Pasaje de la fuente | Primera pasada, después de que el programa comprueba que existe |
-| Fuente | Primera pasada: archivo y página, lámina o celda |
-| Veredicto | Primera pasada: coincide, no coincide o sin fuente |
-| Revisor independiente | Revisor: "Ronda R: defecto. Resuelto" o "Rechazado: pasaje" |
+- FALLA y AVISO: los hallazgos del verificador, y cada uno que se envió a corrección, con su vuelta.
+- REVISIÓN: los errores de la revisión del contenido, con su prueba y si quedaron corregidos o pendientes, y los que el programa descartó.
+- REVISOR: lo que encontró el revisor independiente, si el profesor lo pidió.
 
-**Hoja Hallazgos** (Nivel, Diapositiva, Oración, Regla, Detalle, Cómo se resolvió): la llenan el verificador y las dos pasadas. El redactor escribe "Cómo se resolvió".
-
-**Hoja Datos repetidos** (Término o cifra, Apariciones, Oraciones): la llena la segunda pasada. Una variante prohibida aparece con 0 apariciones.
-
-**Hoja Segunda pasada** (Bloque y las cuatro preguntas): la llena la IA en la segunda pasada.
-
-Hay cinco Excel por sesión, como en el modelo. El laboratorio y su guía comparten uno. La evaluación y su clave comparten otro. Cada archivo tiene sus propias filas y se valida por separado.
+Hay cinco Excel por sesión, como en el modelo. El laboratorio y su guía comparten uno. La evaluación y su clave comparten otro.
 
 ### 5.7 Qué valida cada material
 
-| Material | Fuente de la primera pasada | Revisiones propias |
+| Material | Fuente de la revisión del contenido | Revisiones propias |
 |---|---|---|
-| Lectura | Fuentes del curso | Seis páginas como máximo, según Word. De 2 a 4 bloques. No da respuestas del laboratorio |
+| Lectura | Fuentes del curso | Sin material de referencia: seis páginas como máximo, según Word, y de 2 a 4 bloques. Con material de referencia: sus temas, menos las exclusiones, sin máximo de páginas (decisión 23). No da respuestas del laboratorio |
 | Diapositivas | Lectura validada. Si una frase cita una fuente del curso, también esa fuente | De 14 a 18 diapositivas. Notas en todas. Sin desbordes, medido con PowerPoint. Mismo orden que la lectura |
 | Laboratorio y archivos | Fichas y fuentes | Datos del caso, cálculos rehechos, nombres en guía, tabla y .zip, ejecución de cada ejercicio, figuras del archivo real |
 | Guía del profesor | Registro de la ejecución | Cada respuesta es igual a lo que salió al ejecutar |
@@ -322,7 +298,7 @@ Hay cinco Excel por sesión, como en el modelo. El laboratorio y su guía compar
 ### 5.8 Prueba de que la validación detecta errores
 
 - **Errores mecánicos** (`tests/sembrados/`): un material por cada revisión del verificador, con un solo error puesto. Cada prueba exige la FALLA o el AVISO esperado en la fila correcta.
-- **Errores de significado** (`tests/ia/`): un material con errores puestos, como "cuatro pilares", "puede" en lugar de "debe", un "todos" que la fuente no dice, una regla sin "en este curso", una oración sin fuente, una instrucción con dos lecturas, un paso que falta y una frase de relleno. Las dos pasadas deben marcar el 100 %. Del revisor se mide y se reporta cuántos detecta.
+- **Errores de significado** (`tests/ia/test_revision_sembrados.py`): un material con errores puestos, como "cuatro pilares", "puede" en lugar de "debe", un dato inventado, una cifra distinta a la ficha y una instrucción con dos lecturas, junto con paráfrasis correctas. La revisión no debe marcar ninguna paráfrasis y debe encontrar la mayoría de los errores. Del revisor opcional se mide y se reporta cuántos detecta.
 - **Control limpio:** un material sin errores debe quedar con cero fallas.
 
 ## 6. Pruebas
@@ -362,20 +338,20 @@ Reglas del SPEC §6 como pruebas:
 
 ## 7. Costo
 
-Gasto de tokens, de mayor a menor probable: primera pasada, redacción y correcciones, revisor, ejecución de ejercicios, segunda pasada, lectura de imágenes y propuesta de fichas.
+Gasto de tokens, de mayor a menor probable: redacción, revisión del contenido, corrección, ejecución de ejercicios, lectura de imágenes y propuesta de fichas. El revisor independiente solo gasta si el profesor lo pide.
 
 | Regla del SPEC §9 | Cómo se aplica |
 |---|---|
 | El verificador va primero | La IA no se usa mientras haya fallas mecánicas |
 | Cada fuente se convierte una sola vez | Huella del archivo. Si no cambia, no se convierte de nuevo. La IA solo lee imágenes y PDF escaneados |
-| La IA recibe solo el pasaje | El programa elige tres pasajes por oración |
-| Se valida solo lo que cambió | Las huellas de las oraciones guardan sus veredictos |
-| Tope del revisor | Tres rondas |
+| La IA recibe solo el pasaje | El programa elige hasta doce pasajes por bloque |
+| Se valida solo lo que cambió | Después de la corrección, solo se revisan de nuevo los bloques que cambiaron |
+| Tope de correcciones | Tres para el verificador y una para la revisión del contenido |
 | Registro de tokens | `tokens.jsonl` guarda curso, sesión, material, etapa, modelo, tokens y costo estimado. La página muestra el total |
 
 Además:
 
-- `modelos.toml` fija un modelo por tarea: Opus 5.5 para redactar y revisar, Sonnet 5.5 para las pasadas.
+- `modelos.toml` fija un modelo por tarea: Opus 5.5 para redactar y para el revisor opcional, Sonnet 5.5 para la revisión del contenido y las correcciones por oración.
 - `max_budget_usd` detiene cada llamada que supere su tope.
 - Las oraciones sin afirmación no van a la IA.
 
@@ -386,8 +362,8 @@ Además:
 | El buscador no encuentra el pasaje de una oración reescrita | En la etapa 5b se mide cuántas oraciones necesitan `buscar_en_fuentes`. Si son más del 20 %, se cambia el método |
 | La IA inventa un pasaje | El programa comprueba que el pasaje exista tal cual |
 | Controlar Office desde Python falla o deja programas abiertos | Prueba de apertura y cierre en la etapa 2 |
-| El ciclo no converge | Tope de cinco vueltas y aviso |
-| El costo por material es alto | En la etapa 5d se reporta el costo real de una lectura antes de seguir |
+| El ciclo no converge | Tres correcciones del verificador, una de la revisión, y lo abierto queda pendiente |
+| El costo por material es alto | En la etapa 5d se reporta el costo real de una lectura antes de seguir. Reportado al cerrar la 5d: la lectura de la sesión 1 de Scrum, con 10 páginas de material de referencia, costó 0,71 USD (redacción 0,63 y revisión del contenido 0,08) |
 | El verificador marca errores falsos | Control limpio y revisión de los avisos del modelo |
 | El Agent SDK cambia | Versión fija en `requirements.txt`. Todo el uso del SDK está en `agente.py` |
 | La ejecución con Claude no es igual a la del alumno | La guía del profesor lo dice en "diferencias con otra herramienta" |

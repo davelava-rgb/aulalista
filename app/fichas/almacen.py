@@ -248,9 +248,10 @@ def errores_del_material(ficha: dict, material: str) -> list[str]:
         return [f"«Materiales de esta sesión» no incluye {material}."]
     lista = []
     if material == "lectura":
+        # Con material de referencia, los bloques salen de sus temas (PLAN.md §0, decisión 23).
         bloques = [n for n in range(1, 5) if valor(ficha, f"lectura.bloque.{n}")]
-        if len(bloques) < 2:
-            lista.append("La lectura necesita de 2 a 4 bloques.")
+        if len(bloques) < 2 and not valor(ficha, "sesion.referencia").strip():
+            lista.append("La lectura necesita de 2 a 4 bloques, o un material de referencia.")
         riesgos = _renglones(valor(ficha, "lectura.cuidado"))
         if not 1 <= len(riesgos) <= 3:
             lista.append("«Cuidado con» necesita de 1 a 3 riesgos, uno por línea.")
@@ -394,7 +395,9 @@ def faltantes_para(carpeta_curso: Path, sesion: int, material: str) -> list[str]
     """Lo que falta para producir un material: las dos fichas confirmadas y los datos de ese material."""
     if not puede_empezar_material(carpeta_curso, sesion):
         return ["Confirma la ficha del curso y la ficha de la sesión."]
-    return errores_del_material(cargar(carpeta_curso, "sesion", sesion), material)
+    from app.fichas import referencia   # importa este módulo: se carga aquí para no formar un círculo
+    ficha = cargar(carpeta_curso, "sesion", sesion)
+    return errores_del_material(ficha, material) + referencia.interpretar(carpeta_curso, ficha)[1]
 
 
 def agregar_datos_fijos(carpeta_curso: Path, lineas: list[str], origen: str) -> list[str]:

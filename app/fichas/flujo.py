@@ -83,7 +83,7 @@ def _dice_literal(carpeta_curso: Path, archivo: str, texto: str) -> bool:
 # Campos que la propuesta no llena: la identidad visual, que AulaLista resuelve con su paleta, y los modelos de
 # diseño, que elige el profesor. El docente y el contacto son datos de personas reales: solo se toman si la fuente
 # los dice tal cual; nunca se proponen.
-NO_SE_PROPONEN = ("visual.", "modelos.")
+NO_SE_PROPONEN = ("visual.", "modelos.", "sesion.exclusiones")   # las exclusiones las decide el profesor (decisión 23)
 SOLO_TAL_CUAL = ("portada.",)
 _INTENTOS_DE_REEMPLAZO = 40   # 40 × 0,05 s: unos dos segundos
 
@@ -141,6 +141,9 @@ def pedido_de_propuesta(carpeta_curso: Path, tipo: str, sesion: int | None, fich
             "PDF solo si el caso lo exige. Nunca .txt.",
             "- La evaluación tiene 3 preguntas, salvo que la ficha diga otra cantidad. Cada pregunta "
             "usa archivos y datos nuevos, y no repite un ejercicio del laboratorio.",
+            "- En «Material de referencia» escribe, por cada fuente que cubre el alcance de la sesión, "
+            "«archivo: páginas X a Y». Usa el campo «pagina» de cada pasaje (la página del PDF), no el número impreso. "
+            "Las exclusiones las decide el profesor (PLAN.md §0, decisión 23).",
             "- En el vocabulario escribe un concepto por línea con su nombre único. Si conviene, agrega "
             "«(no usar: variante 1, variante 2)».",
             "- Los datos del caso son ficticios y cuadran con los datos fijos de la ficha del curso.",

@@ -13,6 +13,7 @@
 
 import re
 import shutil
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -29,50 +30,61 @@ ARCHIVO_FICHA_SESION = "ficha_de_la_sesion.md"
 CARPETA_FUENTES = "fuentes"
 NOMBRES_DE_FICHA = {ARCHIVO_FICHA_CURSO: FICHA_DEL_CURSO, ARCHIVO_FICHA_SESION: FICHA_DE_LA_SESION}
 
-ESQUEMA = {
-    "type": "object",
-    "properties": {"hallazgos": {"type": "array", "items": {
+def esquema(campos: list[str]) -> dict:
+    """La respuesta del revisor, con solo las preguntas por bloque de su material (PLAN.md §0, decisión 20)."""
+    return {
         "type": "object",
-        "properties": {
-            "n": {"type": "integer"},
-            "oracion": {"type": "string"},
-            "defecto": {"type": "string", "enum": DEFECTOS},
-            "prueba": {"type": "string"},
-            "donde": {"type": "string"},
-            "explicacion": {"type": "string"},
+        "properties": {"hallazgos": {"type": "array", "items": {
+            "type": "object",
+            "properties": {
+                "n": {"type": "integer"},
+                "oracion": {"type": "string"},
+                "defecto": {"type": "string", "enum": DEFECTOS},
+                "prueba": {"type": "string"},
+                "donde": {"type": "string"},
+                "explicacion": {"type": "string"},
+            },
+            "required": ["n", "oracion", "defecto", "prueba", "donde", "explicacion"],
+            "additionalProperties": False,
+        }},
+            "bloques": {"type": "array", "items": {
+                "type": "object",
+                "properties": {"bloque": {"type": "string"}, **{c: {"type": "string"} for c in campos}},
+                "required": ["bloque", *campos], "additionalProperties": False,
+            }},
+            "lista": {"type": "array", "items": {
+                "type": "object",
+                "properties": {"pregunta": {"type": "string"},
+                               "respuesta": {"type": "string", "enum": pasada2.RESPUESTAS_LISTA},
+                               "detalle": {"type": "string"}},
+                "required": ["pregunta", "respuesta", "detalle"], "additionalProperties": False,
+            }},
         },
-        "required": ["n", "oracion", "defecto", "prueba", "donde", "explicacion"],
+        "required": ["hallazgos", "bloques", "lista"],
         "additionalProperties": False,
-    }},
-        "bloques": {"type": "array", "items": {
-            "type": "object",
-            "properties": {"bloque": {"type": "string"}, **{c: {"type": "string"} for c in pasada2.CAMPOS}},
-            "required": ["bloque", *pasada2.CAMPOS], "additionalProperties": False,
-        }},
-        "lista": {"type": "array", "items": {
-            "type": "object",
-            "properties": {"pregunta": {"type": "string"},
-                           "respuesta": {"type": "string", "enum": pasada2.RESPUESTAS_LISTA},
-                           "detalle": {"type": "string"}},
-            "required": ["pregunta", "respuesta", "detalle"], "additionalProperties": False,
-        }},
-    },
-    "required": ["hallazgos", "bloques", "lista"],
-    "additionalProperties": False,
-}
+    }
 
-# El pedido de la skill, adaptado: la comparación oración por oración ya la hizo la primera pasada
-# (PLAN.md §0, decisión 12). Si la skill cambia su pedido, el programa se detiene.
+
+ESQUEMA = esquema(pasada2.CAMPOS)
+
+# El pedido de la skill, adaptado: el revisor es opcional y la revisión del contenido ya comparó cada bloque
+# con sus pasajes (PLAN.md §0, decisiones 12 y 22). Si la skill cambia su pedido, el programa se detiene.
 PEDIDO_DE_AULALISTA = (
-    "Busca errores en este material. Léelo completo, como un experto que no lo escribió. La primera pasada ya "
-    "comparó cada oración con su pasaje de las fuentes: busca lo que solo se ve al leer el documento completo o "
-    "desde el lugar del alumno. Entrega una lista con el número de oración, el defecto (vacío, inconsistencia, "
-    "ambigüedad, imprecisión o relleno) y la prueba. No des opiniones de estilo.")
+    "Busca errores en este material. Léelo completo, como un experto que no lo escribió. La revisión del "
+    "contenido ya comparó cada bloque con sus pasajes de las fuentes: busca lo que solo se ve al leer el documento "
+    "completo o desde el lugar del alumno. Decir lo mismo que la fuente con otras palabras no es un error. Entrega "
+    "una lista con el número de oración, el defecto (vacío, inconsistencia, ambigüedad, imprecisión o relleno) y la "
+    "prueba. No des opiniones de estilo.")
 
 
 PEDIDO_DE_LA_SKILL = ("Busca errores en este material. Compara cada oración con las fuentes. Entrega una lista con "
                       "el número de oración, el defecto (vacío, inconsistencia, ambigüedad, imprecisión o relleno) y "
                       "la prueba. No des opiniones de estilo")
+
+
+# Lo que el revisor lee de SKILL.md. La lectura lo comprueba antes de gastar tokens.
+SECCIONES_DE_LA_SKILL = ("Validación en dos pasadas antes de cada entrega",)
+SUBSECCIONES_DE_LA_SKILL = ("Revisor independiente", "Segunda pasada · Revisión del contenido")
 
 
 def pedido_de_la_skill() -> str:
@@ -85,19 +97,38 @@ def pedido_de_la_skill() -> str:
 
 
 def definiciones_de_defectos() -> str:
-    texto = skill.secciones("Validación doble antes de cada entrega")
+    texto = skill.secciones("Validación en dos pasadas antes de cada entrega")
     return "\n".join(l for l in texto.splitlines()
                      if l.startswith("- ") and l[2:].split(":")[0].lower() in DEFECTOS)
 
 
 # ---------- Carpeta de trabajo ----------
 
+def _carpeta_libre(carpeta: Path) -> Path:
+    """Una carpeta vacía para el revisor. En Windows, borrar una carpeta y crearla de nuevo con el mismo
+    nombre puede fallar con «Acceso denegado»: OneDrive, el antivirus o un proceso anterior la tienen abierta
+    y el borrado queda pendiente. Por eso la carpeta vieja se mueve a otro nombre antes de borrarla, y si
+    Windows no deja moverla, el revisor usa una carpeta nueva con otro nombre."""
+    for vieja in carpeta.parent.glob(f"{carpeta.name}.borrar-*"):
+        shutil.rmtree(vieja, ignore_errors=True)       # restos de generaciones anteriores
+    if not carpeta.exists():
+        return carpeta
+    marca = time.strftime("%Y%m%d-%H%M%S")
+    vieja = carpeta.with_name(f"{carpeta.name}.borrar-{marca}")
+    try:
+        carpeta.rename(vieja)
+    except OSError:
+        return carpeta.with_name(f"{carpeta.name}-{marca}")
+    shutil.rmtree(vieja, ignore_errors=True)
+    return carpeta
+
+
 def preparar_carpeta(carpeta: Path, carpeta_curso: Path, sesion: int, oraciones: list[dict],
                      bloques: list[pasada2.Bloque] | None = None) -> Path:
-    """Crea la carpeta del revisor desde cero con solo el material final, las fuentes y las fichas."""
-    if carpeta.exists():
-        shutil.rmtree(carpeta)
-    (carpeta / CARPETA_FUENTES).mkdir(parents=True)
+    """Crea una carpeta vacía para el revisor con solo el material final, las fuentes y las fichas.
+    Devuelve la carpeta que usó: puede tener otro nombre si Windows no dejó liberar la anterior."""
+    carpeta = _carpeta_libre(carpeta)
+    (carpeta / CARPETA_FUENTES).mkdir(parents=True, exist_ok=True)
     (carpeta / MATERIAL).write_text(texto_por_bloques(oraciones, bloques or []), encoding="utf-8")
     shutil.copyfile(almacen.ruta_ficha(carpeta_curso, "curso", extension=".md"), carpeta / ARCHIVO_FICHA_CURSO)
     shutil.copyfile(almacen.ruta_ficha(carpeta_curso, "sesion", sesion, ".md"), carpeta / ARCHIVO_FICHA_SESION)
@@ -159,15 +190,19 @@ def _pedido(carpeta: Path, bloques: list[pasada2.Bloque], material: str) -> str:
         "- Los títulos y rótulos no son defectos. No reportes opiniones de estilo.",
         "- Si no encuentras errores, devuelve la lista vacía.",
         "",
-        "SEGUNDA PASADA, como dice la skill:",
-        skill.subseccion("Segunda pasada · Valor y funcionamiento"),
-        "- bloques: cada bloque de la lista «BLOQUES», con las cuatro respuestas, 25 palabras como máximo cada una.",
+        "PREGUNTAS POR BLOQUE, como dice la skill:",
+        skill.subseccion("Segunda pasada · Revisión del contenido"),
+        f"- bloques: cada bloque de la lista «BLOQUES». En este material ({material}) responde solo estas preguntas,",
+        "  25 palabras como máximo cada una; las demás no se aplican:",
+        *[f"  - {c}: {p}" for c, p in zip(pasada2.campos_de(material), pasada2.preguntas_de(material))],
         "  Si no hay oración con dos lecturas, escribe «Ninguna». Cada relleno, vacío, ambigüedad o inconsistencia",
         "  que encuentres va también en «hallazgos». En un vacío, la oración es la que va antes de lo que falta.",
-        "- La cuarta pregunta se aplica a las instrucciones y pasos que el alumno ejecuta. Un ejemplo ilustra una",
-        "  idea: no es un vacío que no cubra otros casos.",
-        f"- lista: cada pregunta de la LISTA DE VERIFICACIÓN con «sí», «no» o «no aplica», solo para este material ({material}).",
-        "  «no» es para lo que no se puede señalar en una sola oración; si ya está en «hallazgos», responde «sí».",
+        *(["- La cuarta pregunta se aplica a las instrucciones y pasos que el alumno ejecuta. Un ejemplo ilustra una",
+           "  idea: no es un vacío que no cubra otros casos."] if "si_no_sale" in pasada2.campos_de(material) else []),
+        f"- lista: cada pregunta de la LISTA DE VERIFICACIÓN, solo para este material ({material}), con «cumple» si el",
+        "  material está bien en ese punto, «no cumple» si tiene el problema, o «no aplica». No respondas «sí» ni «no»:",
+        "  en «¿Hay contenido de sesiones posteriores?», que no haya es «cumple». En «no cumple», di en «detalle» dónde",
+        "  está el problema. Si ya está en «hallazgos», responde «cumple».",
         "  Juntar dos sujetos con «y» no es tener dos ideas.",
         "",
         "LISTA DE VERIFICACIÓN:",
@@ -214,12 +249,12 @@ class Resultado:
     descartados: list[dict] = field(default_factory=list)
     revisadas: dict[str, int] = field(default_factory=dict)   # huella → ronda
     respuestas: dict[str, dict] = field(default_factory=dict)  # bloque → las cuatro respuestas (hoja Segunda pasada)
-    lista_no: list[dict] = field(default_factory=list)         # preguntas de la lista de verificación sin cumplir
+    lista_no: list[dict] = field(default_factory=list)   # preguntas de la lista que no cumplen: informativas (decisión 21)
 
     @property
     def encontrados(self) -> int:
-        """Hallazgos válidos más puntos de la lista sin cumplir: con tres o más se lanza otro revisor."""
-        return len(self.hallazgos) + len(self.lista_no)
+        """Hallazgos válidos: con tres o más se lanza otro revisor. La lista es informativa (PLAN.md §0, decisión 21)."""
+        return len(self.hallazgos)
 
 
 def _comparable(texto: str) -> str:
@@ -258,16 +293,19 @@ def ubicar_prueba(prueba: str, donde: str, corpus: Corpus, oraciones: list[dict]
 
 
 def comprobar(respuesta: dict, ronda: int, oraciones: list[dict], corpus: Corpus,
-              bloques: list[pasada2.Bloque] | None = None) -> Resultado:
+              bloques: list[pasada2.Bloque] | None = None, campos: list[str] | None = None) -> Resultado:
     resultado = Resultado(ronda=ronda, revisadas={o["huella"]: ronda for o in oraciones})
+    campos = campos or pasada2.CAMPOS
     nombres = {b.nombre for b in bloques or []}
     for fila in respuesta.get("bloques", []):
         nombre = fila["bloque"].strip("[] ")
         if nombre in nombres:
-            resultado.respuestas[nombre] = {c: fila[c] for c in pasada2.CAMPOS}
+            resultado.respuestas[nombre] = {c: fila.get(c, "(sin respuesta)") if c in campos else pasada2.NO_SE_APLICA
+                                            for c in pasada2.CAMPOS}
     for nombre in sorted(nombres - set(resultado.respuestas)):
-        resultado.respuestas[nombre] = {c: "(sin respuesta)" for c in pasada2.CAMPOS}
-    resultado.lista_no = [p for p in respuesta.get("lista", []) if p["respuesta"] == "no"]
+        resultado.respuestas[nombre] = {c: "(sin respuesta)" if c in campos else pasada2.NO_SE_APLICA
+                                        for c in pasada2.CAMPOS}
+    resultado.lista_no = [p for p in respuesta.get("lista", []) if p["respuesta"] == "no cumple"]
     vistos = set()
     for r in respuesta["hallazgos"]:
         oracion = _oracion(r, oraciones)
@@ -291,12 +329,13 @@ async def ejecutar(oraciones: list[dict], *, ronda: int, carpeta: Path, carpeta_
     """oraciones: las filas del verificador sobre el archivo final (n, huella, texto).
     material: la clave para el registro de tokens; nombre_material: el nombre para la lista de verificación."""
     bloques = bloques or []
-    preparar_carpeta(carpeta, carpeta_curso, sesion, oraciones, bloques)
+    campos = pasada2.campos_de(nombre_material)
+    carpeta = preparar_carpeta(carpeta, carpeta_curso, sesion, oraciones, bloques)
     corpus = Corpus.del_curso(carpeta_curso, sesion)
     servidor, _ = herramientas.servidor_del_revisor(carpeta, corpus)
     respuesta = await agente.consultar(
-        _pedido(carpeta, bloques, nombre_material), tarea="revisor", esquema=ESQUEMA, curso=curso,
+        _pedido(carpeta, bloques, nombre_material), tarea="revisor", esquema=esquema(campos), curso=curso,
         etapa=f"revisor independiente {ronda}", sesion=f"S{sesion}", material=material, cwd=carpeta,
         herramientas=herramientas.HERRAMIENTAS_REVISOR, servidores={herramientas.SERVIDOR_REVISOR: servidor},
         consulta=consulta)
-    return comprobar(respuesta, ronda, oraciones, corpus, bloques)
+    return comprobar(respuesta, ronda, oraciones, corpus, bloques, campos)
