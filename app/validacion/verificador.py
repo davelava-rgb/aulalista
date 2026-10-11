@@ -32,6 +32,7 @@ verificar = _cargar()
 # Límites de cada material (SPEC §4 y SKILL.md). Los demás se agregan en sus etapas.
 LIMITES = {
     "Lectura": {"paginas_max": 6},
+    "Diapositivas": {"diapositivas_min": 14, "diapositivas_max": 18, "notas_en_todas": True},
 }
 
 
@@ -49,11 +50,13 @@ def configuracion_del_material(carpeta_sesion: Path, material: str, carpeta_prac
 
 
 def ejecutar(configuracion: Path, archivos: list[Path], salida_excel: Path, explicaciones: dict | None = None,
-             contar_paginas=None):
+             contar_paginas=None, hallazgos_extra: list | None = None):
     """Corre el verificador, escribe el Excel y su copia en JSON, y anota en «Cómo se resolvió»
-    la explicación de cada aviso que se mantuvo."""
+    la explicación de cada aviso que se mantuvo. `hallazgos_extra` agrega lo que mide AulaLista con Office
+    y el programa no puede medir solo (por ejemplo, un texto que se sale de su recuadro en PowerPoint)."""
     opciones = {"contar_paginas": contar_paginas} if contar_paginas else {}
     resultado = verificar.verificar(configuracion, archivos, **opciones)
+    resultado.hallazgos += hallazgos_extra or []
     verificar.escribir_excel(resultado, salida_excel)
     verificar.escribir_json(resultado, salida_excel.with_suffix(".json"))
     if explicaciones:

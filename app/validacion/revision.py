@@ -121,10 +121,12 @@ def pasajes_del_bloque(bloque: pasada2.Bloque, corpus: Corpus, anclas: list[dict
     return elegidos
 
 
-def _pedido(bloques: list[pasada2.Bloque], corpus: Corpus, anclas: list[dict], material: str) -> str:
+def _pedido(bloques: list[pasada2.Bloque], corpus: Corpus, anclas: list[dict], material: str,
+            indicaciones: str = "") -> str:
     partes = [
         f"Revisa el contenido de este material ({material}) bloque por bloque. Lo escribió otra persona.",
         "Compara cada bloque con sus pasajes de las fuentes y de las fichas.",
+        *([indicaciones] if indicaciones else []),
         "",
         REGLAS,
         "",
@@ -185,13 +187,14 @@ def comprobar(respuesta: dict, bloques: list[pasada2.Bloque], corpus: Corpus) ->
 
 async def ejecutar(bloques: list[pasada2.Bloque], *, corpus: Corpus, anclas: list[dict] | None = None,
                    curso: str, sesion: int, material: str, nombre_material: str, etapa: str,
-                   consulta=agente.query) -> Resultado:
-    """Revisa los bloques en una sola llamada. Sin bloques, no llama a la IA."""
+                   indicaciones: str = "", consulta=agente.query) -> Resultado:
+    """Revisa los bloques en una sola llamada. Sin bloques, no llama a la IA.
+    `indicaciones` agrega lo propio del material (las diapositivas se comparan con la lectura)."""
     if not bloques:
         return Resultado()
     servidor, _ = herramientas.servidor_de_busqueda(corpus)
     respuesta = await agente.consultar(
-        _pedido(bloques, corpus, anclas or [], nombre_material), tarea="revision", esquema=ESQUEMA, curso=curso,
+        _pedido(bloques, corpus, anclas or [], nombre_material, indicaciones), tarea="revision", esquema=ESQUEMA, curso=curso,
         etapa=etapa, sesion=f"S{sesion}", material=material,
         herramientas=(herramientas.BUSCAR,), servidores={herramientas.SERVIDOR: servidor}, consulta=consulta)
     return comprobar(respuesta, bloques, corpus)

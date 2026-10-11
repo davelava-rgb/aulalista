@@ -23,7 +23,7 @@ from pydantic import ValidationError
 
 from app import agente, entrega, skill, tokens
 from app.fichas import almacen, referencia, verificacion
-from app.materiales import docx, estilo
+from app.materiales import comun, docx, estilo
 from app.materiales.contenido import ESQUEMA_LECTURA, Lectura
 from app.validacion import excel, pasada2, revision, revisor, verificador
 from app.validacion.pasajes import FICHA_DE_LA_SESION, FICHA_DEL_CURSO, Corpus
@@ -38,35 +38,8 @@ BLOQUES_SIN_REFERENCIA = (2, 4)
 # y las del revisor (propuesta 1).
 SECCIONES_DE_LA_SKILL = ("Reglas comunes", "Paso 3 · Vocabulario de la sesión", "Material 1 · Lectura")
 
-ESQUEMA_CORRECCION = {
-    "type": "object",
-    "properties": {
-        "lectura": ESQUEMA_LECTURA,
-        "explicaciones": {"type": "array", "items": {
-            "type": "object",
-            "properties": {"regla": {"type": "string"}, "oracion": {"type": "string"}, "explicacion": {"type": "string"}},
-            "required": ["regla", "oracion", "explicacion"], "additionalProperties": False,
-        }},
-        "datos_nuevos": {"type": "array", "items": {"type": "string"}},
-    },
-    "required": ["lectura", "explicaciones", "datos_nuevos"],
-    "additionalProperties": False,
-}
-
-ESQUEMA_CAMBIOS = {
-    "type": "object",
-    "properties": {
-        "cambios": {"type": "array", "items": {
-            "type": "object",
-            "properties": {"oracion": {"type": "string"}, "nueva": {"type": "string"}},
-            "required": ["oracion", "nueva"], "additionalProperties": False,
-        }},
-        "explicaciones": ESQUEMA_CORRECCION["properties"]["explicaciones"],
-        "datos_nuevos": {"type": "array", "items": {"type": "string"}},
-    },
-    "required": ["cambios", "explicaciones", "datos_nuevos"],
-    "additionalProperties": False,
-}
+ESQUEMA_CORRECCION = comun.esquema_de_correccion("lectura", ESQUEMA_LECTURA)
+ESQUEMA_CAMBIOS = comun.ESQUEMA_CAMBIOS
 
 class NoSePuedeEmpezar(RuntimeError):
     """Faltan fichas confirmadas (SPEC §3: ningún material empieza sin la ficha de la sesión confirmada)."""
@@ -99,22 +72,15 @@ def archivos(carpeta_curso: Path, sesion: int) -> dict[str, Path]:
 # ---------- Estado y avance (la página lo consulta mientras se trabaja) ----------
 
 def _estado(carpeta_curso: Path, sesion: int) -> dict:
-    return almacen.cargar_estado(carpeta_curso, sesion)["materiales"].get(CLAVE, {})
+    return comun.estado(carpeta_curso, sesion, CLAVE)
 
 
 def _actualizar(carpeta_curso: Path, sesion: int, **cambios) -> dict:
-    estado = almacen.cargar_estado(carpeta_curso, sesion)
-    material = estado["materiales"].setdefault(CLAVE, {"avance": []})
-    material.update(cambios)
-    almacen.guardar_estado(carpeta_curso, sesion, estado)
-    return material
+    return comun.actualizar(carpeta_curso, sesion, CLAVE, **cambios)
 
 
 def _avance(carpeta_curso: Path, sesion: int, texto: str) -> None:
-    estado = almacen.cargar_estado(carpeta_curso, sesion)
-    material = estado["materiales"].setdefault(CLAVE, {"avance": []})
-    material.setdefault("avance", []).append(f"{datetime.now():%H:%M:%S} · {texto}")
-    almacen.guardar_estado(carpeta_curso, sesion, estado)
+    comun.avance(carpeta_curso, sesion, CLAVE, texto)
 
 
 # ---------- Pedidos al agente ----------
@@ -218,20 +184,7 @@ def pedido_de_redaccion(carpeta_curso: Path, sesion: int) -> str:
     ])
 
 
-REGLAS_DE_CORRECCION = """REGLAS DE CORRECCIÓN
-- Una FALLA del verificador se corrige siempre. Un AVISO se corrige o se explica.
-- REVISIÓN · contradice la fuente: reescribe la oración para que diga lo que dice la fuente. Puedes usar tus palabras.
-- REVISIÓN · dato inventado: elimina la oración, o reescríbela con lo que dice una fuente. Si es un dato ficticio
-  del caso que hace falta, agrégalo en «datos_nuevos» como «Etiqueta: valor». AulaLista lo guarda en los datos
-  fijos de la ficha del curso, y todos los materiales lo usan igual.
-- REVISIÓN · vacío: agrega lo que falta. Para agregar, reemplaza la oración indicada por ella misma seguida de la nueva.
-- REVISIÓN · ambigüedad: reescribe la oración para que tenga una sola lectura.
-- REVISIÓN · inconsistencia: usa el mismo dato en todas sus apariciones, el de la ficha si existe.
-- Si no hay datos nuevos, deja «datos_nuevos» vacío.
-- Si mantienes una oración con AVISO, agrega en «explicaciones» la regla y la oración copiadas tal cual del problema, y por qué se mantiene.
-- Cambia solo lo necesario. No cambies oraciones que ningún problema nombra.
-  Puedes buscar en las fuentes con Grep y Read si necesitas un pasaje.
-"""
+REGLAS_DE_CORRECCION = comun.REGLAS_DE_CORRECCION
 
 
 def pedido_de_cambios(carpeta_curso: Path, sesion: int, contenido: dict, problemas: list[str]) -> str:
@@ -317,51 +270,18 @@ async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.
 
 
 def gasto_de_la_corrida(carpeta_curso: Path, curso: str, sesion: int) -> dict | None:
-    """Lo que gastó la lectura desde que se pulsó Generar por última vez, aunque se haya detenido o
-    terminado con error. Incluye el revisor independiente si se pidió después. None si nunca se generó."""
-    desde = _estado(carpeta_curso, sesion).get("corrida_desde")
-    if desde is None:
-        return None
-    return tokens.total(curso, sesion=f"S{sesion}", material=CLAVE, desde_linea=desde)
+    return comun.gasto_de_la_corrida(carpeta_curso, curso, sesion, CLAVE)
 
 
 def marcar_detenida(carpeta_curso: Path, sesion: int) -> bool:
-    """El profesor detuvo el trabajo con el botón Detener. También libera una lectura que quedó en
-    «Trabajando» porque el servidor se cerró a mitad de camino. Si lo detenido era el revisor opcional,
-    la lectura vuelve al estado que tenía. Devuelve False si no estaba trabajando."""
-    material = _estado(carpeta_curso, sesion)
-    if material.get("estado") != "trabajando":
-        return False
-    _avance(carpeta_curso, sesion, "Detenido por ti. Lo que se gastó hasta aquí queda en el registro de tokens.")
-    _actualizar(carpeta_curso, sesion, estado=material.get("previo") or "detenida", previo="", error="")
-    return True
+    return comun.marcar_detenida(carpeta_curso, sesion, CLAVE)
 
 
-def _leer_json(ruta: Path) -> dict:
-    return json.loads(ruta.read_text(encoding="utf-8")) if ruta.exists() else {}
+_leer_json, _guardar_json = comun.leer_json, comun.guardar_json
 
-
-def _guardar_json(ruta: Path, datos) -> None:
-    ruta.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-# Avisos que se muestran en la hoja Hallazgos pero no obligan a corregir ni a explicar (PLAN.md §0, decisión 13).
-AVISOS_INFORMATIVOS = ("relleno", "palabra imprecisa")
-NOTA_INFORMATIVA = "Aviso informativo: no obliga a corregir ni a explicar (PLAN.md §0, decisión 13)."
-
-
-def _hallazgos_abiertos(resultado, explicaciones) -> tuple[list, list]:
-    """Fallas del verificador y avisos todavía sin explicar. Los avisos informativos no cuentan."""
-    fallas = [h for h in resultado.hallazgos if h.nivel == "FALLA"]
-    avisos = [h for h in resultado.hallazgos
-              if h.nivel == "AVISO" and h.regla not in AVISOS_INFORMATIVOS
-              and not verificador.buscar_explicacion(h.regla, h.oracion, explicaciones)]
-    return fallas, avisos
-
-
-def _texto_de(h) -> str:
-    donde = f"«{h.oracion}»" if h.oracion else h.seccion
-    return f"{h.nivel} · {h.regla} · {donde}: {h.detalle}"
+AVISOS_INFORMATIVOS, NOTA_INFORMATIVA = comun.AVISOS_INFORMATIVOS, comun.NOTA_INFORMATIVA
+_hallazgos_abiertos, _texto_de = comun.hallazgos_abiertos, comun.texto_de
+_cuantos = comun.cuantos
 
 
 def bloques_de(contenido: Lectura) -> list[pasada2.Bloque]:
@@ -380,73 +300,8 @@ def bloques_de(contenido: Lectura) -> list[pasada2.Bloque]:
     return bloques
 
 
-REGLAS_QUE_EXPLICA_EL_PROGRAMA = ("palabra imprecisa",)
-
-
-def _explicar_literales(resultado, explicaciones: dict, corpus: Corpus) -> bool:
-    """Un aviso de palabra imprecisa en una oración copiada tal cual de una fuente del curso se explica solo:
-    cambiarla cambiaría lo que dice la fuente (así lo hace el Excel modelo)."""
-    nuevas = False
-    for h in resultado.hallazgos:
-        if h.nivel != "AVISO" or h.regla not in REGLAS_QUE_EXPLICA_EL_PROGRAMA or not h.oracion:
-            continue
-        if verificador.buscar_explicacion(h.regla, h.oracion, explicaciones):
-            continue
-        texto = h.oracion.split(": ", 1)[-1]
-        encontrada = corpus.ubicar_en_cualquiera(texto)
-        if encontrada and encontrada[0] not in FICHAS:
-            fuente, ubicacion = encontrada
-            explicaciones[verificador.clave_de_hallazgo(h.regla, h.oracion)] = (
-                f"Es un pasaje literal de la fuente ({fuente}, {ubicacion}). Cambiarlo cambiaría lo que dice. "
-                "Lo comprobó el programa.")
-            nuevas = True
-    return nuevas
-
-
-def _historial(hallazgos, vuelta) -> list[dict]:
-    return [{"nivel": h.nivel, "seccion": h.seccion, "oracion": h.oracion, "regla": h.regla,
-             "detalle": h.detalle, "vuelta": vuelta} for h in hallazgos]
-
-
-def aplicar_cambios(datos: dict, cambios: list[dict]) -> tuple[dict, list[str]]:
-    """Reemplaza cada oración corregida dentro de la lectura. «nueva» vacía elimina la oración.
-    Devuelve la lectura nueva y las oraciones que no se encontraron."""
-    datos = json.loads(json.dumps(datos))
-    no_encontradas = []
-    for cambio in cambios:
-        buscada = " ".join(cambio["oracion"].split())
-        nueva = " ".join(cambio["nueva"].split())
-        if not buscada or not _reemplazar(datos, buscada, nueva):
-            no_encontradas.append(cambio["oracion"])
-    return datos, no_encontradas
-
-
-CAMPOS_QUE_NO_SE_CORRIGEN = {"pasajes", "decisiones", "agrupacion"}
-
-
-def _reemplazar(nodo, buscada: str, nueva: str, borrar: bool = True) -> bool:
-    """borrar=False dentro de una tabla: una celda vacía se queda, para no descuadrar las columnas."""
-    if isinstance(nodo, dict):
-        return any(_reemplazar_en(nodo, clave, buscada, nueva, borrar and clave != "tabla") for clave in list(nodo)
-                   if clave not in CAMPOS_QUE_NO_SE_CORRIGEN)
-    if isinstance(nodo, list):
-        return any(_reemplazar_en(nodo, i, buscada, nueva, borrar) for i in range(len(nodo) - 1, -1, -1))
-    return False
-
-
-def _reemplazar_en(contenedor, clave, buscada: str, nueva: str, borrar: bool) -> bool:
-    valor = contenedor[clave]
-    if not isinstance(valor, str):
-        return _reemplazar(valor, buscada, nueva, borrar)
-    normal = " ".join(valor.split())
-    if buscada not in normal:
-        return False
-    texto = " ".join(normal.replace(buscada, nueva, 1).split())
-    if not texto and borrar and isinstance(contenedor, list):
-        del contenedor[clave]   # el párrafo quedó vacío: se elimina
-    else:
-        contenedor[clave] = texto
-    return True
+_explicar_literales, _historial = comun.explicar_literales, comun.historial
+aplicar_cambios = comun.aplicar_cambios
 
 
 class _Trabajo:
@@ -565,12 +420,6 @@ class _Trabajo:
             self.avance(f"Datos nuevos del caso agregados a la ficha del curso: {len(nuevos)}.")
 
 
-def _cambio(antes: dict[str, str], despues: list[pasada2.Bloque], nombre: str) -> bool:
-    """Un bloque cambió si su texto es otro o si ya no está con ese nombre."""
-    actual = next((b for b in despues if b.nombre == nombre), None)
-    return actual is None or actual.huella != antes.get(nombre)
-
-
 def _limpiar(rutas: dict[str, Path]) -> None:
     """Borra lo que dejó la generación anterior, para que la carpeta muestre solo la lectura nueva (propuesta 6).
     Un archivo abierto en Word u OneDrive puede negar el borrado: se deja y la generación lo reescribe."""
@@ -602,44 +451,8 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
     errores: list[revision.Error] = []
     revisados = 0
     if await trabajo.verificar():
-        # Segunda pasada: la revisión del contenido, por bloque.
-        bloques = bloques_de(trabajo.contenido)
-        revisados = len(bloques)
-        trabajo.avance(f"Revisión del contenido: {_cuantos(len(bloques), 'bloque')} con sus pasajes de las fuentes.")
-        resultado = await trabajo.revisar(bloques, "revisión")
-        errores = resultado.errores
-        trabajo.avance(f"Revisión: {_cuantos(len(errores), 'error')} con prueba"
-                       + (f", {len(resultado.descartados)} descartados porque su prueba no existe." if resultado.descartados else "."))
-        if errores:
-            # Una sola corrección. Después, el verificador y la confirmación de los bloques que cambiaron.
-            antes = {b.nombre: b.huella for b in bloques}
-            trabajo.correcciones["revisión"] += len(errores)
-            await trabajo.corregir([e.describir() for e in errores], completa=False)
-            if await trabajo.verificar():
-                despues = bloques_de(trabajo.contenido)
-                cambiados = [b for b in despues if _cambio(antes, despues, b.nombre)]
-                confirmacion = await trabajo.revisar(cambiados, "confirmación") if cambiados else revision.Resultado()
-                trabajo.avance(f"Confirmación: {_cuantos(len(cambiados), 'bloque')} corregidos revisados de nuevo, "
-                               f"{_cuantos(len(confirmacion.errores), 'error')}.")
-                nuevos = list(confirmacion.errores)
-                for e in errores:
-                    # El mismo error sigue si la confirmación lo encuentra otra vez en su oración, o en su bloque
-                    # con el mismo tipo (la oración corregida tiene otro texto).
-                    sigue = next((c for c in nuevos if c.tipo == e.tipo and (c.oracion == e.oracion or c.bloque == e.bloque)), None)
-                    if sigue is not None:
-                        nuevos.remove(sigue)
-                        e.oracion, e.explicacion, e.prueba, e.fuente = sigue.oracion, sigue.explicacion, sigue.prueba, sigue.fuente
-                        e.estado, e.resolucion = "pendiente", "Sigue después de la corrección. Pendiente: decides tú."
-                    elif _cambio(antes, despues, e.bloque):
-                        e.estado, e.resolucion = "corregido", "Corregido y confirmado por la revisión."
-                    else:
-                        e.estado, e.resolucion = "pendiente", "La corrección no cambió su bloque. Pendiente: decides tú."
-                for c in nuevos:
-                    c.estado, c.resolucion = "pendiente", "Apareció en la confirmación. Pendiente: decides tú."
-                errores += nuevos
-            else:
-                for e in errores:
-                    e.estado, e.resolucion = "pendiente", "No se confirmó: quedaron fallas del verificador."
+        # Segunda pasada: la revisión del contenido, por bloque, con una sola corrección.
+        errores, revisados = await comun.revisar_y_corregir(trabajo, bloques_de)
 
     pendientes = [e for e in errores if e.estado == "pendiente"]
     final = trabajo.contenido
@@ -685,24 +498,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
     return _estado(carpeta_curso, sesion)
 
 
-def _filas_de_revision(errores: list[revision.Error], descartados: list[dict], seccion: str) -> list[dict]:
-    """Filas de la hoja Hallazgos para la revisión del contenido."""
-    filas = [{"nivel": "REVISIÓN", "seccion": f"{seccion} · {e.bloque}", "oracion": e.oracion,
-              "regla": f"revisión: {e.tipo}",
-              "detalle": e.explicacion + (f" Prueba: «{e.prueba}» ({e.fuente})." if e.prueba else ""),
-              "resolucion": e.resolucion or "Pendiente: decides tú."} for e in errores]
-    filas += [{"nivel": "REVISIÓN", "seccion": f"{seccion} · {d['bloque']}", "oracion": d["oracion"],
-               "regla": f"revisión: {d['tipo']}", "detalle": d["explicacion"],
-               "resolucion": f"Descartado por el programa: {d['motivo']}"} for d in descartados]
-    return filas
-
-
-def _filas_de_decisiones(decisiones: list, seccion: str) -> list[dict]:
-    """Filas de la hoja Hallazgos con lo que anotó el redactor. Las notas solo quedan aquí (propuesta 5)."""
-    resolucion = {"sin fuente": "Pendiente: decides tú.", "decisión": "En «Qué decidí por mi cuenta».",
-                  "nota": "Informativo."}
-    return [{"nivel": "REDACTOR", "seccion": seccion, "oracion": "", "regla": f"redactor: {d.tipo}",
-             "detalle": d.texto, "resolucion": resolucion[d.tipo]} for d in decisiones]
+_filas_de_revision, _filas_de_decisiones = comun.filas_de_revision, comun.filas_de_decisiones
 
 
 def _escribir_entrega(carpeta_curso: Path, sesion: int, material: dict) -> dict:
@@ -759,14 +555,6 @@ async def revisar_con_revisor(carpeta_curso: Path, curso: str, sesion: int, cons
 
 
 # ---------- Entrega (SPEC §8 y SKILL.md «Formato de cada entrega») ----------
-
-def _cuantos(numero: int, palabra: str) -> str:
-    if palabra.endswith("ón"):
-        plural = palabra[:-2] + "ones"
-    else:
-        plural = palabra + ("es" if palabra[-1] in "rnl" else "s")
-    return f"{numero} {palabra if numero == 1 else plural}"
-
 
 def _entrega(material: dict) -> dict:
     archivos_ = material["archivos"]
@@ -848,3 +636,8 @@ def aprobar(carpeta_curso: Path, sesion: int) -> dict:
 
 def estado(carpeta_curso: Path, sesion: int) -> dict:
     return _estado(carpeta_curso, sesion)
+
+
+def faltan(carpeta_curso: Path, sesion: int) -> dict[str, list[str]]:
+    """Lo que falta para generar la lectura: en «ficha», lo que se completa en la ficha de la sesión."""
+    return {"ficha": almacen.faltantes_para(carpeta_curso, sesion, CLAVE), "otros": []}
