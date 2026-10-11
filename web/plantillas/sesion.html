@@ -8,23 +8,26 @@
 <p><a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">Ficha de la sesión</a>:
   {{ 'confirmada' if puede_empezar else 'falta confirmar las fichas. Ningún material empieza sin ellas.' }}</p>
 
-<section class="material" id="lectura" data-estado="{{ lectura.estado or '' }}">
-  <h2>1. Lectura</h2>
+{% for m in materiales %}
+{% set e = m.estado %}
+{% set base = "/cursos/" ~ curso ~ "/sesiones/" ~ sesion ~ "/materiales/" ~ m.clave %}
+<section class="material" id="{{ m.clave }}" data-estado="{{ e.estado or '' }}">
+  <h2>{{ m.numero }}. {{ m.titulo }}</h2>
   <p class="estado-material">
-    {% if lectura.estado == "trabajando" %}Trabajando…
-    {% elif lectura.estado == "aprobada" %}Aprobada por ti el {{ lectura.aprobada[:10] }}.
-    {% elif lectura.estado == "verificada" %}Verificada: el verificador y la revisión del contenido terminaron sin errores abiertos.
-    {% elif lectura.estado == "con pendientes" %}Lista, con pendientes de la revisión. Míralos en «Decisiones pendientes» y decide: puedes aprobarla igual.
-    {% elif lectura.estado == "con fallas" %}Con fallas del verificador. No se puede aprobar así.
-    {% elif lectura.estado == "error" %}Se detuvo por un error: {{ lectura.error }}
-    {% elif lectura.estado == "detenida" %}Detenida por ti. Puedes generarla de nuevo.
+    {% if e.estado == "trabajando" %}Trabajando…
+    {% elif e.estado == "aprobada" %}{{ "Aprobadas" if m.plural else "Aprobada" }} por ti el {{ e.aprobada[:10] }}.
+    {% elif e.estado == "verificada" %}{{ "Verificadas" if m.plural else "Verificada" }}: el verificador y la revisión del contenido terminaron sin errores abiertos.
+    {% elif e.estado == "con pendientes" %}{{ "Listas" if m.plural else "Lista" }}, con pendientes de la revisión. Míralos en «Decisiones pendientes» y decide: puedes {{ "aprobarlas" if m.plural else "aprobarla" }} igual.
+    {% elif e.estado == "con fallas" %}Con fallas del verificador. No se {{ "pueden" if m.plural else "puede" }} aprobar así.
+    {% elif e.estado == "error" %}Se {{ "detuvieron" if m.plural else "detuvo" }} por un error: {{ e.error }}
+    {% elif e.estado == "detenida" %}{{ "Detenidas" if m.plural else "Detenida" }} por ti. Puedes {{ "generarlas" if m.plural else "generarla" }} de nuevo.
     {% else %}Sin generar.{% endif %}
-    {% if lectura.desactualizado %}<strong>Desactualizada: las fichas cambiaron.</strong>{% endif %}
+    {% if e.desactualizado %}<strong>{{ "Desactualizadas: la lectura o las fichas cambiaron." if m.plural else "Desactualizada: las fichas cambiaron." }}</strong>{% endif %}
   </p>
 
-  {% if lectura.entrega and lectura.estado != "trabajando" %}
+  {% if e.entrega and e.estado != "trabajando" %}
   <h3>Entrega</h3>
-  {% for s in lectura.entrega.secciones %}
+  {% for s in e.entrega.secciones %}
   <h4>{{ s.titulo }}</h4>
   {% if s.clave == "archivos" %}
   <ul class="lista">
@@ -36,62 +39,67 @@
   <ul class="lista">{% for l in s.lineas %}<li>{{ l }}</li>{% endfor %}</ul>
   {% endif %}
   {% endfor %}
-  {% if lectura.avisos_de_diseno %}
+  {% if e.avisos_de_diseno %}
   <h4>Avisos de diseño</h4>
-  <ul>{% for a in lectura.avisos_de_diseno %}<li>{{ a }}</li>{% endfor %}</ul>
+  <ul>{% for a in e.avisos_de_diseno %}<li>{{ a }}</li>{% endfor %}</ul>
   {% endif %}
-  {% if lectura.estado in ("verificada", "con pendientes") and not lectura.desactualizado %}
-  <form method="post" action="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/lectura/aprobar" class="aprobar">
-    <p><strong>{{ lectura.entrega.pregunta }}</strong></p>
-    <button type="submit">Aprobar la lectura</button>
+  {% if e.estado in ("verificada", "con pendientes") and not e.desactualizado %}
+  <form method="post" action="{{ base }}/aprobar" class="aprobar">
+    <p><strong>{{ e.entrega.pregunta }}</strong></p>
+    <button type="submit">Aprobar {{ m.el }}</button>
   </form>
-  {% elif lectura.estado == "con fallas" %}
-  <p><strong>No se puede aprobar: tiene fallas del verificador.</strong> Genera la lectura de nuevo después de resolverlas en las fichas.</p>
+  {% elif e.estado == "con fallas" %}
+  <p><strong>No se {{ "pueden" if m.plural else "puede" }} aprobar: {{ "tienen" if m.plural else "tiene" }} fallas del verificador.</strong> {{ "Genéralas" if m.plural else "Genérala" }} de nuevo después de resolverlas en las fichas.</p>
   {% endif %}
-  {% if lectura.estado in ("verificada", "con pendientes", "aprobada") %}
-  <form method="post" action="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/lectura/revisor">
+  {% if e.estado in ("verificada", "con pendientes", "aprobada") %}
+  <form method="post" action="{{ base }}/revisor">
     <button type="submit">Pedir revisor independiente</button>
-    <span class="nota">Opcional. Una sesión nueva de Claude Opus lee la lectura, las fuentes y las fichas. No corrige: lo que encuentra queda pendiente para que decidas. Gasta hasta 2 USD.</span>
+    <span class="nota">Opcional. Una sesión nueva de Claude Opus lee {{ m.el }}, las fuentes y las fichas. No corrige: lo que encuentra queda pendiente para que decidas. Gasta hasta 2 USD.</span>
   </form>
   {% endif %}
   {% endif %}
 
-  {% if lectura.avance %}
-  <details {% if lectura.estado == "trabajando" %}open{% endif %}>
+  {% if e.avance %}
+  <details {% if e.estado == "trabajando" %}open{% endif %}>
     <summary>Avance</summary>
-    <ol class="avance" aria-live="polite">{% for a in lectura.avance %}<li>{{ a }}</li>{% endfor %}</ol>
+    <ol class="avance" aria-live="polite">{% for a in e.avance %}<li>{{ a }}</li>{% endfor %}</ol>
   </details>
   {% endif %}
 
-  {% if gasto_corrida %}
-  <p class="nota">Gasto desde la última vez que pulsaste Generar: {{ gasto_corrida.llamadas }} {{ "llamada" if gasto_corrida.llamadas == 1 else "llamadas" }}, {{ "%.4f"|format(gasto_corrida.costo_usd) }} USD estimados.{% if lectura.revisor %} Incluye el revisor independiente.{% endif %}</p>
+  {% if m.gasto_corrida %}
+  <p class="nota">Gasto desde la última vez que pulsaste Generar: {{ m.gasto_corrida.llamadas }} {{ "llamada" if m.gasto_corrida.llamadas == 1 else "llamadas" }}, {{ "%.4f"|format(m.gasto_corrida.costo_usd) }} USD estimados.{% if e.revisor %} Incluye el revisor independiente.{% endif %}</p>
   {% endif %}
 
-  {% if faltan_lectura %}
-  <p><strong>Para generar la lectura, completa en la <a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">ficha de la sesión</a>:</strong></p>
-  <ul>{% for f in faltan_lectura %}<li>{{ f }}</li>{% endfor %}</ul>
+  {% if m.faltan.ficha %}
+  <p><strong>Para generar {{ m.el }}, completa en la <a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">ficha de la sesión</a>:</strong></p>
+  <ul>{% for f in m.faltan.ficha %}<li>{{ f }}</li>{% endfor %}</ul>
   {% endif %}
-  <form method="post" action="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/lectura">
-    <button type="submit" {% if not puede_empezar or faltan_lectura or lectura.estado == "trabajando" %}disabled{% endif %}>
-      {{ 'Generar de nuevo' if lectura.estado else 'Generar lectura' }}
+  {% if m.faltan.otros %}
+  <p><strong>Para generar {{ m.el }}:</strong></p>
+  <ul>{% for f in m.faltan.otros %}<li>{{ f }}</li>{% endfor %}</ul>
+  {% endif %}
+  <form method="post" action="{{ base }}">
+    <button type="submit" {% if not puede_empezar or m.faltan.ficha or m.faltan.otros or e.estado == "trabajando" %}disabled{% endif %}>
+      {{ 'Generar de nuevo' if e.estado else m.generar }}
     </button>
     <span class="nota">Gasta tokens. La redacción y las correcciones pueden tardar varios minutos.</span>
   </form>
-  {% if lectura.estado == "trabajando" %}
-  <form method="post" action="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/lectura/detener">
+  {% if e.estado == "trabajando" %}
+  <form method="post" action="{{ base }}/detener">
     <button type="submit">Detener</button>
     <span class="nota">Corta el trabajo en curso. Lo que ya se gastó no se recupera.</span>
   </form>
   {% endif %}
 </section>
+{% endfor %}
 
 <p class="nota">Gasto total de este curso, con todas las corridas: {{ gasto.llamadas }} llamadas, {{ "%.4f"|format(gasto.costo_usd) }} USD estimados.</p>
 {% endblock %}
 
 {% block scripts %}
 <script>
-  // Mientras se trabaja, la página se actualiza sola cada 5 segundos.
-  if (document.getElementById("lectura").dataset.estado === "trabajando") {
+  // Mientras se trabaja en algún material, la página se actualiza sola cada 5 segundos.
+  if (document.querySelector('section.material[data-estado="trabajando"]')) {
     setTimeout(() => location.reload(), 5000);
   }
 </script>

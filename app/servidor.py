@@ -15,7 +15,7 @@ from app.config import RAIZ, FaltaClave
 from app.fichas import almacen, flujo
 from app.fichas import plantillas as plantillas_fichas
 from app.fuentes import convertir
-from app.materiales import lectura
+from app.materiales import diapositivas, lectura
 
 app = FastAPI(title="AulaLista")
 app.mount("/estaticos", StaticFiles(directory=RAIZ / "web" / "estaticos"), name="estaticos")
@@ -322,75 +322,101 @@ def _trabajo_en_segundo_plano(funcion, *argumentos, clave: tuple | None = None) 
     return hilo
 
 
+# Materiales que ya se generan, en el orden de la skill. Cada módulo tiene las mismas funciones:
+# estado, faltan, generar, marcar_detenida, revisar_con_revisor, aprobar y gasto_de_la_corrida.
+MATERIALES = {
+    lectura.CLAVE: {"modulo": lectura, "numero": 1, "titulo": "Lectura", "el": "la lectura", "plural": False,
+                    "aprobado": "Lectura aprobada.", "generar": "Generar lectura"},
+    diapositivas.CLAVE: {"modulo": diapositivas, "numero": 2, "titulo": "Diapositivas", "el": "las diapositivas",
+                         "plural": True, "aprobado": "Diapositivas aprobadas.", "generar": "Generar diapositivas"},
+}
+
+
+def _material(material: str) -> dict:
+    if material not in MATERIALES:
+        raise HTTPException(404, "Ese material no existe.")
+    return MATERIALES[material]
+
+
 @app.get("/cursos/{curso}/sesiones/{sesion}")
 def ver_sesion(request: Request, curso: str, sesion: int, mensaje: str = ""):
     carpeta = _carpeta(curso)
     _exigir_ficha_del_curso(carpeta, curso)
+    puede_empezar = almacen.puede_empezar_material(carpeta, sesion)
+    materiales = []
+    for clave, datos in MATERIALES.items():
+        modulo = datos["modulo"]
+        materiales.append({**{k: v for k, v in datos.items() if k != "modulo"}, "clave": clave,
+                           "estado": modulo.estado(carpeta, sesion),
+                           "faltan": modulo.faltan(carpeta, sesion) if puede_empezar else {"ficha": [], "otros": []},
+                           "gasto_corrida": modulo.gasto_de_la_corrida(carpeta, curso, sesion)})
     return plantillas.TemplateResponse(request, "sesion.html", {
         "curso": curso, "nombre": cursos.nombre(curso), "sesion": sesion, "mensaje": mensaje,
-        "puede_empezar": almacen.puede_empezar_material(carpeta, sesion),
-        "faltan_lectura": almacen.faltantes_para(carpeta, sesion, lectura.CLAVE)
-        if almacen.puede_empezar_material(carpeta, sesion) else [],
-        "lectura": lectura.estado(carpeta, sesion),
-        "gasto_corrida": lectura.gasto_de_la_corrida(carpeta, curso, sesion),
-        "gasto": tokens.total(curso),
+        "puede_empezar": puede_empezar, "materiales": materiales, "gasto": tokens.total(curso),
     })
 
 
-@app.post("/cursos/{curso}/sesiones/{sesion}/materiales/lectura")
-def generar_lectura(curso: str, sesion: int):
+@app.post("/cursos/{curso}/sesiones/{sesion}/materiales/{material}")
+def generar_material(curso: str, sesion: int, material: str):
+    modulo = _material(material)["modulo"]
     carpeta = _carpeta(curso)
     destino = f"/cursos/{curso}/sesiones/{sesion}"
     if not almacen.puede_empezar_material(carpeta, sesion):
         return RedirectResponse(destino + "?mensaje=" + quote("Confirma las dos fichas antes de generar."), status_code=303)
-    faltan = almacen.faltantes_para(carpeta, sesion, lectura.CLAVE)
-    if faltan:
-        return RedirectResponse(destino + "?mensaje=" + quote("Falta en la ficha de la sesión: " + " ".join(faltan)),
-                                status_code=303)
-    if lectura.estado(carpeta, sesion).get("estado") == "trabajando":
+    faltan = modulo.faltan(carpeta, sesion)
+    if faltan["ficha"]:
+        mensaje = "Falta en la ficha de la sesión: " + " ".join(faltan["ficha"])
+        return RedirectResponse(destino + "?mensaje=" + quote(mensaje), status_code=303)
+    if faltan["otros"]:
+        return RedirectResponse(destino + "?mensaje=" + quote(" ".join(faltan["otros"])), status_code=303)
+    if modulo.estado(carpeta, sesion).get("estado") == "trabajando":
         return RedirectResponse(destino, status_code=303)
-    _trabajo_en_segundo_plano(lectura.generar, carpeta, curso, sesion, clave=(curso, sesion, lectura.CLAVE))
+    _trabajo_en_segundo_plano(modulo.generar, carpeta, curso, sesion, clave=(curso, sesion, material))
     return RedirectResponse(destino, status_code=303)
 
 
-@app.post("/cursos/{curso}/sesiones/{sesion}/materiales/lectura/revisor")
-def revisor_de_la_lectura(curso: str, sesion: int):
+@app.post("/cursos/{curso}/sesiones/{sesion}/materiales/{material}/revisor")
+def revisor_del_material(curso: str, sesion: int, material: str):
     """El revisor independiente opcional (PLAN.md §0, decisión 22): lo pide el profesor."""
+    datos = _material(material)
     carpeta = _carpeta(curso)
     destino = f"/cursos/{curso}/sesiones/{sesion}"
-    if lectura.estado(carpeta, sesion).get("estado") not in ("verificada", "con pendientes", "aprobada"):
-        return RedirectResponse(destino + "?mensaje=" + quote("El revisor revisa una lectura generada y sin fallas."),
-                                status_code=303)
-    _trabajo_en_segundo_plano(lectura.revisar_con_revisor, carpeta, curso, sesion, clave=(curso, sesion, lectura.CLAVE))
+    if datos["modulo"].estado(carpeta, sesion).get("estado") not in ("verificada", "con pendientes", "aprobada"):
+        generado = "generadas" if datos["plural"] else "generada"
+        mensaje = f"El revisor revisa {datos['el']} ya {generado} y sin fallas."
+        return RedirectResponse(destino + "?mensaje=" + quote(mensaje), status_code=303)
+    _trabajo_en_segundo_plano(datos["modulo"].revisar_con_revisor, carpeta, curso, sesion, clave=(curso, sesion, material))
     return RedirectResponse(destino, status_code=303)
 
 
-@app.post("/cursos/{curso}/sesiones/{sesion}/materiales/lectura/detener")
-def detener_lectura(curso: str, sesion: int):
+@app.post("/cursos/{curso}/sesiones/{sesion}/materiales/{material}/detener")
+def detener_material(curso: str, sesion: int, material: str):
     """Cancela la generación en curso. Si no hay ninguna (el servidor se cerró a mitad de camino),
-    libera la lectura que quedó en «Trabajando»."""
+    libera el material que quedó en «Trabajando»."""
+    datos = _material(material)
     destino = f"/cursos/{curso}/sesiones/{sesion}"
     with _CANDADO:
-        trabajo = _TRABAJOS.get((curso, sesion, lectura.CLAVE))
+        trabajo = _TRABAJOS.get((curso, sesion, material))
     if trabajo:
         bucle, tarea = trabajo
         bucle.call_soon_threadsafe(tarea.cancel)
-        mensaje = "Deteniendo la lectura. La llamada a Claude en curso se corta."
-    elif lectura.marcar_detenida(_carpeta(curso), sesion):
+        mensaje = f"Deteniendo {datos['el']}. La llamada a Claude en curso se corta."
+    elif datos["modulo"].marcar_detenida(_carpeta(curso), sesion):
         mensaje = "Trabajo detenido."
     else:
-        mensaje = "La lectura no estaba trabajando."
+        mensaje = f"{datos['el'].capitalize()} no {'estaban' if datos['plural'] else 'estaba'} trabajando."
     return RedirectResponse(destino + "?mensaje=" + quote(mensaje), status_code=303)
 
 
-@app.post("/cursos/{curso}/sesiones/{sesion}/materiales/lectura/aprobar")
-def aprobar_lectura(curso: str, sesion: int):
+@app.post("/cursos/{curso}/sesiones/{sesion}/materiales/{material}/aprobar")
+def aprobar_material(curso: str, sesion: int, material: str):
+    datos = _material(material)
     destino = f"/cursos/{curso}/sesiones/{sesion}"
     try:
-        lectura.aprobar(_carpeta(curso), sesion)
-    except lectura.NoSePuedeAprobar as error:
+        datos["modulo"].aprobar(_carpeta(curso), sesion)
+    except datos["modulo"].NoSePuedeAprobar as error:
         return RedirectResponse(destino + "?mensaje=" + quote(str(error)), status_code=303)
-    return RedirectResponse(destino + "?mensaje=" + quote("Lectura aprobada."), status_code=303)
+    return RedirectResponse(destino + "?mensaje=" + quote(datos["aprobado"]), status_code=303)
 
 
 @app.get("/cursos/{curso}/sesiones/{sesion}/descargar/{archivo}")

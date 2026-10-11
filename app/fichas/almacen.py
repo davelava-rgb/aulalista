@@ -247,11 +247,15 @@ def errores_del_material(ficha: dict, material: str) -> list[str]:
     if material not in materiales_de_la_sesion(ficha):
         return [f"«Materiales de esta sesión» no incluye {material}."]
     lista = []
-    if material == "lectura":
+    # Sin lectura en la sesión, las diapositivas salen de las fichas y de la referencia: piden lo mismo que
+    # pediría la lectura (PLAN.md §0, decisión 26).
+    sin_lectura = material == "diapositivas" and "lectura" not in materiales_de_la_sesion(ficha)
+    if material == "lectura" or sin_lectura:
         # Con material de referencia, los bloques salen de sus temas (PLAN.md §0, decisión 23).
         bloques = [n for n in range(1, 5) if valor(ficha, f"lectura.bloque.{n}")]
         if len(bloques) < 2 and not valor(ficha, "sesion.referencia").strip():
-            lista.append("La lectura necesita de 2 a 4 bloques, o un material de referencia.")
+            quien = "La lectura necesita" if material == "lectura" else "Sin lectura, las diapositivas necesitan"
+            lista.append(f"{quien} de 2 a 4 bloques, o un material de referencia.")
         riesgos = _renglones(valor(ficha, "lectura.cuidado"))
         if not 1 <= len(riesgos) <= 3:
             lista.append("«Cuidado con» necesita de 1 a 3 riesgos, uno por línea.")

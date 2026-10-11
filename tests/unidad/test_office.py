@@ -49,3 +49,17 @@ def test_word_a_pdf_cierra_word_aunque_falle(tmp_path):
     with pytest.raises(Exception):
         office.word_a_pdf(roto, tmp_path / "roto.pdf")
     assert procesos("WINWORD.EXE") <= antes
+
+
+def test_powerpoint_mide_el_texto_que_no_cabe_y_guarda_una_imagen_por_diapositiva(tmp_path):
+    """Material sembrado: la segunda diapositiva tiene un texto que se sale de su recuadro."""
+    from tests.sembrados.diapositivas import TEXTO_QUE_NO_CABE, con_desborde
+    abierto_antes = office.proceso_activo("POWERPNT.EXE")
+    medicion = office.medir_diapositivas(con_desborde(tmp_path / "sembrado.pptx"), tmp_path / "imagenes")
+    assert medicion.diapositivas == 2
+    assert [d.diapositiva for d in medicion.desbordes] == [2]
+    assert medicion.desbordes[0].texto.startswith(TEXTO_QUE_NO_CABE.strip()[:40]) and medicion.desbordes[0].sobra_cm > 1
+    assert [i.name for i in medicion.imagenes] == ["diapositiva_01.png", "diapositiva_02.png"]
+    assert all(i.stat().st_size > 0 for i in medicion.imagenes)
+    if not abierto_antes:
+        assert not office.proceso_activo("POWERPNT.EXE")

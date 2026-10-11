@@ -7,6 +7,7 @@ las ventanas que el profesor tenga abiertas, y la cierra al terminar. La excepci
 import subprocess
 import time
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
 import pythoncom
@@ -143,3 +144,75 @@ def contar_paginas_word(ruta: Path) -> int:
             raise ErrorDeOffice(f"Word no pudo contar las páginas de {ruta.name}: {error}") from error
         finally:
             documento.Close(False)
+
+
+# ---------- Diapositivas: desbordes medidos con PowerPoint ----------
+
+PUNTOS_POR_CM = 72 / 2.54
+TOLERANCIA_PT = 2   # medio milímetro: PowerPoint redondea la medida del texto
+
+
+@dataclass
+class Desborde:
+    diapositiva: int
+    texto: str          # el comienzo del texto que no cabe, o «tabla» si es una tabla
+    sobra_cm: float
+    es_tabla: bool = False
+
+
+@dataclass
+class Medicion:
+    diapositivas: int
+    desbordes: list[Desborde]
+    imagenes: list[Path]
+
+
+def medir_diapositivas(ruta: Path, carpeta_imagenes: Path | None = None) -> Medicion:
+    """Mide con el PowerPoint instalado si algún texto se sale de su recuadro o de la diapositiva,
+    y guarda una imagen de cada diapositiva (SKILL.md: «Revisa en una imagen de cada diapositiva…»)."""
+    imagenes = []
+    if carpeta_imagenes is not None:
+        carpeta_imagenes.mkdir(parents=True, exist_ok=True)
+        for vieja in carpeta_imagenes.glob("*.png"):
+            vieja.unlink(missing_ok=True)
+    with abrir_powerpoint() as powerpoint:
+        try:
+            # ReadOnly, Untitled, WithWindow: sin ventana, para no tocar lo que el profesor tenga abierto.
+            presentacion = powerpoint.Presentations.Open(str(ruta.resolve()), True, False, False)
+        except Exception as error:
+            raise ErrorDeOffice(f"PowerPoint no pudo abrir {ruta.name}: {error}") from error
+        try:
+            alto_diapositiva = presentacion.PageSetup.SlideHeight
+            ancho_diapositiva = presentacion.PageSetup.SlideWidth
+            desbordes = []
+            total = presentacion.Slides.Count
+            for numero in range(1, total + 1):
+                diapositiva = presentacion.Slides(numero)
+                for figura in diapositiva.Shapes:
+                    sobra = 0.0
+                    if figura.HasTable:
+                        sobra = max(figura.Top + figura.Height - alto_diapositiva,
+                                    figura.Left + figura.Width - ancho_diapositiva)
+                        if sobra > TOLERANCIA_PT:
+                            desbordes.append(Desborde(numero, "tabla", round(sobra / PUNTOS_POR_CM, 1), es_tabla=True))
+                        continue
+                    if not figura.HasTextFrame or not figura.TextFrame.HasText:
+                        continue
+                    marco = figura.TextFrame
+                    texto = marco.TextRange
+                    disponible = figura.Height - marco.MarginTop - marco.MarginBottom
+                    sobra = max(texto.BoundHeight - disponible, figura.Top + figura.Height - alto_diapositiva)
+                    if sobra > TOLERANCIA_PT:
+                        desbordes.append(Desborde(numero, " ".join(texto.Text.split())[:200],
+                                                  round(sobra / PUNTOS_POR_CM, 1)))
+                if carpeta_imagenes is not None:
+                    imagen = carpeta_imagenes / f"diapositiva_{numero:02d}.png"
+                    diapositiva.Export(str(imagen.resolve()), "PNG", 1280, 720)
+                    imagenes.append(imagen)
+        except ErrorDeOffice:
+            raise
+        except Exception as error:
+            raise ErrorDeOffice(f"PowerPoint no pudo medir {ruta.name}: {error}") from error
+        finally:
+            presentacion.Close()
+    return Medicion(diapositivas=total, desbordes=desbordes, imagenes=imagenes)
