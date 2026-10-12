@@ -47,11 +47,12 @@ CONTROLES = {
     "visual.advertencia": _COLOR,
     "visual.fondos": _COLOR,
     "visual.texto": _COLOR,
-    "visual.tipografia": {"tipo": "lista", "opciones": TIPOGRAFIAS, "otro": True,
-                          "ayuda": "Fuentes que vienen con Office. Vacío: se toma del modelo o se usa Calibri."},
+    "visual.tipografia": {"tipo": "lista", "opciones": TIPOGRAFIAS, "otro": True, "por_omision": "Calibri",
+                          "ayuda": "Fuentes que vienen con Office. Por defecto: la del modelo en PDF; sin modelo, Calibri."},
     "visual.estilo": {"tipo": "lista", "titulo": "Estilo", "opciones": tuple(ESTILOS), "otro": False,
+                      "por_omision": "profesional",
                       "descripciones": {nombre: e.descripcion for nombre, e in ESTILOS.items()},
-                      "ayuda": "Cambia la portada, los títulos, los recuadros y el tono. Vacío: profesional."},
+                      "ayuda": "Cambia la portada, los títulos, los recuadros y el tono."},
     "herramientas.neutral": {
         "tipo": "opciones", "titulo": "¿El material habla en general o nombra una herramienta?",
         "opciones": (("sí", "Hablar en general, sin nombrar productos («una IA generativa», «una hoja de cálculo»)"),
@@ -106,14 +107,55 @@ def archivos_de(valor: str) -> list[str]:
     return [p.strip() for p in re.split(r";|\n", valor or "") if p.strip()]
 
 
+def _sin_tildes(texto: str) -> str:
+    return (texto or "").strip().lower().translate(str.maketrans("áéíóú", "aeiou"))
+
+
+def elegida(campo_id: str, valor: str) -> str | None:
+    """La opción que corresponde al valor guardado, sin importar mayúsculas ni tildes.
+
+    "" es la opción por defecto (valor vacío o igual al de por defecto). None: no es ninguna opción.
+    En los botones de opción vale también un valor que empieza con la opción («Sí, es neutral»).
+    """
+    control = CONTROLES[campo_id]
+    texto = _sin_tildes(valor)
+    if not texto or texto == _sin_tildes(control.get("por_omision", "")):
+        return ""
+    if control["tipo"] == "lista":
+        return next((o for o in control["opciones"] if _sin_tildes(o) == texto), None)
+    if control["tipo"] == "opciones":
+        for opcion, _ in sorted(control["opciones"], key=lambda o: -len(o[0])):
+            clave = _sin_tildes(opcion)
+            if texto == clave or re.match(rf"{re.escape(clave)}\b", texto):
+                return opcion
+    return None
+
+
+def equivalente(campo_id: str, nuevo: str, anterior: str) -> bool:
+    """El control muestra lo mismo para los dos valores: guardar sin tocarlo no cambia el dato ni su origen."""
+    control = CONTROLES.get(campo_id)
+    if control is None or not anterior:
+        return False
+    if control["tipo"] in ("lista", "opciones"):
+        actual = elegida(campo_id, anterior)
+        return actual is not None and actual == elegida(campo_id, nuevo)
+    if control["tipo"] == "casillas":
+        return marcadas(campo_id, nuevo) == marcadas(campo_id, anterior)
+    return False
+
+
 def vista(campo_id: str, valor: str) -> dict | None:
     """Datos que necesita la página para dibujar el control, o None si el campo sigue siendo texto."""
     control = CONTROLES.get(campo_id)
     if control is None:
         return None
     datos = dict(control)
-    if control["tipo"] == "lista":
-        datos["es_otro"] = bool(valor) and valor not in control["opciones"]
+    if control["tipo"] in ("lista", "opciones"):
+        datos["elegida"] = elegida(campo_id, valor)
+        datos["es_otro"] = datos["elegida"] is None
+        por_omision = _sin_tildes(control.get("por_omision", ""))
+        datos["opciones"] = [o for o in control["opciones"]
+                             if control["tipo"] == "opciones" or _sin_tildes(o) != por_omision]
     elif control["tipo"] == "casillas":
         datos["marcadas"], datos["texto_otros"] = marcadas(campo_id, valor)
     elif control["tipo"] == "archivos":

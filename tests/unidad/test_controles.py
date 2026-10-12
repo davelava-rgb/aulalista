@@ -264,3 +264,51 @@ def test_un_curso_anterior_toma_el_docente_por_defecto(curso):
     almacen.guardar(curso, "curso", None, ficha)
     assert "portada.docente" not in almacen.ruta_ficha(curso, "curso").read_text(encoding="utf-8")
     assert almacen.valor(almacen.cargar(curso, "curso"), "portada.docente") == "José Fernando Davelouis Mendía"
+
+
+# ---------- Valores por defecto y propuesta desde las fuentes ----------
+
+def test_tipografia_y_estilo_muestran_su_valor_por_defecto(curso):
+    pagina = cliente.get("/cursos/scrum/ficha").text
+    assert '<option value="" selected>Calibri (por defecto)</option>' in pagina
+    assert '<option value="" selected>Profesional (por defecto): Directo y sobrio. Es el diseño de siempre.</option>' in pagina
+    assert pagina.count('value="profesional"') == 0   # la opción por defecto no se repite
+    assert pagina.count('value="Calibri"') == 0
+
+
+def test_la_propuesta_conoce_las_opciones_de_los_controles(curso):
+    from app.fichas import flujo
+    pedido = flujo.pedido_de_propuesta(curso, "curso", None, almacen.cargar(curso, "curso"))
+    assert "curso.idioma: Idioma del material [usa una de estas, tal cual: Español, Inglés, Portugués, Francés" in pedido
+    assert "herramientas.adjuntos" in pedido and "[usa una de estas, tal cual: sí, no, no sé]" in pedido
+    assert "[usa las que correspondan, separadas por comas: lectura, diapositivas" in pedido
+
+
+def test_una_ficha_propuesta_se_ve_en_los_controles_y_guardar_no_borra_la_marca(curso):
+    """La ficha que se llena sola desde las fuentes (decisión 17) se muestra bien en los controles. Guardar desde la
+    página, sin tocar esos controles, conserva «Propuesto» y la fuente."""
+    from app.fichas import flujo
+    ficha = almacen.cargar(curso, "curso")
+    flujo.aplicar_propuesta(curso, ficha, {"campos": [
+        {"id": "curso.idioma", "valor": "español", "origen": "deducido", "literal": False},
+        {"id": "herramientas.neutral", "valor": "Sí, el material es neutral", "origen": "deducido", "literal": False},
+        {"id": "herramientas.adjuntos", "valor": "no sé", "origen": "deducido", "literal": False},
+        {"id": "materiales.por_sesion", "valor": "Lectura y diapositivas", "origen": "deducido", "literal": False},
+    ], "conflictos": []})
+    almacen.guardar(curso, "curso", None, ficha)
+    pagina = cliente.get("/cursos/scrum/ficha").text
+    assert '<option value="Español" selected>' in pagina
+    assert 'name="herramientas.neutral" value="sí" checked' in pagina
+    assert 'name="herramientas.adjuntos" value="no sé" checked' in pagina
+    assert 'name="materiales.por_sesion" value="lectura" checked' in pagina
+    assert 'name="materiales.por_sesion" value="laboratorio" >' in pagina   # sin marcar
+    assert pagina.count('<span class="marca">Propuesto</span>') == 4
+    # Lo que el navegador envía al pulsar «Guardar» sin tocar nada
+    cliente.post("/cursos/scrum/ficha", data={
+        "accion": "guardar", "curso.idioma": "Español", "herramientas.neutral": "sí",
+        "herramientas.adjuntos": "no sé", "materiales.por_sesion.casillas": "1",
+        "materiales.por_sesion": ["lectura", "diapositivas"]})
+    campos = almacen.cargar(curso, "curso")["campos"]
+    for campo_id in ("curso.idioma", "herramientas.neutral", "herramientas.adjuntos", "materiales.por_sesion"):
+        assert campos[campo_id]["estado"] == "propuesto", campo_id
+    assert campos["curso.idioma"]["valor"] == "español"

@@ -14,7 +14,7 @@ import unicodedata
 from pathlib import Path
 
 from app import agente
-from app.fichas import almacen, plantillas, verificacion
+from app.fichas import almacen, controles, plantillas, verificacion
 from app.fuentes import convertir
 
 ESQUEMA_PROPUESTA = {
@@ -99,6 +99,17 @@ def campos_vacios(ficha: dict) -> list[tuple[str, str]]:
     return vacios
 
 
+def _opciones_del_control(campo_id: str) -> str:
+    """Las opciones del control de la página, para que el valor propuesto se pueda elegir (decisión 27)."""
+    control = controles.CONTROLES.get(campo_id)
+    if not control or control["tipo"] not in ("lista", "opciones", "casillas"):
+        return ""
+    opciones = [o[0] if isinstance(o, tuple) else o for o in control["opciones"]]
+    forma = "una de estas, tal cual" if control["tipo"] != "casillas" else "las que correspondan, separadas por comas"
+    otra = " (o escribe otra si ninguna sirve)" if control.get("otro") else ""
+    return f" [usa {forma}: {', '.join(opciones)}{otra}]"
+
+
 def pedido_de_propuesta(carpeta_curso: Path, tipo: str, sesion: int | None, ficha: dict) -> str:
     fuentes = verificacion.fuentes_utilizables(carpeta_curso)
     lineas = [
@@ -110,7 +121,7 @@ def pedido_de_propuesta(carpeta_curso: Path, tipo: str, sesion: int | None, fich
         "Busca con Grep y lee con Read. Lo que dice la fuente se toma de la fuente, no de tu memoria.",
         "",
         "Campos vacíos que debes intentar llenar (id: etiqueta):",
-        *[f"- {campo_id}: {etiqueta}" for campo_id, etiqueta in campos_vacios(ficha)],
+        *[f"- {campo_id}: {etiqueta}" + _opciones_del_control(campo_id) for campo_id, etiqueta in campos_vacios(ficha)],
         "",
         "Reglas:",
         "- Por cada dato devuelve id, valor, origen y literal. El origen es el nombre exacto de la fuente.",

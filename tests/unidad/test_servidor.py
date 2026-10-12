@@ -6,11 +6,11 @@ from tests.conftest import consulta_simulada
 cliente = TestClient(servidor.app)
 
 
-def test_la_pagina_responde_con_el_boton(entorno):
+def test_la_pagina_de_inicio_no_muestra_la_conexion_con_claude(entorno):
     r = cliente.get("/")
     assert r.status_code == 200
-    assert "Probar conexión" in r.text
-    assert "Gasto de las pruebas de conexión" in r.text
+    assert "Crear curso" in r.text
+    assert "Conexión con Claude" not in r.text and "Probar conexión" not in r.text
 
 
 def test_probar_conexion_sin_clave_responde_el_mensaje(entorno):

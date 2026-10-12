@@ -7,9 +7,13 @@
 {% set k = c.control %}
 {% if k.tipo == "lista" %}
   <select id="{{ c.id }}" name="{{ c.id }}" data-otro="{{ c.id }}.otro">
-    <option value="">Sin elegir</option>
+    {% if k.por_omision %}
+    <option value="" {% if k.elegida == "" %}selected{% endif %}>{{ k.por_omision | capitalize }} (por defecto){% if k.descripciones %}: {{ k.descripciones[k.por_omision] }}{% endif %}</option>
+    {% else %}
+    <option value="" {% if k.elegida == "" %}selected{% endif %}>Sin elegir</option>
+    {% endif %}
     {% for o in k.opciones %}
-    <option value="{{ o }}" {% if c.valor == o %}selected{% endif %}>{{ o | capitalize }}{% if k.descripciones %}: {{ k.descripciones[o] }}{% endif %}</option>
+    <option value="{{ o }}" {% if k.elegida == o %}selected{% endif %}>{{ o | capitalize }}{% if k.descripciones %}: {{ k.descripciones[o] }}{% endif %}</option>
     {% endfor %}
     {% if k.otro %}<option value="__otro" {% if k.es_otro %}selected{% endif %}>Otro…</option>{% endif %}
   </select>
@@ -20,7 +24,7 @@
 {% elif k.tipo == "opciones" %}
   <div role="radiogroup" aria-labelledby="t-{{ c.id }}" id="{{ c.id }}">
     {% for valor, texto in k.opciones %}
-    <label class="opcion"><input type="radio" name="{{ c.id }}" value="{{ valor }}" {% if c.valor | lower == valor %}checked{% endif %}> {{ texto }}</label>
+    <label class="opcion"><input type="radio" name="{{ c.id }}" value="{{ valor }}" {% if k.elegida == valor %}checked{% endif %}> {{ texto }}</label>
     {% endfor %}
   </div>
 {% elif k.tipo == "casillas" %}

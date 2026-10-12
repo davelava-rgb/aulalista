@@ -188,7 +188,7 @@ def aplicar_formulario(ficha: dict, formulario: dict) -> bool:
         anterior = ficha["campos"].get(campo_id) or {}
         if anterior.get("estado") == CONFLICTO and not nuevo:
             continue
-        if nuevo == anterior.get("valor", ""):
+        if nuevo == anterior.get("valor", "") or controles.equivalente(campo_id, nuevo, anterior.get("valor", "")):
             continue
         if nuevo:
             ficha["campos"][campo_id] = {"valor": nuevo, "origen": PROFESOR, "estado": ""}
