@@ -95,9 +95,10 @@ def con_lectura(sesion):  # noqa: F811
     return sesion
 
 
-def generar(carpeta, *salidas, medir=medir_sin_desbordes, revisar=True):
-    consulta = consulta_en_secuencia(*salidas, *([SIN_ERRORES] if revisar else []))
-    material = asyncio.run(diapositivas.generar(carpeta, "scrum", 1, consulta=consulta, medir=medir))
+def generar(carpeta, *salidas, medir=medir_sin_desbordes, revisar=True, disenar=False, despues=()):
+    """`despues`: respuestas que llegan después de la revisión del contenido (el diseñador y la revisión visual)."""
+    consulta = consulta_en_secuencia(*salidas, *([SIN_ERRORES] if revisar else []), *despues)
+    material = asyncio.run(diapositivas.generar(carpeta, "scrum", 1, consulta=consulta, medir=medir, disenar=disenar))
     return material, consulta
 
 
@@ -407,37 +408,6 @@ def test_sin_lectura_la_ficha_pide_temas_o_referencia_y_riesgos():
 
 # ---------- Recursos gráficos y cierre (PLAN.md §0, decisión 29) ----------
 
-def test_al_menos_la_mitad_con_recursos_graficos():
-    solo_texto = copy.deepcopy(LIMPIAS["diapositivas"])
-    for d in solo_texto[:6]:
-        d.update(tipo="frases", frases=d["frases"] or ["El Manifiesto Ágil tiene cuatro aspectos."], tabla=None,
-                 columnas=[], grafico=None)
-    _, problemas = diapositivas._validar(con(diapositivas=solo_texto), lectura_limpia())
-    assert any("deben ser al menos la mitad" in p for p in problemas)
-    assert any("más de 2 diapositivas seguidas solo con texto" in p for p in problemas)
-
-
-def test_las_tablas_las_columnas_y_los_pasos_no_cuentan_como_diagrama():
-    sin_diagramas = copy.deepcopy(LIMPIAS["diapositivas"])
-    for d in sin_diagramas:
-        if d["grafico"]:
-            d.update(tipo="pasos", frases=["Observa el tablero.", "Decide qué cambiar."], grafico=None)
-    _, problemas = diapositivas._validar(con(diapositivas=sin_diagramas), lectura_limpia())
-    assert any("0 de 10 diapositivas de concepto son un diagrama" in p for p in problemas)
-
-
-def test_treinta_palabras_como_maximo_y_dos_tablas():
-    cargada = copy.deepcopy(LIMPIAS["diapositivas"])
-    cargada[3]["columnas"][0]["frases"] = ["Las personas que trabajan juntas cada día conversan sobre lo que hacen, "
-                                           "lo que les falta y lo que van a cambiar en la próxima semana de trabajo."]
-    _, problemas = diapositivas._validar(con(diapositivas=cargada), lectura_limpia())
-    assert any("diapositiva 6 («Personas y producto»): muestra" in p and "el máximo es 30" in p for p in problemas)
-    tres_tablas = copy.deepcopy(LIMPIAS["diapositivas"])
-    tres_tablas[3] = tres_tablas[7] = copy.deepcopy(LIMPIAS["diapositivas"][1])
-    _, problemas = diapositivas._validar(con(diapositivas=tres_tablas), lectura_limpia())
-    assert any("tablas: hay 3" in p for p in problemas)
-
-
 def test_cada_recurso_trae_sus_elementos():
     rota = copy.deepcopy(LIMPIAS["diapositivas"])
     rota[4]["grafico"]["elementos"] = rota[4]["grafico"]["elementos"][:1]
@@ -519,32 +489,6 @@ def medir_con_imagenes(ruta, carpeta):
     return office.Medicion(diapositivas=total, desbordes=[], imagenes=imagenes)
 
 
-def test_la_revision_visual_mira_las_imagenes_y_pide_una_correccion(con_lectura):
-    visual = {"cambios": [{"numero": 4, "problema": "Una tabla con mucho texto.",
-                           "propuesta": "Pasar a tarjetas."},
-                          {"numero": 1, "problema": "La portada.", "propuesta": "Nada."}]}   # la portada no se toca
-    material, consulta = generar(con_lectura, LIMPIAS, visual, solo(4, LIMPIAS["diapositivas"][1]),
-                                 medir=medir_con_imagenes)
-    assert material["estado"] == "verificada", material.get("problemas")
-    pedido_visual = consulta.llamadas[1]
-    assert pedido_visual["options"].output_format["schema"] == diapositivas.ESQUEMA_VISUAL
-    correccion = consulta.llamadas[2]["prompt"]
-    assert "DISEÑO · diapositiva 4 («Qué valora más»): Una tabla con mucho texto. Propuesta: Pasar a tarjetas." in correccion
-    assert "La portada." not in correccion
-    assert consulta.llamadas[2]["options"].output_format["schema"] == diapositivas.ESQUEMA_POR_DIAPOSITIVAS
-    assert material["revision_visual"] == [visual["cambios"][0]]
-    assert any("Revisión visual" in l for l in material["avance"])
-    entrega = {s["clave"]: s["lineas"] for s in material["entrega"]["secciones"]}
-    assert any("Revisión visual de las imágenes" in l and "Pasar a tarjetas" in l for l in entrega["valide"])
-
-
-def test_sin_cambios_visuales_sigue_sin_corregir(con_lectura):
-    material, consulta = generar(con_lectura, LIMPIAS, {"cambios": []}, medir=medir_con_imagenes)
-    assert material["estado"] == "verificada"
-    assert len(consulta.llamadas) == 3          # redacción, revisión visual y revisión del contenido
-    assert material["revision_visual"] == []
-
-
 # ---------- Corrección por diapositivas (decisión 31) ----------
 
 def test_solo_lo_que_nombra_una_diapositiva_se_corrige_por_diapositivas():
@@ -583,3 +527,58 @@ def test_la_cantidad_sigue_con_la_correccion_completa(con_lectura):
     cortas = con(diapositivas=LIMPIAS["diapositivas"][:9])
     _, consulta = generar(con_lectura, cortas, {"diapositivas": LIMPIAS, "explicaciones": [], "datos_nuevos": []})
     assert consulta.llamadas[1]["options"].output_format["schema"] == diapositivas.ESQUEMA_CORRECCION
+
+
+# ---------- Agente diseñador (PLAN.md §0, decisión 32) ----------
+
+def _con_disenador():
+    from app.materiales import disenador
+    if not disenador.disponible():
+        pytest.skip("Node o los paquetes del diseñador no están instalados")
+    from tests.unidad.test_disenador import DISENO
+    return {"codigo": DISENO, "notas": "Tarjetas y una portada sobre el color principal."}
+
+
+def test_con_el_contenido_aprobado_el_disenador_dibuja_y_la_revision_visual_pide_un_arreglo(con_lectura):
+    diseno = _con_disenador()
+    visual = {"cambios": [{"numero": 4, "problema": "Una tabla con mucho texto.", "propuesta": "Pasar a tarjetas."},
+                          {"numero": 1, "problema": "La portada.", "propuesta": "Nada."}]}   # la portada no se toca
+    material, consulta = generar(con_lectura, LIMPIAS, medir=medir_con_imagenes, disenar=True,
+                                 despues=(diseno, visual, diseno))
+    assert material["estado"] == "verificada", material.get("problemas")
+    assert material["diseno"]["estado"] == "diseñada" and material["diseno"]["arreglos"] == 1
+    assert consulta.llamadas[2]["options"].output_format["schema"] == disenador_esquema()
+    assert "module.exports = async (h)" in consulta.llamadas[2]["prompt"]
+    arreglo = consulta.llamadas[4]["prompt"]
+    assert "DISEÑO · diapositiva 4 («Qué valora más»): Una tabla con mucho texto. Propuesta: Pasar a tarjetas." in arreglo
+    assert "La portada." not in arreglo and "PROGRAMA ACTUAL:" in arreglo
+    assert material["revision_visual"] == [visual["cambios"][0]]
+    entrega = {s["clave"]: s["lineas"] for s in material["entrega"]["secciones"]}
+    assert any("lo dibujó el agente diseñador con 1 ícono" in l for l in entrega["valide"])
+    assert any("Revisión visual de las imágenes" in l and "Pasar a tarjetas" in l for l in entrega["valide"])
+    assert len(Presentation(diapositivas.archivos(con_lectura, 1)["pptx"]).slides) == 15
+
+
+def test_si_el_diseno_no_queda_bien_se_entrega_la_version_base(con_lectura):
+    _con_disenador()
+    roto = {"codigo": 'module.exports = async (h) => { throw new Error("se rompió"); };', "notas": ""}
+    material, consulta = generar(con_lectura, LIMPIAS, medir=medir_con_imagenes, disenar=True,
+                                 despues=(roto,) * (diapositivas.ARREGLOS_DE_DISENO + 1))
+    assert material["estado"] == "con pendientes"
+    assert material["diseno"]["estado"] == "base"
+    assert any("Diseño: FALLA · diseño · el programa no corrió" in p and "se rompió" in p for p in material["problemas"])
+    assert len(Presentation(diapositivas.archivos(con_lectura, 1)["pptx"]).slides) == 15   # la versión base
+
+
+def test_un_programa_que_usa_require_no_se_corre(con_lectura):
+    _con_disenador()
+    malo = {"codigo": 'const fs = require("fs"); module.exports = async (h) => {};', "notas": ""}
+    material, consulta = generar(con_lectura, LIMPIAS, medir=medir_con_imagenes, disenar=True,
+                                 despues=(malo,) * (diapositivas.ARREGLOS_DE_DISENO + 1))
+    assert material["diseno"]["estado"] == "base"
+    assert "el programa usa lo que no está permitido: require" in consulta.llamadas[3]["prompt"]
+
+
+def disenador_esquema():
+    from app.materiales import disenador
+    return disenador.ESQUEMA_DISENO

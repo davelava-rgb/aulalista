@@ -21,13 +21,14 @@ Si encuentras una contradicción nueva entre estos documentos, avísale al profe
 ## Decisiones fijas
 
 - Un solo usuario. Sistema web local en Windows. El servidor escucha solo en `127.0.0.1`.
-- Python 3.13. Versiones fijas en `requirements.txt`.
+- Python 3.13. Versiones fijas en `requirements.txt`. Node 22 solo para el diseñador de las diapositivas, con versiones fijas en `package.json`.
 - Claude Agent SDK (`claude-agent-sdk`). Todo uso del SDK está en `app/agente.py`.
 - La clave de API se lee del `.env` con `python-dotenv` y se pasa al SDK con la opción `env`. Nunca se define como variable de Windows. Sin clave, el programa se detiene y avisa. No hay respaldo con el plan Max.
 - `.env` nunca se sube al repositorio. `cursos/` tampoco.
 - Todo se guarda en archivos, en `cursos/[curso]/`. Sin base de datos.
 - El verificador es `.claude/skills/material-de-clase/scripts/verificar.py`. No usa IA. El formato de `verificacion.json` está escrito al inicio de ese archivo.
 - El agente escribe el contenido como datos estructurados. Los generadores de `app/materiales/` crean los archivos. El agente no escribe Word, PowerPoint ni HTML a mano.
+- Excepción (`PLAN.md` §0, decisión 32): el diseño de las diapositivas lo escribe el agente diseñador como programa pptxgenjs, con el contenido ya aprobado. Corre con Node con permisos limitados, sin require ni red, y un programa comprueba que todo su texto salga tal cual del contenido.
 - Office instalado (Word, PowerPoint, Excel) se controla con `pywin32` solo desde `app/office.py`. Siempre se cierra la aplicación al terminar.
 
 ## Reglas que no se negocian (SPEC §6)

@@ -75,3 +75,9 @@ modelo = "claude-sonnet-5-5"
 tope_usd = 0.80
 max_turns = 10
 esfuerzo = "medium"
+
+# Agente diseñador: escribe el programa pptxgenjs de las diapositivas y lo corrige (decisión 32).
+[diseno]
+modelo = "claude-opus-5-5"
+tope_usd = 4.00
+max_turns = 3
