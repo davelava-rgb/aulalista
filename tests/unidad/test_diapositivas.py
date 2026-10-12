@@ -27,7 +27,15 @@ NOTAS = {"destacar": "Que el equipo ve el trabajo.", "preguntar": "¿Qué ven us
 
 def diapositiva(bloque, titulo, tipo="frases", frases=None, **otros):
     return {"bloque": bloque, "titulo": titulo, "tipo": tipo, "frases": frases or [], "columnas": [],
-            "tabla": None, "notas": NOTAS, **otros}
+            "tabla": None, "grafico": None, "notas": NOTAS, **otros}
+
+
+def elemento(texto, detalle="", hijos=None, valor=None):
+    return {"texto": texto, "detalle": detalle, "hijos": hijos or [], "valor": valor}
+
+
+def grafico(*elementos, centro="", ejes=None):
+    return {"centro": centro, "elementos": list(elementos), "ejes": ejes or []}
 
 
 MANIFIESTO, PILARES = "El Manifiesto Ágil", "Pilares de Scrum"
@@ -43,16 +51,20 @@ LIMPIAS = {
         diapositiva(MANIFIESTO, "Personas y producto", "columnas",
                     columnas=[{"titulo": "Primero", "frases": ["Las personas."]},
                               {"titulo": "Segundo", "frases": ["El producto que funciona."]}]),
-        diapositiva(MANIFIESTO, "Para recordar", frases=["El Manifiesto Ágil tiene cuatro aspectos."]),
+        diapositiva(MANIFIESTO, "Para recordar", "tarjetas",
+                    grafico=grafico(elemento("Personas", "Las personas."), elemento("Producto", "El producto que funciona."))),
         diapositiva(PILARES, "Pilares de Scrum", frases=["Los pilares de Scrum son tres."]),
         diapositiva(PILARES, "Cómo se usan", "pasos", frases=["Observa el tablero.", "Decide qué cambiar."]),
         diapositiva(PILARES, "Ejemplo: el tablero", "ejemplo", frases=["El equipo muestra su tablero a todos."]),
-        diapositiva(PILARES, "Todos ven el trabajo", frases=["El equipo muestra su tablero a todos."]),
+        diapositiva(PILARES, "Todos ven el trabajo", "mapa", frases=["El equipo muestra su tablero a todos."],
+                    grafico=grafico(elemento("Transparencia"), elemento("Inspección"), elemento("Adaptación"),
+                                    centro="Los tres pilares")),
         diapositiva(PILARES, "Para recordar", frases=["Los pilares de Scrum son tres."]),
     ],
     "aplicalo": {"frases": ["Usa estas dos preguntas al cerrar cada semana."],
                  "plantilla": ["Qué observamos esta semana.", "Qué cambiamos la próxima semana."], "notas": NOTAS},
     "cuidado": {"riesgos": ["Revisar el avance sin cambiar nada después."], "notas": NOTAS},
+    "cierre": {"frase": "Scrum ayuda a un equipo a trabajar con lo que observa.", "notas": NOTAS},
     "pasajes": [{"oracion": "Los pilares de Scrum son tres.", "fuente": diapositivas.FUENTE_LECTURA,
                  "ubicacion": PILARES, "texto": "Los pilares de Scrum son tres."}],
     "decisiones": [{"texto": "Repetí una frase de cierre en cada bloque.", "tipo": "nota"}],
@@ -98,9 +110,11 @@ def presentacion(tmp_path):
 def test_16_9_con_portada_idea_central_conceptos_y_cierre(presentacion):
     p = Presentation(presentacion[0])
     assert round(p.slide_width / p.slide_height, 2) == round(16 / 9, 2)
-    assert len(p.slides) == 14
+    assert len(p.slides) == 15
+    ultima = " ".join(f.text_frame.text for f in p.slides[-1].shapes if f.has_text_frame)
+    assert "La idea que te llevas" in ultima and LIMPIAS["cierre"]["frase"] in ultima
     titulos = [s.shapes.title.text if s.shapes.title is not None else "" for s in p.slides]
-    assert titulos[1] == "Idea central" and titulos[-2:] == ["Aplícalo así", "Cuidado con"]
+    assert titulos[1] == "Idea central" and titulos[-3:-1] == ["Aplícalo así", "Cuidado con"]
     portada = " ".join(f.text_frame.text for f in p.slides[0].shapes if f.has_text_frame)
     assert "Scrum Master con IA" in portada and "Sesión 1 · Fundamentos" in portada
     assert not any(t in ("Preguntas", "Gracias") for t in titulos)
@@ -151,9 +165,9 @@ def lectura_limpia():
     return Lectura.model_validate(LIMPIA)
 
 
-def test_cuenta_las_cuatro_fijas_y_pide_de_14_a_18():
+def test_cuenta_las_cinco_fijas_y_pide_de_15_a_19():
     _, problemas = diapositivas._validar(con(diapositivas=LIMPIAS["diapositivas"][:9]), lectura_limpia())
-    assert any("hay 13 con las 4 fijas; deben ser de 14 a 18" in p for p in problemas)
+    assert any("hay 14 con las 5 fijas; deben ser de 15 a 19" in p for p in problemas)
 
 
 def test_sigue_el_orden_de_la_lectura():
@@ -197,7 +211,7 @@ def test_genera_verifica_y_entrega(con_lectura):
     material, consulta = generar(con_lectura, LIMPIAS)
     assert material["estado"] == "verificada", material.get("problemas")
     rutas = diapositivas.archivos(con_lectura, 1)
-    assert len(Presentation(rutas["pptx"]).slides) == 14
+    assert len(Presentation(rutas["pptx"]).slides) == 15
     redaccion = consulta.llamadas[0]["prompt"]
     assert "## Material 2 · Diapositivas" in redaccion and "LECTURA APROBADA" in redaccion
     assert "Los pilares de Scrum son tres." in redaccion         # la lectura va en el pedido
@@ -205,8 +219,8 @@ def test_genera_verifica_y_entrega(con_lectura):
     assert diapositivas.FUENTE_LECTURA in revision_ and "no agregan contenido" in revision_
     assert "[Diapositivas de «Pilares de Scrum»]" in revision_
     entrega = {s["clave"]: s["lineas"] for s in material["entrega"]["secciones"]}
-    assert entrega["archivos"][0].startswith("S1_Diapositivas.pptx: las diapositivas, 16:9, 14 diapositivas")
-    assert any("Medí con PowerPoint cada texto de las 14 diapositivas: ninguno se sale" in l for l in entrega["probe"])
+    assert entrega["archivos"][0].startswith("S1_Diapositivas.pptx: las diapositivas, 16:9, 15 diapositivas")
+    assert any("Medí con PowerPoint cada texto de las 15 diapositivas: ninguno se sale" in l for l in entrega["probe"])
     assert any("contra la lectura aprobada" in l for l in entrega["valide"])
     assert rutas["entrega"].read_text(encoding="utf-8").endswith("¿Apruebas este material para pasar a la siguiente etapa?\n")
     assert material["lectura_fecha"] == lectura.estado(con_lectura, 1)["fecha"]
@@ -218,7 +232,7 @@ def test_un_desborde_se_corrige_con_las_diapositivas_completas(con_lectura):
     def medir(ruta, carpeta):
         medidas.append(ruta)
         if len(medidas) == 1:
-            return office.Medicion(14, [office.Desborde(8, "Los pilares de Scrum son tres.", 1.4)], [])
+            return office.Medicion(15, [office.Desborde(8, "Los pilares de Scrum son tres.", 1.4)], [])
         return medir_sin_desbordes(ruta, carpeta)
 
     corregidas = {"diapositivas": LIMPIAS, "explicaciones": [], "datos_nuevos": []}
@@ -233,11 +247,11 @@ def test_un_desborde_se_corrige_con_las_diapositivas_completas(con_lectura):
     assert any(r == "desborde" and "Resuelto" in (c or "") for r, c in reglas)
 
 
-def test_menos_de_14_diapositivas_se_corrige(con_lectura):
+def test_menos_de_15_diapositivas_se_corrige(con_lectura):
     cortas = con(diapositivas=LIMPIAS["diapositivas"][:9])
     material, consulta = generar(con_lectura, cortas, {"diapositivas": LIMPIAS, "explicaciones": [], "datos_nuevos": []})
     assert material["estado"] == "verificada"
-    assert "deben ser de 14 a 18" in consulta.llamadas[1]["prompt"]
+    assert "deben ser de 15 a 19" in consulta.llamadas[1]["prompt"]
 
 
 def test_lo_que_no_esta_en_la_lectura_se_corrige_sin_tocar_el_orden(con_lectura):
@@ -358,3 +372,82 @@ def test_sin_lectura_la_ficha_pide_temas_o_referencia_y_riesgos():
     assert "«Cuidado con» necesita de 1 a 3 riesgos, uno por línea." in errores
     con_lectura_ = {**vacia, "materiales.cuales": "lectura y diapositivas"}
     assert almacen.errores_del_material(datos.ficha("sesion", con_lectura_), "diapositivas") == []
+
+
+# ---------- Recursos gráficos y cierre (PLAN.md §0, decisión 29) ----------
+
+def test_al_menos_la_mitad_con_recursos_graficos():
+    solo_texto = copy.deepcopy(LIMPIAS["diapositivas"])
+    for d in solo_texto[:4]:
+        d.update(tipo="frases", frases=d["frases"] or ["El Manifiesto Ágil tiene cuatro aspectos."], tabla=None,
+                 columnas=[], grafico=None)
+    _, problemas = diapositivas._validar(con(diapositivas=solo_texto), lectura_limpia())
+    assert any("deben ser al menos la mitad" in p for p in problemas)
+    assert any("más de 2 diapositivas seguidas solo con texto" in p for p in problemas)
+
+
+def test_cada_recurso_trae_sus_elementos():
+    rota = copy.deepcopy(LIMPIAS["diapositivas"])
+    rota[4]["grafico"]["elementos"] = rota[4]["grafico"]["elementos"][:1]
+    contenido, problemas = diapositivas._validar(con(diapositivas=rota), lectura_limpia())
+    assert contenido is None and any("de 2 a 6 elementos" in p for p in problemas)
+    sin_centro = copy.deepcopy(LIMPIAS["diapositivas"])
+    sin_centro[8]["grafico"]["centro"] = ""
+    _, problemas = diapositivas._validar(con(diapositivas=sin_centro), lectura_limpia())
+    assert any("necesita «centro»" in p for p in problemas)
+
+
+def test_la_grafica_solo_usa_cifras_de_la_lectura():
+    con_grafica = copy.deepcopy(LIMPIAS["diapositivas"])
+    con_grafica[0] = diapositiva(MANIFIESTO, "Cuántos aspectos", "grafica", grafico=grafico(
+        elemento("Aspectos", valor=4), elemento("Pilares", valor=3), centro="Cantidad"))
+    lectura_ = lectura_limpia()
+    texto = diapositivas._texto_de_la_lectura(lectura_)
+    _, problemas = diapositivas._validar(con(diapositivas=con_grafica), lectura_)
+    faltan = [p for p in problemas if "la gráfica usa cifras" in p]
+    assert ("4" in texto and "3" in texto) == (not faltan)
+    con_grafica[0]["grafico"]["elementos"][0]["valor"] = 1986
+    _, problemas = diapositivas._validar(con(diapositivas=con_grafica), lectura_)
+    assert any("la gráfica usa cifras que no están en la lectura: 1986" in p for p in problemas)
+
+
+def test_la_frase_de_cierre_sale_de_la_idea_central():
+    _, problemas = diapositivas._validar(con(cierre={"frase": "¡Gracias por su atención!", "notas": NOTAS}),
+                                         lectura_limpia())
+    assert any("una de las frases de la idea central" in p for p in problemas)
+
+
+def test_cada_recurso_se_dibuja_con_formas_y_colores_de_la_ficha(tmp_path):
+    tipos = {
+        "proceso": grafico(elemento("Planificar", "Se elige el trabajo."), elemento("Hacer"), elemento("Revisar")),
+        "ciclo": grafico(elemento("Observar"), elemento("Decidir"), elemento("Cambiar"), centro="Mejora"),
+        "organigrama": grafico(elemento("Dueño de producto", hijos=["Prioriza"]), elemento("Equipo"),
+                               centro="Comité"),
+        "mapa": grafico(elemento("Transparencia"), elemento("Inspección"), elemento("Adaptación"), centro="Pilares"),
+        "matriz": grafico(elemento("A"), elemento("B"), elemento("C"), elemento("D"), ejes=["Impacto", "Esfuerzo"]),
+        "tarjetas": grafico(elemento("Personas", "Las personas."), elemento("Producto")),
+        "grafica": grafico(elemento("Aspectos", valor=4), elemento("Pilares", valor=3), centro="Cantidad"),
+    }
+    datos = con(diapositivas=[diapositiva(MANIFIESTO, f"Recurso {t}", t, grafico=g) for t, g in tipos.items()]
+                + LIMPIAS["diapositivas"][:3])
+    identidad = estilo.Identidad(**estilo.PALETA_SOBRIA, tipografia="Calibri", logo=None)
+    ruta = generador.generar_diapositivas(Diapositivas.model_validate(datos), identidad,
+                                          Portada("Scrum Master con IA", "Sesión 1 · Fundamentos", "Diapositivas"),
+                                          tmp_path / "recursos.pptx")
+    p = Presentation(ruta)
+    for numero, tipo in enumerate(tipos, start=2):
+        formas = p.slides[numero].shapes
+        textos = " ".join(f.text_frame.text for f in formas if f.has_text_frame)
+        if tipo == "grafica":
+            assert any(f.has_chart for f in formas)
+        else:
+            assert len(formas) >= 4, tipo
+            for e in tipos[tipo]["elementos"]:
+                assert e["texto"] in textos, (tipo, e["texto"])
+    archivo = zipfile.ZipFile(ruta)
+    xml = "".join(archivo.read(n).decode("utf-8") for n in archivo.namelist()
+                  if re.match(r"ppt/(slides/slide|charts/chart)\d+\.xml$", n))
+    assert set(re.findall(r'<a:srgbClr val="([0-9A-Fa-f]{6})"', xml)) <= identidad.colores_permitidos()
+    tamanos = [r.font.size for s in p.slides for f in s.shapes if f.has_text_frame
+               for par in f.text_frame.paragraphs for r in par.runs]
+    assert min(tamanos) >= Pt(generador.TAMANO_MINIMO)

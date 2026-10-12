@@ -111,7 +111,13 @@ ESQUEMA_LECTURA = _objeto({
 
 # ---------- Diapositivas (SKILL.md, «Material 2 · Diapositivas») ----------
 
-TIPOS_DE_DIAPOSITIVA = ("frases", "pasos", "columnas", "tabla", "ejemplo")
+TIPOS_DE_TEXTO = ("frases", "ejemplo")
+TIPOS_GRAFICOS = ("pasos", "columnas", "tabla", "proceso", "ciclo", "organigrama", "mapa", "matriz", "tarjetas",
+                  "grafica")   # PLAN.md §0, decisión 29
+TIPOS_DE_DIAPOSITIVA = TIPOS_DE_TEXTO + TIPOS_GRAFICOS
+# Cuántos elementos lleva cada recurso dibujado: (mínimo, máximo).
+ELEMENTOS_POR_TIPO = {"proceso": (3, 6), "ciclo": (3, 6), "organigrama": (2, 5), "mapa": (3, 6), "matriz": (4, 4),
+                      "tarjetas": (2, 6), "grafica": (2, 6)}
 
 
 class Notas(BaseModel):
@@ -128,16 +134,39 @@ class Columna(BaseModel):
     frases: list[str] = Field(min_length=1, max_length=5)
 
 
+class Elemento(BaseModel):
+    """Una pieza de un recurso dibujado: un paso del proceso, una rama del mapa, un cargo del organigrama,
+    un cuadrante de la matriz, una tarjeta o una barra de la gráfica."""
+    texto: str = Field(min_length=1)
+    detalle: str = ""                                   # una frase corta debajo del texto
+    hijos: list[str] = Field(default_factory=list, max_length=3)   # subramas o cargos que dependen de este
+    valor: float | None = None                          # solo en la gráfica de barras
+
+
+class Grafico(BaseModel):
+    """Lo que dibuja el programa. «centro»: la idea central del mapa, el cargo de arriba del organigrama o la
+    unidad de la gráfica. «ejes»: en la matriz, el eje horizontal y el vertical."""
+    centro: str = ""
+    elementos: list[Elemento] = Field(default_factory=list, max_length=6)
+    ejes: list[str] = Field(default_factory=list, max_length=2)
+
+
 class Diapositiva(BaseModel):
     """Una diapositiva de concepto. «bloque» es el subtítulo del bloque de la lectura al que pertenece:
     así el programa comprueba que las diapositivas sigan el orden de la lectura."""
     bloque: str
     titulo: str
-    tipo: Literal["frases", "pasos", "columnas", "tabla", "ejemplo"]
+    tipo: Literal["frases", "ejemplo", "pasos", "columnas", "tabla", "proceso", "ciclo", "organigrama", "mapa",
+                  "matriz", "tarjetas", "grafica"]
     frases: list[str] = Field(default_factory=list, max_length=6)
     columnas: list[Columna] = Field(default_factory=list, max_length=2)
     tabla: Tabla | None = None
+    grafico: Grafico | None = None
     notas: Notas
+
+    @property
+    def es_grafica(self) -> bool:
+        return self.tipo in TIPOS_GRAFICOS
 
     @model_validator(mode="after")
     def segun_su_tipo(self):
@@ -147,6 +176,17 @@ class Diapositiva(BaseModel):
             raise ValueError("una diapositiva de tabla necesita su tabla")
         if self.tipo in ("frases", "pasos", "ejemplo") and not self.frases:
             raise ValueError(f"una diapositiva de {self.tipo} necesita al menos una frase")
+        if self.tipo in ELEMENTOS_POR_TIPO:
+            minimo, maximo = ELEMENTOS_POR_TIPO[self.tipo]
+            g = self.grafico
+            if g is None or not minimo <= len(g.elementos) <= maximo:
+                raise ValueError(f"una diapositiva de {self.tipo} lleva en «grafico» de {minimo} a {maximo} elementos")
+            if self.tipo in ("mapa", "organigrama") and not g.centro.strip():
+                raise ValueError(f"una diapositiva de {self.tipo} necesita «centro»")
+            if self.tipo == "matriz" and len(g.ejes) != 2:
+                raise ValueError("una matriz necesita sus dos ejes: el horizontal y el vertical")
+            if self.tipo == "grafica" and any(e.valor is None for e in g.elementos):
+                raise ValueError("cada barra de la gráfica necesita su «valor»")
         return self
 
 
@@ -170,20 +210,30 @@ class CuidadoDiapositiva(BaseModel):
     notas: Notas
 
 
+class CierreDiapositiva(BaseModel):
+    """La idea que se llevan: una frase de la idea central, con el docente y el contacto (decisión 29)."""
+    frase: str = Field(min_length=1)
+    notas: Notas
+
+
 class Diapositivas(BaseModel):
-    """Portada, idea central, una diapositiva por concepto y cierre con «Aplícalo así» y «Cuidado con».
-    Las cuatro fijas más las de concepto suman de 14 a 18 (lo comprueba el programa)."""
+    """Portada, idea central, una diapositiva por concepto, «Aplícalo así», «Cuidado con» y cierre.
+    Las cinco fijas más las de concepto suman de 15 a 19 (lo comprueba el programa; decisión 29)."""
     portada: PortadaDiapositiva
     idea_central: IdeaCentral
     diapositivas: list[Diapositiva] = Field(min_length=1, max_length=20)
     aplicalo: AplicaloDiapositiva
     cuidado: CuidadoDiapositiva
+    cierre: CierreDiapositiva
     pasajes: list[Pasaje] = Field(default_factory=list)       # de la lectura o de las fuentes, copiados tal cual
     decisiones: list[Decision] = Field(default_factory=list)
 
     @property
     def total(self) -> int:
-        return len(self.diapositivas) + 4
+        return len(self.diapositivas) + FIJAS
+
+
+FIJAS = 5   # portada, idea central, «Aplícalo así», «Cuidado con» y cierre
 
 
 ESQUEMA_NOTAS = _objeto({"destacar": {"type": "string"}, "preguntar": {"type": "string"}})
@@ -197,10 +247,18 @@ ESQUEMA_DIAPOSITIVAS = _objeto({
         "frases": TEXTOS,
         "columnas": {"type": "array", "items": _objeto({"titulo": {"type": "string"}, "frases": TEXTOS})},
         "tabla": {"anyOf": [ESQUEMA_TABLA, {"type": "null"}]},
+        "grafico": {"anyOf": [_objeto({
+            "centro": {"type": "string"},
+            "elementos": {"type": "array", "items": _objeto({
+                "texto": {"type": "string"}, "detalle": {"type": "string"}, "hijos": TEXTOS,
+                "valor": {"anyOf": [{"type": "number"}, {"type": "null"}]}})},
+            "ejes": TEXTOS,
+        }), {"type": "null"}]},
         "notas": ESQUEMA_NOTAS,
     })},
     "aplicalo": _objeto({"frases": TEXTOS, "plantilla": TEXTOS, "notas": ESQUEMA_NOTAS}),
     "cuidado": _objeto({"riesgos": TEXTOS, "notas": ESQUEMA_NOTAS}),
+    "cierre": _objeto({"frase": {"type": "string"}, "notas": ESQUEMA_NOTAS}),
     "pasajes": ESQUEMA_LECTURA["properties"]["pasajes"],
     "decisiones": ESQUEMA_LECTURA["properties"]["decisiones"],
 })

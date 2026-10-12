@@ -31,6 +31,7 @@ from app import agente, entrega, office, skill, tokens
 from app.fichas import almacen, verificacion
 from app.materiales import comun, estilo, lectura
 from app.materiales import pptx as generador
+from app.materiales import contenido as contenido_
 from app.materiales.contenido import ESQUEMA_DIAPOSITIVAS, Diapositivas, Lectura
 from app.validacion import excel, pasada2, revision, revisor, verificador
 from app.validacion.pasajes import Corpus, Fuente, normal
@@ -38,7 +39,8 @@ from app.validacion.pasajes import Corpus, Fuente, normal
 MATERIAL = "Diapositivas"
 CLAVE = "diapositivas"
 VUELTAS_DEL_VERIFICADOR = comun.VUELTAS_DEL_VERIFICADOR
-FIJAS = 4                                   # portada, idea central, «Aplícalo así» y «Cuidado con»
+FIJAS = contenido_.FIJAS                    # portada, idea central, «Aplícalo así», «Cuidado con» y cierre
+MAX_SOLO_TEXTO_SEGUIDAS = 2                 # decisión 29: nunca más de dos diapositivas de concepto seguidas solo con texto
 LIMITES = verificador.LIMITES[MATERIAL]
 FUENTE_LECTURA = "lectura aprobada"        # así se llama la lectura entre las fuentes de la revisión
 SECCIONES_DE_LA_SKILL = ("Reglas comunes", "Paso 3 · Vocabulario de la sesión", "Material 2 · Diapositivas")
@@ -203,23 +205,42 @@ def _contexto(carpeta_curso: Path, sesion: int, contenido_lectura: Lectura | Non
 FORMATO_COMUN = f"""
 CÓMO ENTREGAR LAS DIAPOSITIVAS
 - Devuelve solo los datos del esquema. Un programa crea el PowerPoint 16:9 con el diseño común: la portada con
-  el curso y la sesión, los títulos «Idea central», «Aplícalo así» y «Cuidado con», los recuadros y las notas.
+  el curso, la sesión, el docente y el contacto; los títulos «Idea central», «Aplícalo así» y «Cuidado con»; los
+  recuadros, los diagramas, la diapositiva de cierre y las notas.
 - En total van de {LIMITES['diapositivas_min']} a {LIMITES['diapositivas_max']} diapositivas. El programa pone {FIJAS} fijas
-  (portada, idea central, «Aplícalo así» y «Cuidado con»), así que «diapositivas» trae de
+  (portada, idea central, «Aplícalo así», «Cuidado con» y cierre), así que «diapositivas» trae de
   {LIMITES['diapositivas_min'] - FIJAS} a {LIMITES['diapositivas_max'] - FIJAS}.
 {{orden}}
-- tipo y lo que lleva cada uno (deja vacío lo que el tipo no usa y «tabla» en null si no es una tabla):
-  - «frases»: de 1 a 5 frases cortas.
-  - «pasos»: pasos numerados, uno por frase.
+- tipo y lo que lleva cada uno. Deja vacío lo que el tipo no usa, y «tabla» y «grafico» en null si no los usa:
+  - «frases»: de 1 a 5 frases cortas. Solo texto.
+  - «ejemplo»: un ejemplo en un recuadro legible a distancia. Solo texto.
+  - «pasos»: de 2 a 6 pasos numerados, uno por frase.
   - «columnas»: dos columnas comparativas, cada una con su título y sus frases.
   - «tabla»: una tabla de 4 columnas y 6 filas como máximo; en «frases», una línea de introducción o nada.
-  - «ejemplo»: un ejemplo en un recuadro legible a distancia.
+  - Recursos dibujados: van en «grafico». Cada elemento lleva «texto» (de 1 a 4 palabras), «detalle» (una frase
+    de 12 palabras como máximo, o vacío), «hijos» (de 0 a 3 textos cortos) y «valor» (null salvo en la gráfica).
+    En «frases», una línea de introducción o nada.
+    - «proceso»: de 3 a 6 pasos en fila, con flechas: una secuencia, un flujo o un antes y un después.
+    - «ciclo»: de 3 a 6 etapas que se repiten. «centro»: el nombre del ciclo, o vacío.
+    - «organigrama»: «centro» es el cargo o la instancia de arriba; de 2 a 5 elementos que dependen de él, con
+      sus funciones en «hijos».
+    - «mapa»: mapa mental. «centro» es la idea; de 3 a 6 ramas, con hasta 3 «hijos» cada una.
+    - «matriz»: 4 cuadrantes, en este orden: arriba a la izquierda, arriba a la derecha, abajo a la izquierda,
+      abajo a la derecha. «ejes»: el nombre del eje horizontal y el del vertical.
+    - «tarjetas»: de 2 a 6 tarjetas: tipos, componentes, principios o roles, cada uno con su detalle.
+    - «grafica»: barras con cifras. De 2 a 6 elementos con su «valor». «centro»: qué mide y en qué unidad. Úsala
+      solo con cifras que la fuente dice tal cual. Nunca inventes una cifra.
+- Recursos gráficos (PLAN.md §0, decisión 29): al menos la mitad de las diapositivas de «diapositivas» usa un tipo
+  distinto de «frases» y «ejemplo», y nunca hay más de {MAX_SOLO_TEXTO_SEGUIDAS} de «frases» o «ejemplo» seguidas. Elige el
+  recurso que muestra mejor la relación entre las ideas: secuencia, ciclo, jerarquía, ramas, comparación o cifras.
+  El recurso no agrega contenido: dibuja lo que dice la fuente.
 - Frases cortas, no párrafos: una idea por frase, que se lea de un vistazo.
 {{contenido}}
 - notas: en todas, también en la portada, la idea central, «Aplícalo así» y «Cuidado con». En «destacar», qué
   destacar; en «preguntar», qué preguntar al grupo. Las notas tampoco agregan contenido sin fuente.
 {{cierre}}
-- Sin diapositivas de relleno como «Preguntas» o «Gracias».
+- cierre.frase: la idea que se llevan. Copia tal cual una de las frases de idea_central.frases. El programa la pone
+  con el docente y el contacto. Sin diapositivas de relleno como «Preguntas» o «Gracias».
 {{pasajes}}
 - Usa los nombres del vocabulario de la sesión tal cual y en su orden. No uses sus variantes.
 - Usa comillas solo para copiar texto tal cual de una fuente.
@@ -358,7 +379,62 @@ def _validar(datos: dict, contenido_lectura: Lectura | None) -> tuple[Diapositiv
         problemas += _bloques_juntos(contenido)
     else:
         problemas += _orden_de_la_lectura(contenido, contenido_lectura)
+    problemas += _recursos_graficos(contenido)
+    problemas += _cifras_de_las_graficas(contenido, contenido_lectura)
+    problemas += _frase_de_cierre(contenido)
     return (None if problemas else contenido), problemas
+
+
+def _recursos_graficos(contenido: Diapositivas) -> list[str]:
+    """Decisión 29: al menos la mitad de las diapositivas de concepto con un recurso gráfico, y nunca más de dos
+    seguidas solo con texto."""
+    problemas = []
+    total = len(contenido.diapositivas)
+    graficas = sum(1 for d in contenido.diapositivas if d.es_grafica)
+    if graficas * 2 < total:
+        problemas.append(f"FALLA · estructura · recursos gráficos: {graficas} de {total} diapositivas de concepto usan "
+                         "un recurso gráfico; deben ser al menos la mitad. Cambia el tipo de las que muestran una "
+                         "secuencia, un ciclo, una jerarquía, ramas, una comparación o cifras.")
+    seguidas = 0
+    for numero, d in enumerate(contenido.diapositivas, start=3):
+        seguidas = 0 if d.es_grafica else seguidas + 1
+        if seguidas == MAX_SOLO_TEXTO_SEGUIDAS + 1:
+            problemas.append(f"FALLA · estructura · diapositiva {numero} («{d.titulo}»): hay más de "
+                             f"{MAX_SOLO_TEXTO_SEGUIDAS} diapositivas seguidas solo con texto. Usa un recurso gráfico.")
+    return problemas
+
+
+def _cifras(texto: str) -> set[str]:
+    return {re.sub(r"[.,]0+$", "", c.replace(",", ".")) for c in re.findall(r"\d+(?:[.,]\d+)?", texto)}
+
+
+def _numero(valor: float) -> str:
+    return f"{valor:g}"
+
+
+def _cifras_de_las_graficas(contenido: Diapositivas, contenido_lectura: Lectura | None) -> list[str]:
+    """Una gráfica solo usa cifras de la lectura o, sin lectura, de un pasaje copiado de una fuente."""
+    graficas = [(n, d) for n, d in enumerate(contenido.diapositivas, start=3) if d.tipo == "grafica"]
+    if not graficas:
+        return []
+    if contenido_lectura is not None:
+        base, de_donde = _cifras(_texto_de_la_lectura(contenido_lectura)), "la lectura"
+    else:
+        base, de_donde = _cifras(" ".join(p.texto for p in contenido.pasajes)), "los pasajes copiados de las fuentes"
+    problemas = []
+    for numero, d in graficas:
+        faltan = [_numero(e.valor) for e in d.grafico.elementos if _numero(e.valor) not in base]
+        if faltan:
+            problemas.append(f"FALLA · estructura · diapositiva {numero} («{d.titulo}»): la gráfica usa cifras que no "
+                             f"están en {de_donde}: {', '.join(faltan)}. Usa solo cifras de la fuente o cambia el recurso.")
+    return problemas
+
+
+def _frase_de_cierre(contenido: Diapositivas) -> list[str]:
+    """La idea que se llevan es una de las frases de la idea central (decisión 29)."""
+    if any(normal(contenido.cierre.frase) == normal(f) for f in contenido.idea_central.frases):
+        return []
+    return ["FALLA · estructura · cierre: la frase de cierre debe ser, tal cual, una de las frases de la idea central."]
 
 
 def _bloques_juntos(contenido: Diapositivas) -> list[str]:
@@ -397,7 +473,8 @@ def _orden_de_la_lectura(contenido: Diapositivas, contenido_lectura: Lectura) ->
 
 def titulos(contenido: Diapositivas) -> list[str]:
     """El título de cada diapositiva, en orden (la portada lleva el nombre «Portada»)."""
-    return ["Portada", "Idea central", *[d.titulo for d in contenido.diapositivas], "Aplícalo así", "Cuidado con"]
+    return ["Portada", "Idea central", *[d.titulo for d in contenido.diapositivas], "Aplícalo así", "Cuidado con",
+            "Cierre"]
 
 
 def desbordes_como_hallazgos(medicion: office.Medicion, contenido: Diapositivas, nombre: str) -> list:
@@ -557,11 +634,16 @@ def bloques_de(contenido: Diapositivas) -> list[pasada2.Bloque]:
             textos += [c.titulo, *c.frases]
         if d.tabla:
             textos += [" | ".join(f) for f in d.tabla.filas]
+        if d.grafico:
+            textos += [d.grafico.centro, *d.grafico.ejes]
+            for e in d.grafico.elementos:
+                textos += [e.texto + (f": {_numero(e.valor)}" if e.valor is not None else ""), e.detalle, *e.hijos]
         por_bloque.setdefault(d.bloque, []).extend(oraciones(*textos, *notas(d.notas)))
     bloques += [pasada2.Bloque(f"Diapositivas de «{nombre}»", lista) for nombre, lista in por_bloque.items()]
     a, c = contenido.aplicalo, contenido.cuidado
     bloques.append(pasada2.Bloque("Aplícalo así", oraciones(*a.frases, *a.plantilla, *notas(a.notas))))
     bloques.append(pasada2.Bloque("Cuidado con", oraciones(*c.riesgos, *notas(c.notas))))
+    bloques.append(pasada2.Bloque("Cierre", oraciones(contenido.cierre.frase, *notas(contenido.cierre.notas))))
     return bloques
 
 

@@ -32,7 +32,8 @@ verificar = _cargar()
 # Límites de cada material (SPEC §4 y SKILL.md). Los demás se agregan en sus etapas.
 LIMITES = {
     "Lectura": {"paginas_max": 6},
-    "Diapositivas": {"diapositivas_min": 14, "diapositivas_max": 18, "notas_en_todas": True},
+    # De 15 a 19: la diapositiva de cierre se suma a las de la skill (PLAN.md §0, decisión 29).
+    "Diapositivas": {"diapositivas_min": 15, "diapositivas_max": 19, "notas_en_todas": True},
 }
 
 

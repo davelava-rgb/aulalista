@@ -128,7 +128,7 @@ Estas reglas valen para todo ejercicio que el alumno ejecuta en una herramienta:
 - PowerPoint 16:9, de 14 a 18 diapositivas.
 - Portada, idea central, una diapositiva por concepto y cierre con "Aplícalo así" y "Cuidado con".
 - Una idea por diapositiva. Frases cortas, no párrafos.
-- Tablas, columnas comparativas o pasos numerados cuando ayuden a entender.
+- Recursos gráficos cuando ayuden a entender: tablas, columnas comparativas, pasos numerados, procesos, ciclos, organigramas, mapas mentales, matrices, tableros de tarjetas y gráficas de barras con cifras de las fuentes. Al menos la mitad de las diapositivas de concepto lleva uno.
 - Los ejemplos van en recuadros legibles a distancia. Si uno no cabe, divídelo en dos diapositivas o muestra una parte y remite a la lectura en las notas.
 - Notas del profesor en cada diapositiva: qué destacar y qué preguntar al grupo.
 - Mismo orden y mismos ejemplos que la lectura. No agregues contenido nuevo.

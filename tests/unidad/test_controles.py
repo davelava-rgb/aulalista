@@ -252,7 +252,7 @@ def test_la_portada_de_las_diapositivas_lleva_franja_y_contacto(tmp_path):
     ruta = diapositivas.generar_diapositivas(Diapositivas.model_validate(LIMPIAS), identidad, portada,
                                              tmp_path / "S1_Diapositivas.pptx")
     primera = Presentation(ruta).slides[0]
-    textos = [f.text_frame.text for f in primera.shapes if f.has_text_frame]
+    textos = [linea for f in primera.shapes if f.has_text_frame for linea in f.text_frame.text.splitlines()]
     assert "www.linkedin.com/in/jdavelouis" in textos and "info@futurasoft.net" in textos
     franjas = [f for f in primera.shapes if f.shape_type == 1 and f.top == 0]   # 1: autoforma
     assert franjas and str(franjas[0].fill.fore_color.rgb) == estilo.PALETA_SOBRIA["principal"]
