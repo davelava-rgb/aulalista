@@ -396,6 +396,12 @@ class Fuente:
     patron_referencia: re.Pattern | None
     indice: dict[str, str]
 
+    @property
+    def texto_normal(self) -> str:
+        if not hasattr(self, "_texto_normal"):
+            self._texto_normal = normalizar(self.texto_continuo)
+        return self._texto_normal
+
 
 @dataclass
 class Configuracion:
@@ -536,6 +542,26 @@ def _dentro_de_cita(texto: str, inicio: int, fin: int) -> bool:
     return any(c.start() <= inicio and fin <= c.end() for c in CITA.finditer(normalizar(texto)))
 
 
+PALABRAS_DE_ENLACE = frozenset("el la los las lo un una unos unas de del al a y e o u en que por para con sin se su "
+                               "sus es son como mas muy este esta estos estas ese esa".split())
+
+
+def _termino_de_la_fuente(texto: str, inicio: int, fin: int, fuentes: list[Fuente]) -> bool:
+    """La variante va junto a la misma palabra con que la usa una fuente del curso («jefe administrador de datos»):
+    es un término de la fuente usado con su sentido, no otro nombre del concepto (PLAN.md §0, decisión 31).
+    Las palabras de enlace («el», «de»…) no cuentan como vecinas."""
+    variante = texto[inicio:fin]
+    antes = [p for p in re.findall(r"\w+", texto[:inicio]) if p not in PALABRAS_DE_ENLACE][-1:]
+    despues = [p for p in re.findall(r"\w+", texto[fin:]) if p not in PALABRAS_DE_ENLACE][:1]
+    if antes and not texto[:inicio].rstrip().endswith(antes[0]):
+        antes = []
+    if despues and not texto[fin:].lstrip().startswith(despues[0]):
+        despues = []
+    tramos = [f"{antes[0]} {variante}"] if antes else []
+    tramos += [f"{variante} {despues[0]}"] if despues else []
+    return any(patron_frase(t).search(f.texto_normal) for t in tramos for f in fuentes)
+
+
 UNIDADES = ["cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez",
             "once", "doce", "trece", "catorce", "quince", "dieciseis", "diecisiete", "dieciocho",
             "diecinueve", "veinte", "veintiuno", "veintidos", "veintitres", "veinticuatro",
@@ -635,7 +661,13 @@ def revisar_oracion(o: Oracion, cfg: Configuracion, hallazgos: list[Hallazgo]) -
     for concepto in cfg.vocabulario:
         sin_concepto = patron_frase(concepto["concepto"]).sub(" ", normal)
         for variante in concepto.get("variantes", []):
-            if patron_frase(variante).search(sin_concepto):
+            m = patron_frase(variante).search(sin_concepto)
+            if not m:
+                continue
+            if _termino_de_la_fuente(sin_concepto, m.start(), m.end(), cfg.fuentes):
+                agregar(AVISO, "término de la fuente",
+                        f"usa «{variante}» como lo usa la fuente; como nombre del concepto vale «{concepto['concepto']}»")
+            else:
                 agregar(FALLA, "variante de un concepto",
                         f"usa «{variante}»; el nombre único es «{concepto['concepto']}»")
 

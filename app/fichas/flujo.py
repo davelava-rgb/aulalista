@@ -156,8 +156,12 @@ def pedido_de_propuesta(carpeta_curso: Path, tipo: str, sesion: int | None, fich
             "- En «Material de referencia» escribe, por cada fuente que cubre el alcance de la sesión, "
             "«archivo: páginas X a Y». Usa el campo «pagina» de cada pasaje (la página del PDF), no el número impreso. "
             "Las exclusiones las decide el profesor (PLAN.md §0, decisión 23).",
-            "- En el vocabulario escribe un concepto por línea con su nombre único. Si conviene, agrega "
-            "«(no usar: variante 1, variante 2)».",
+            "- En el vocabulario escribe un concepto por línea con su nombre único, en el orden en que la fuente los "
+            "presenta. Si conviene, agrega «(no usar: variante 1, variante 2)». No pongas como variante un término "
+            "que la fuente usa (PLAN.md §0, decisión 31).",
+            "- Los temas, los bloques y los pasos van en el orden de la fuente.",
+            "- En «Temas de sesiones posteriores que no se deben adelantar» escribe los temas que no se desarrollan. "
+            "La lectura puede nombrarlos en pocas oraciones si hace falta para entender la sesión.",
             "- Los datos del caso son ficticios y cuadran con los datos fijos de la ficha del curso.",
             "",
             f"Sesión {sesion}: {sesiones.get(sesion, '')}",

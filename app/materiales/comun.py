@@ -18,8 +18,9 @@ FICHAS = (FICHA_DEL_CURSO, FICHA_DE_LA_SESION)
 VUELTAS_DEL_VERIFICADOR = 3   # correcciones de fallas mecánicas antes de dejarlas abiertas (PLAN.md §0, decisión 22)
 
 # Avisos que se muestran en la hoja Hallazgos pero no obligan a corregir ni a explicar (PLAN.md §0, decisión 13).
-AVISOS_INFORMATIVOS = ("relleno", "palabra imprecisa")
-NOTA_INFORMATIVA = "Aviso informativo: no obliga a corregir ni a explicar (PLAN.md §0, decisión 13)."
+# Un término que la fuente usa con su sentido tampoco obliga, aunque la ficha lo liste como variante (decisión 31).
+AVISOS_INFORMATIVOS = ("relleno", "palabra imprecisa", "término de la fuente")
+NOTA_INFORMATIVA = "Aviso informativo: no obliga a corregir ni a explicar (PLAN.md §0, decisiones 13 y 31)."
 
 ESQUEMA_EXPLICACIONES = {"type": "array", "items": {
     "type": "object",

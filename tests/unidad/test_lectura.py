@@ -194,6 +194,26 @@ def test_el_redactor_recibe_las_secciones_de_la_skill_sin_el_claude_md():
         skill.secciones("No existe")
 
 
+def test_el_redactor_recibe_las_reglas_de_la_decision_31():
+    """La fuente manda sobre las fichas: orden, cifras, marcas, términos y adelantos (PLAN.md §0, decisión 31)."""
+    reglas = skill.secciones(*lectura.SECCIONES_DE_LA_SKILL)
+    assert "La fuente manda sobre las fichas." in reglas
+    assert "Sigue el orden en que la fuente presenta los temas" in reglas
+    assert "Copia tal cual las cifras de las fuentes y de las fichas. No las quites ni las cambies." in reglas
+    assert "salvo los que nombran las fuentes del curso o las fichas" in reglas
+    assert "Una variante prohibida solo se prohíbe como nombre del concepto." in reglas
+    assert "Un tema de una sesión posterior se puede nombrar en pocas oraciones" in reglas
+    formato = lectura.instrucciones_de_formato(True)
+    assert "en su orden. No uses sus variantes." not in formato
+    assert "Dentro de cada bloque, los temas van en el orden de la fuente." in formato
+
+
+def test_la_revision_no_marca_lo_que_permite_la_decision_31():
+    from app.validacion import revision
+    assert "la fuente manda sobre las fichas" in revision.REGLAS
+    assert "Un término, una marca o una norma que la fuente nombra" in revision.REGLAS
+
+
 # ---------- Flujo: redactar, generar, verificar y corregir ----------
 
 def test_sin_fichas_confirmadas_no_empieza(entorno):
@@ -217,6 +237,12 @@ def test_lectura_limpia_queda_verificada_con_dos_llamadas(sesion):
     assert consulta.llamadas[1]["options"].model == "claude-sonnet-5-5"
     assert material["decisiones"] == [{"texto": "Usé una tienda como ejemplo.", "tipo": "decisión"}]
     assert material["revision"] == {"bloques": 5, "errores": 0, "corregidos": 0, "pendientes": 0, "descartados": 0}
+
+
+def test_el_excel_de_la_lectura_dice_seccion_y_no_diapositiva(sesion):
+    generar(sesion, LIMPIA)
+    hoja = openpyxl.load_workbook(lectura.archivos(sesion, 1)["excel"])["Hallazgos"]
+    assert [c.value for c in hoja[1]][:2] == ["Nivel", "Sección"]
 
 
 def test_una_falla_se_corrige_y_se_verifica_de_nuevo(sesion):
@@ -281,7 +307,7 @@ def test_relleno_y_palabras_imprecisas_son_avisos_informativos(sesion):
     assert filas["palabra imprecisa"][5] == lectura.NOTA_INFORMATIVA
     assert filas["relleno"][5] == lectura.NOTA_INFORMATIVA
     valide = next(s["lineas"] for s in material["entrega"]["secciones"] if s["clave"] == "valide")
-    assert any(l.startswith("Avisos informativos de relleno o palabras imprecisas: 2.") for l in valide)
+    assert any(l.startswith("Avisos informativos (relleno, palabras imprecisas o términos de la fuente): 2.") for l in valide)
 
 
 def test_mas_de_seis_paginas_es_falla_y_se_pide_acortar(sesion):

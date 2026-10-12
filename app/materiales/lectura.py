@@ -140,7 +140,8 @@ CÓMO ENTREGAR LA LECTURA
 - agrupacion: si hubo más temas que bloques, cómo los agrupaste. Si no, texto vacío.
 {extension}
 - Una idea por oración.
-- Usa los nombres del vocabulario de la sesión tal cual y en su orden. No uses sus variantes.
+- Usa los nombres del vocabulario de la sesión tal cual. No uses sus variantes como nombre del concepto.
+  Un término que la fuente usa con su sentido sí se puede usar (PLAN.md §0, decisión 31).
 - Usa comillas solo para copiar texto tal cual de una fuente.
 - Si agrupas, resumes o cambias el orden de lo que dice una fuente, escribe «en este curso».
 - Para afirmar algo de una fuente, apóyate en su pasaje: di lo mismo, con sus palabras o con otras más claras.
@@ -148,12 +149,15 @@ CÓMO ENTREGAR LA LECTURA
 """
 
 SIN_REFERENCIA = {
-    "bloques": "- bloques: de 2 a 4, en el orden de la ficha de la sesión. Cada uno con subtítulo, párrafos breves y un ejemplo.",
+    "bloques": ("- bloques: de 2 a 4, en el orden de la ficha de la sesión. Cada uno con subtítulo, párrafos breves y un ejemplo.\n"
+                "  Dentro de cada bloque, los temas van en el orden de la fuente."),
     "extension": f"- Unas {PALABRAS_MAX} palabras como máximo en total, para no pasar de seis páginas con portada.",
 }
 CON_REFERENCIA = {
     "bloques": ("- bloques: si la ficha de la sesión trae bloques, síguelos en su orden. Si no, agrupa los temas del\n"
                 "  material de referencia en bloques, en el orden de la referencia, y explica la agrupación en «agrupacion».\n"
+                "  Dentro de cada bloque, los temas van en el orden de la fuente. Si la ficha ordena distinto que la fuente,\n"
+                "  sigue la fuente y anótalo como «decisión».\n"
                 "  Cada bloque con subtítulo, párrafos breves y un ejemplo."),
     "extension": ("- Cubre todos los temas del material de referencia, menos las exclusiones. No hay un máximo de páginas:\n"
                   "  la extensión sale de esos temas. Explica cada tema con lo necesario para entenderlo y aplicarlo, sin relleno.\n"
@@ -463,7 +467,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
     sin_fuente = [f"Afirmación sin fuente: {d.texto}" for d in decisiones if d.tipo == "sin fuente"]
     estado_final = "con fallas" if trabajo.fallas else ("con pendientes" if pendientes or sin_fuente else "verificada")
     if trabajo.resultado is not None:
-        excel.solo_hallazgos(rutas["excel"])
+        excel.solo_hallazgos(rutas["excel"], "Sección")
         excel.agregar_historial(rutas["excel"], [
             {**h, "resolucion": f"Enviado a corrección en la vuelta {h['vuelta']}." + ("" if trabajo.fallas else " Resuelto.")}
             for h in trabajo.historial] + _filas_de_revision(errores, trabajo.descartados, rutas["word"].name)
@@ -584,7 +588,7 @@ def _entrega(material: dict) -> dict:
     valide = [f"Verificador: {material['resumen']}." if material["resumen"] else "El verificador no llegó a correr.",
               *([f"Avisos explicados en la hoja Hallazgos: {material['avisos_explicados']}."]
                 if material.get("avisos_explicados") else []),
-              *([f"Avisos informativos de relleno o palabras imprecisas: {material['avisos_informativos']}. "
+              *([f"Avisos informativos (relleno, palabras imprecisas o términos de la fuente): {material['avisos_informativos']}. "
                  "Están en la hoja Hallazgos; no obligan a corregir."] if material.get("avisos_informativos") else []),
               f"Fallas del verificador corregidas: {c['verificador']}."]
     if r.get("bloques"):

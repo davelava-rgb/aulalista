@@ -37,6 +37,8 @@ def sesion(tmp_path):
         {"texto": "Scrum es gratuito y se aplica completo en cada equipo.", "ubicacion": "página 24",
          "pagina": 24, "numero_impreso": 43},
         {"texto": "Tres pilares de Scrum", "ubicacion": "página 35", "pagina": 35, "numero_impreso": 54},
+        {"texto": "El jefe administrador de datos coordina a los data stewards.", "ubicacion": "página 36",
+         "pagina": 36, "numero_impreso": 55},
     ]
     fuente.write_text("\n".join(json.dumps(p, ensure_ascii=False) for p in pasajes), encoding="utf-8")
     practica = tmp_path / "practica"
@@ -49,7 +51,8 @@ def sesion(tmp_path):
             "referencias": {"patron": r"lámina (\d+)", "indice": "numero_impreso"},
         }],
         "datos_fijos": [{"etiqueta": "Fecha de referencia", "valor": "lunes 5 de octubre de 2026"}],
-        "vocabulario": [{"concepto": "Manifiesto Ágil", "variantes": ["Agile"]}],
+        "vocabulario": [{"concepto": "Manifiesto Ágil", "variantes": ["Agile"]},
+                        {"concepto": "Data steward", "variantes": ["administrador de datos"]}],
         "nunca_se_incluye": ["objetivos de aprendizaje", "requisitos previos", "glosario"],
         "permitidos": ["notas del profesor", "puntos de historia"],
         "carpeta_practica": "practica",
@@ -187,6 +190,20 @@ def test_lenguaje_de_ia_dentro_de_una_cita_es_aviso(sesion, tmp_path):
     material = word(tmp_path / "S1_Laboratorio.docx", ["El borrador decía «es importante destacar»."])
     resultado = correr(sesion, [material])
     assert [(h.nivel, h.regla) for h in resultado.hallazgos] == [("AVISO", "lenguaje de IA")]
+
+
+def test_un_termino_de_la_fuente_no_es_variante_pero_como_nombre_si(sesion, tmp_path):
+    """Decisión 31: la variante solo se prohíbe como nombre del concepto. Junto a la palabra con que la usa la
+    fuente («jefe administrador de datos») es un aviso informativo; sola, o con una palabra de enlace, es falla."""
+    material = word(tmp_path / "S1_Laboratorio.docx", [
+        "El jefe administrador de datos coordina el comité.",
+        "El administrador de datos aprueba la política."])
+    resultado = correr(sesion, [material])
+    por_oracion = {}
+    for h in resultado.hallazgos:
+        por_oracion.setdefault(h.oracion, []).append((h.nivel, h.regla))
+    assert por_oracion["El jefe administrador de datos coordina el comité."] == [("AVISO", "término de la fuente")]
+    assert por_oracion["El administrador de datos aprueba la política."] == [("FALLA", "variante de un concepto")]
 
 
 def test_la_clausula_citada_anota_su_titulo(sesion, tmp_path):

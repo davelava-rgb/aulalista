@@ -46,7 +46,9 @@ Revisa además los materiales de sesiones anteriores que haya en el proyecto y �
 
 ## Paso 3 · Vocabulario de la sesión
 
-Antes de la lectura, escribe la lista de conceptos clave de la sesión con un solo nombre y un solo orden para cada uno. Usa esos nombres iguales en todos los materiales. Si un concepto tiene partes numeradas, el número y los nombres no cambian entre materiales.
+Antes de la lectura, escribe la lista de conceptos clave de la sesión con un solo nombre y un solo orden para cada uno. El orden es el de la fuente. Usa esos nombres iguales en todos los materiales. Si un concepto tiene partes numeradas, el número y los nombres no cambian entre materiales.
+
+Una variante prohibida solo se prohíbe como nombre del concepto. Un término que la fuente usa con su sentido se puede usar, aunque se parezca a una variante: por ejemplo, el cargo que la fuente llama «jefe administrador de datos». No pongas como variante un término que la fuente usa.
 
 ## Paso 4 · Un material a la vez
 
@@ -71,7 +73,11 @@ Termina un material, haz la validación doble, entrégalo y espera la aprobació
 - Antes de redactar, abre las fuentes del curso y copia los pasajes que vas a usar. Redacta a partir de esos pasajes, no de memoria.
 - No afirmes sobre el contenido de una fuente nada que no esté en un pasaje copiado. Puedes decirlo con tus palabras si no cambias su sentido. Si la fuente no está en el proyecto, no la cites.
 - Si agrupas, resumes o cambias el orden de lo que dice una fuente, dilo en el texto: "en este curso".
-- Todos los datos del caso son ficticios y cuadran entre sí y con los datos fijos.
+- La fuente manda sobre las fichas. Si una ficha contradice una fuente (un orden, un paso, un dato), sigue la fuente y anota la diferencia en la entrega.
+- Sigue el orden en que la fuente presenta los temas, también dentro de cada bloque.
+- Copia tal cual las cifras de las fuentes y de las fichas. No las quites ni las cambies. Si una cifra te parece ambigua, mantenla y anota la duda en la entrega.
+- Un tema de una sesión posterior se puede nombrar en pocas oraciones si hace falta para entender la sesión o por razones pedagógicas. No lo desarrolles y anótalo en la entrega.
+- Todos los datos del caso son ficticios y cuadran entre sí y con los datos fijos. Un dato ficticio que hace falta, como un plazo o una cantidad, se puede agregar: va a los datos fijos.
 - Ningún material contiene datos personales reales. Nombra a las personas por su cargo. Si hace falta un nombre propio, usa uno ficticio.
 - Los casos se entienden sin conocer una profesión específica, salvo que el curso sea de esa profesión.
 
@@ -83,7 +89,7 @@ Termina un material, haz la validación doble, entrégalo y espera la aprobació
 
 ### Neutralidad de herramientas (si la ficha la pide)
 
-- No menciones marcas, botones, menús ni funciones exclusivas de un producto.
+- No menciones marcas, botones, menús ni funciones exclusivas de un producto, salvo los que nombran las fuentes del curso o las fichas: esos se nombran tal cual.
 - Explica cada concepto por lo que hace, no por cómo lo llama cada marca.
 - Si un ejercicio necesita un archivo, escribe "adjunta el archivo". Agrega una sola vez, al inicio de la guía, la alternativa: "Si tu herramienta no acepta archivos, copia el texto del archivo y pégalo en el mensaje".
 

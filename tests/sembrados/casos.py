@@ -17,6 +17,9 @@ CASOS_POR_ORACION = [
     ("emoji", "Revisa el registro con cuidado ✅", "FALLA", "emoji"),
     ("nunca se incluye", "Objetivos de aprendizaje de la sesión.", "FALLA", "lo que nunca se incluye"),
     ("variante", "El equipo trabaja según el enfoque Agile.", "FALLA", "variante de un concepto"),
+    ("variante como nombre", "El administrador de datos aprueba la política.", "FALLA", "variante de un concepto"),
+    # Decisión 31: el término de la fuente usado con su sentido es un aviso informativo, no una falla.
+    ("termino de la fuente", "El jefe administrador de datos aprueba la política.", "AVISO", "término de la fuente"),
     ("dato fijo", "Fecha de referencia: lunes 5 de octubre de 2025.", "FALLA", "dato fijo"),
     ("cita", "La guía dice «Scrum es un marco para equipos grandes y complejos».", "FALLA", "cita sin fuente"),
     ("clausula", "Lo explica la lámina 99 del capítulo.", "FALLA", "referencia inexistente"),

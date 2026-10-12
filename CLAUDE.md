@@ -41,10 +41,11 @@ Cada regla tiene una prueba automática. Si una regla no tiene prueba, la etapa 
 - Toda regla propia del curso lleva "en este curso".
 - Datos del caso ficticios y coherentes con los datos fijos de la ficha.
 - Sin datos personales reales.
-- Vocabulario único: mismo nombre y mismo orden en todos los materiales.
+- Vocabulario único: mismo nombre y mismo orden en todos los materiales. El orden es el de la fuente.
+- La fuente manda sobre las fichas. Las cifras de las fuentes y de las fichas no se quitan ni se cambian (`PLAN.md` §0, decisión 31).
 - Ejercicios y preguntas independientes, que funcionan tal cual.
 - Respuestas solo en la guía del profesor y en la clave.
-- Neutralidad de herramientas si la ficha la pide.
+- Neutralidad de herramientas si la ficha la pide, salvo las marcas que nombran las fuentes o las fichas (`PLAN.md` §0, decisión 31).
 - Diseño uniforme: tres colores como máximo, mismos recuadros y tablas.
 - Nunca se incluye, por defecto: objetivos de aprendizaje, requisitos previos, glosarios, relleno, emojis y lenguaje publicitario.
 

@@ -247,7 +247,14 @@ def test_genera_verifica_y_entrega(con_lectura):
     assert material["lectura_fecha"] == lectura.estado(con_lectura, 1)["fecha"]
 
 
-def test_un_desborde_se_corrige_con_las_diapositivas_completas(con_lectura):
+def solo(numero: int, *nuevas) -> dict:
+    """Respuesta de una corrección por diapositivas que reemplaza una de concepto."""
+    return {"reemplazos": [{"numero": numero, "diapositivas": list(nuevas)}],
+            "fijas": {k: None for k in diapositivas.FIJAS_CORREGIBLES}, "cambios": [], "explicaciones": [],
+            "datos_nuevos": []}
+
+
+def test_un_desborde_se_corrige_solo_en_su_diapositiva(con_lectura):
     medidas = []
 
     def medir(ruta, carpeta):
@@ -256,13 +263,16 @@ def test_un_desborde_se_corrige_con_las_diapositivas_completas(con_lectura):
             return office.Medicion(15, [office.Desborde(8, "Los pilares de Scrum son tres.", 1.4)], [])
         return medir_sin_desbordes(ruta, carpeta)
 
-    corregidas = {"diapositivas": LIMPIAS, "explicaciones": [], "datos_nuevos": []}
-    material, consulta = generar(con_lectura, LIMPIAS, corregidas, medir=medir)
+    corta = {**LIMPIAS["diapositivas"][5], "frases": ["Scrum tiene tres pilares."]}
+    material, consulta = generar(con_lectura, LIMPIAS, solo(8, corta), medir=medir)
     assert material["estado"] == "verificada"
     correccion = consulta.llamadas[1]["prompt"]
     assert "FALLA · desborde" in correccion and "Diapositiva 8 («Pilares de Scrum»)" in correccion
-    assert "sobran 1.4 cm" in correccion
-    assert consulta.llamadas[1]["options"].output_format["schema"] == diapositivas.ESQUEMA_CORRECCION
+    assert "sobran 1.4 cm" in correccion and "Corrige solo las diapositivas 8." in correccion
+    assert consulta.llamadas[1]["options"].output_format["schema"] == diapositivas.ESQUEMA_POR_DIAPOSITIVAS
+    final = comun.leer_json(diapositivas.archivos(con_lectura, 1)["contenido"])
+    assert final["diapositivas"][5]["frases"] == ["Scrum tiene tres pilares."]
+    assert final["diapositivas"][:5] == LIMPIAS["diapositivas"][:5]
     hoja = openpyxl.load_workbook(diapositivas.archivos(con_lectura, 1)["excel"])["Hallazgos"]
     reglas = [(f[3].value, f[5].value) for f in hoja.iter_rows(min_row=2)]
     assert any(r == "desborde" and "Resuelto" in (c or "") for r, c in reglas)
@@ -513,14 +523,15 @@ def test_la_revision_visual_mira_las_imagenes_y_pide_una_correccion(con_lectura)
     visual = {"cambios": [{"numero": 4, "problema": "Una tabla con mucho texto.",
                            "propuesta": "Pasar a tarjetas."},
                           {"numero": 1, "problema": "La portada.", "propuesta": "Nada."}]}   # la portada no se toca
-    corregidas = {"diapositivas": LIMPIAS, "explicaciones": [], "datos_nuevos": []}
-    material, consulta = generar(con_lectura, LIMPIAS, visual, corregidas, medir=medir_con_imagenes)
+    material, consulta = generar(con_lectura, LIMPIAS, visual, solo(4, LIMPIAS["diapositivas"][1]),
+                                 medir=medir_con_imagenes)
     assert material["estado"] == "verificada", material.get("problemas")
     pedido_visual = consulta.llamadas[1]
     assert pedido_visual["options"].output_format["schema"] == diapositivas.ESQUEMA_VISUAL
     correccion = consulta.llamadas[2]["prompt"]
     assert "DISEÑO · diapositiva 4 («Qué valora más»): Una tabla con mucho texto. Propuesta: Pasar a tarjetas." in correccion
     assert "La portada." not in correccion
+    assert consulta.llamadas[2]["options"].output_format["schema"] == diapositivas.ESQUEMA_POR_DIAPOSITIVAS
     assert material["revision_visual"] == [visual["cambios"][0]]
     assert any("Revisión visual" in l for l in material["avance"])
     entrega = {s["clave"]: s["lineas"] for s in material["entrega"]["secciones"]}
@@ -532,3 +543,43 @@ def test_sin_cambios_visuales_sigue_sin_corregir(con_lectura):
     assert material["estado"] == "verificada"
     assert len(consulta.llamadas) == 3          # redacción, revisión visual y revisión del contenido
     assert material["revision_visual"] == []
+
+
+# ---------- Corrección por diapositivas (decisión 31) ----------
+
+def test_solo_lo_que_nombra_una_diapositiva_se_corrige_por_diapositivas():
+    nombradas = diapositivas.diapositivas_nombradas
+    desborde = "FALLA · desborde · S1_Diapositivas.pptx · diapositiva 8: Diapositiva 8 («X»): no cabe; sobran 1.0 cm."
+    assert nombradas([desborde], LIMPIAS) == {8}
+    assert nombradas(["FALLA · estructura · idea central: tiene 40 palabras; el máximo es 30."], LIMPIAS) == {2}
+    assert nombradas(["FALLA · estructura · diapositivas.2.grafico: falta"], LIMPIAS) == {5}
+    assert nombradas(["DISEÑO · diapositiva 4 («Y»): cargada. Propuesta: tarjetas."], LIMPIAS) == {4}
+    frase = "FALLA · lenguaje de IA · «Es importante destacar que…»: dice «es importante destacar»"
+    assert nombradas([desborde, frase], LIMPIAS) == {8}
+    # Del documento entero: cantidad, orden, tablas y recursos en total.
+    for problema in ["FALLA · estructura · diapositivas: hay 14 con las 5 fijas; deben ser de 15 a 19.",
+                     "FALLA · estructura · tablas: hay 3 (diapositivas 4, 5, 6); el máximo es 2.",
+                     "FALLA · estructura · diapositiva 9 («Z»): no sigue el orden de la lectura.",
+                     "FALLA · estructura · recursos gráficos: 3 de 10 diapositivas de concepto son un diagrama."]:
+        assert nombradas([desborde, problema], LIMPIAS) is None, problema
+
+
+def test_la_correccion_por_diapositivas_no_toca_las_demas():
+    nueva = diapositiva(PILARES, "Primera mitad", "frases", frases=["Scrum tiene tres pilares."])
+    otra = diapositiva(PILARES, "Segunda mitad", "frases", frases=["Cada uno se usa cada día."])
+    respuesta = solo(8, nueva, otra)
+    respuesta["reemplazos"].append({"numero": 3, "diapositivas": [nueva]})        # no está en la lista: se ignora
+    respuesta["fijas"]["cierre"] = {"frase": "Otra", "notas": NOTAS}             # no está en la lista: se ignora
+    respuesta["fijas"]["idea_central"] = {"frases": ["Idea nueva."], "notas": NOTAS}
+    datos, no_encontradas = diapositivas.aplicar_por_diapositivas(LIMPIAS, respuesta, {2, 8})
+    assert not no_encontradas
+    assert [d["titulo"] for d in datos["diapositivas"]][5:7] == ["Primera mitad", "Segunda mitad"]
+    assert datos["diapositivas"][:5] == LIMPIAS["diapositivas"][:5]
+    assert datos["diapositivas"][7:] == LIMPIAS["diapositivas"][6:]
+    assert datos["idea_central"]["frases"] == ["Idea nueva."] and datos["cierre"] == LIMPIAS["cierre"]
+
+
+def test_la_cantidad_sigue_con_la_correccion_completa(con_lectura):
+    cortas = con(diapositivas=LIMPIAS["diapositivas"][:9])
+    _, consulta = generar(con_lectura, cortas, {"diapositivas": LIMPIAS, "explicaciones": [], "datos_nuevos": []})
+    assert consulta.llamadas[1]["options"].output_format["schema"] == diapositivas.ESQUEMA_CORRECCION

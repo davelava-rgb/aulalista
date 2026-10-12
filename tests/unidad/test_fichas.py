@@ -370,3 +370,12 @@ def test_el_pedido_de_la_sesion_recuerda_formatos_y_tres_preguntas(curso):
     assert "Excel para datos y Word para textos" in pedido
     assert "La evaluación tiene 3 preguntas" in pedido
     assert "Sesión 1: Agilidad y fundamentos de Scrum: manifiesto, pilares y valores" in pedido
+
+
+def test_la_propuesta_ordena_como_la_fuente_y_no_prohibe_sus_terminos(curso):
+    """Decisión 31: el vocabulario va en el orden de la fuente y un término de la fuente no es variante."""
+    ficha_curso_confirmada(curso)
+    pedido = flujo.pedido_de_propuesta(curso, "sesion", 1, almacen.cargar(curso, "sesion", 1))
+    assert "en el orden en que la fuente los presenta" in pedido
+    assert "No pongas como variante un término que la fuente usa" in pedido
+    assert "Los temas, los bloques y los pasos van en el orden de la fuente." in pedido

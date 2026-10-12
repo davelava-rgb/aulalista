@@ -53,6 +53,7 @@ def test_el_revisor_es_una_sesion_nueva_con_el_pedido_de_la_skill(sesion):
     pedido, opciones = llamada["prompt"], llamada["options"]
     assert revisor.PEDIDO_DE_AULALISTA in pedido
     assert "- Imprecisión:" in pedido and "- Relleno:" in pedido
+    assert "sin desarrollarlo, también es «cumple» (decisión 31)" in pedido
     # Sesión nueva: no continúa ni retoma la del redactor.
     assert opciones.resume is None and not opciones.continue_conversation and not opciones.fork_session
     assert opciones.model == "claude-opus-5-5"

@@ -251,7 +251,8 @@ CÓMO ENTREGAR LAS DIAPOSITIVAS
 - cierre.frase: la idea que se llevan. Copia tal cual una de las frases de idea_central.frases. El programa la pone
   con el docente y el contacto. Sin diapositivas de relleno como «Preguntas» o «Gracias».
 {{pasajes}}
-- Usa los nombres del vocabulario de la sesión tal cual y en su orden. No uses sus variantes.
+- Usa los nombres del vocabulario de la sesión tal cual. No uses sus variantes como nombre del concepto.
+  Un término que la fuente usa con su sentido sí se puede usar (PLAN.md §0, decisión 31).
 - Usa comillas solo para copiar texto tal cual de una fuente.
 - Si una regla es propia del curso, escribe «en este curso».
 """
@@ -281,7 +282,7 @@ SIN_LECTURA = {
     "orden": ("- diapositivas: una por concepto y una idea por diapositiva. Si la ficha de la sesión trae bloques de temas,\n"
               "  síguelos en su orden y escribe en «bloque» el nombre de cada uno. Si no, agrupa los temas del material de\n"
               "  referencia en bloques, en el orden de la referencia, y dales un nombre corto. Las diapositivas de un mismo\n"
-              "  bloque van juntas."),
+              "  bloque van juntas. Dentro de cada bloque, los temas van en el orden de la fuente."),
     "contenido": ("- Cubre los temas del material de referencia, menos las exclusiones, o los temas de la ficha si no hay\n"
                   "  referencia. Usa el ejemplo y el caso de las fichas. Si un ejemplo no cabe, divídelo en dos diapositivas.\n"
                   "- Para afirmar algo de una fuente, apóyate en su pasaje: di lo mismo, con sus palabras o con otras más claras."),
@@ -362,9 +363,109 @@ def pedido_de_cambios(carpeta_curso, sesion, contenido_lectura, datos: dict, pro
 
 
 def pedido_de_correccion(carpeta_curso, sesion, contenido_lectura, datos: dict, problemas: list[str]) -> str:
-    """Corrección completa: para problemas de estructura, de cantidad o de espacio, que no son de una frase."""
+    """Corrección completa: para problemas de estructura o de cantidad, que no son de una diapositiva."""
     return _pedido_con_problemas(carpeta_curso, sesion, contenido_lectura, datos, problemas,
                                  ["Devuelve las diapositivas completas con el mismo esquema."])
+
+
+# ---------- Corrección por diapositivas (PLAN.md §0, decisión 31) ----------
+# Un desborde, una diapositiva cargada o un cambio de diseño tocan una diapositiva, no el documento: se devuelven
+# solo las diapositivas nombradas. La corrección completa queda para la cantidad, el orden y los recursos en total.
+
+FIJAS_CORREGIBLES = ("portada", "idea_central", "aplicalo", "cuidado", "cierre")
+_ESQUEMA_FIJAS = ESQUEMA_DIAPOSITIVAS["properties"]
+ESQUEMA_POR_DIAPOSITIVAS = {
+    "type": "object",
+    "properties": {
+        "reemplazos": {"type": "array", "items": {
+            "type": "object",
+            "properties": {"numero": {"type": "integer"}, "diapositivas": _ESQUEMA_FIJAS["diapositivas"]},
+            "required": ["numero", "diapositivas"], "additionalProperties": False}},
+        "fijas": {"type": "object",
+                  "properties": {k: {"anyOf": [_ESQUEMA_FIJAS[k], {"type": "null"}]} for k in FIJAS_CORREGIBLES},
+                  "required": list(FIJAS_CORREGIBLES), "additionalProperties": False},
+        "cambios": comun.ESQUEMA_CAMBIOS["properties"]["cambios"],
+        "explicaciones": comun.ESQUEMA_EXPLICACIONES,
+        "datos_nuevos": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["reemplazos", "fijas", "cambios", "explicaciones", "datos_nuevos"],
+    "additionalProperties": False,
+}
+_DIAPOSITIVA = re.compile(r"\bdiapositiva (\d+)\b", re.I)
+_CAMPO = re.compile(r"^FALLA · estructura · (diapositivas\.(\d+)|portada|idea_central|aplicalo|cuidado|cierre)\b")
+_IDEA_O_CIERRE = re.compile(r"^FALLA · estructura · (idea central|cierre):")
+# El orden y los bloques dependen de todas las diapositivas, aunque el problema nombre una.
+DEL_DOCUMENTO = ("no sigue el orden", "no es un bloque de la lectura", "no van juntas")
+
+
+def numeros_de_las_fijas(datos: dict) -> dict[int, str]:
+    """Número de cada diapositiva fija según cuántas de concepto hay."""
+    n = len(datos.get("diapositivas", []))
+    return {1: "portada", 2: "idea_central", n + 3: "aplicalo", n + 4: "cuidado", n + 5: "cierre"}
+
+
+def es_de_una_frase(problema: str) -> bool:
+    """Un hallazgo del verificador en una frase se escribe con la frase entre comillas (comun.texto_de)."""
+    return bool(re.match(r"^(FALLA|AVISO) · [^·]+ · «", problema))
+
+
+def diapositivas_nombradas(problemas: list[str], datos: dict) -> set[int] | None:
+    """Los números de las diapositivas que nombran los problemas que no son de una frase. None si alguno es del
+    documento entero (cantidad, orden, recursos en total, tablas): entonces va la corrección completa."""
+    fijas = {v: k for k, v in numeros_de_las_fijas(datos).items()}
+    numeros: set[int] = set()
+    for problema in problemas:
+        if es_de_una_frase(problema):
+            continue
+        if any(t in problema for t in DEL_DOCUMENTO):
+            return None
+        campo = _CAMPO.match(problema)
+        idea = _IDEA_O_CIERRE.match(problema)
+        encontrados = {int(m) for m in _DIAPOSITIVA.findall(problema)}
+        if campo:
+            encontrados = {int(campo.group(2)) + 3} if campo.group(2) else {fijas[campo.group(1)]}
+        elif idea:
+            encontrados = {fijas["idea_central" if idea.group(1) == "idea central" else "cierre"]}
+        if not encontrados:
+            return None
+        numeros |= encontrados
+    return numeros
+
+
+def pedido_por_diapositivas(carpeta_curso, sesion, contenido_lectura, datos: dict, problemas: list[str],
+                            numeros: set[int]) -> str:
+    fijas = numeros_de_las_fijas(datos)
+    lista = ", ".join(str(n) for n in sorted(numeros))
+    return _pedido_con_problemas(carpeta_curso, sesion, contenido_lectura, datos, problemas, [
+        "CÓMO ENTREGAR LA CORRECCIÓN",
+        f"- Corrige solo las diapositivas {lista}. No devuelvas las demás: quedan como están.",
+        "- La portada es la 1 y la idea central la 2. Las de concepto van de la 3 en adelante, en el orden de",
+        f"  «diapositivas». «Aplícalo así» es la {min(k for k, v in fijas.items() if v == 'aplicalo')}, «Cuidado con» "
+        f"la {min(k for k, v in fijas.items() if v == 'cuidado')} y el cierre la {max(fijas)}.",
+        "- En «reemplazos», una entrada por diapositiva de concepto que corriges: su «numero» y en «diapositivas» la",
+        "  versión nueva, con el mismo esquema. Para dividirla, devuelve dos, sin pasar del total de diapositivas.",
+        "- En «fijas», la versión nueva de la portada, la idea central, «Aplícalo así», «Cuidado con» o el cierre",
+        "  solo si su número está en la lista. Las demás van en null.",
+        "- En «cambios», las frases que nombran los problemas entre comillas: «oracion» copiada tal cual y «nueva»",
+        "  con el texto nuevo. Si no hay, deja la lista vacía.",
+    ])
+
+
+def aplicar_por_diapositivas(datos: dict, respuesta: dict, numeros: set[int]) -> tuple[dict, list[str]]:
+    """Reemplaza solo las diapositivas nombradas; lo demás no se toca. Devuelve el material y las frases de
+    «cambios» que no se encontraron."""
+    datos = json.loads(json.dumps(datos))
+    fijas = numeros_de_las_fijas(datos)
+    for clave in FIJAS_CORREGIBLES:
+        nueva = respuesta["fijas"].get(clave)
+        if nueva is not None and any(fijas.get(n) == clave for n in numeros):
+            datos[clave] = nueva
+    conceptos = datos.get("diapositivas", [])
+    for r in sorted(respuesta["reemplazos"], key=lambda r: r["numero"], reverse=True):
+        indice = r["numero"] - 3
+        if r["numero"] in numeros and 0 <= indice < len(conceptos) and r["diapositivas"]:
+            conceptos[indice:indice + 1] = r["diapositivas"]
+    return comun.aplicar_cambios(datos, respuesta["cambios"], CAMPOS_QUE_NO_SE_CORRIGEN)
 
 
 # ---------- Estructura: cantidad y orden ----------
@@ -603,7 +704,18 @@ class _Trabajo:
 
     async def corregir(self, problemas: list[str], completa: bool) -> None:
         vuelta = self.vuelta
-        if completa:
+        numeros = diapositivas_nombradas(problemas, self.datos) if completa else None
+        if numeros:
+            self.avance(f"Corrigiendo {comun.cuantos(len(numeros), 'diapositiva')} "
+                        f"({', '.join(map(str, sorted(numeros)))}): {comun.cuantos(len(problemas), 'problema')}.")
+            respuesta = await agente.consultar(
+                pedido_por_diapositivas(self.carpeta_curso, self.sesion, self.lectura, self.datos, problemas, numeros),
+                tarea="correccion_diapositivas", esquema=ESQUEMA_POR_DIAPOSITIVAS,
+                etapa=f"corrección de diapositivas {vuelta}", **self.comun)
+            self.datos, no_encontradas = aplicar_por_diapositivas(self.datos, respuesta, numeros)
+            if no_encontradas:
+                self.avance(f"{comun.cuantos(len(no_encontradas), 'frase')} a cambiar no se encontraron.")
+        elif completa:
             self.avance(f"Corrigiendo las diapositivas completas: {comun.cuantos(len(problemas), 'problema')}.")
             respuesta = await agente.consultar(
                 pedido_de_correccion(self.carpeta_curso, self.sesion, self.lectura, self.datos, problemas),
@@ -899,7 +1011,7 @@ def _entrega(material: dict) -> dict:
     valide = [f"Verificador: {material['resumen']}." if material["resumen"] else "El verificador no llegó a correr.",
               *([f"Avisos explicados en la hoja Hallazgos: {material['avisos_explicados']}."]
                 if material.get("avisos_explicados") else []),
-              *([f"Avisos informativos de relleno o palabras imprecisas: {material['avisos_informativos']}. "
+              *([f"Avisos informativos (relleno, palabras imprecisas o términos de la fuente): {material['avisos_informativos']}. "
                  "Están en la hoja Hallazgos; no obligan a corregir."] if material.get("avisos_informativos") else []),
               f"Fallas del verificador y de la medición corregidas: {c['verificador']}."]
     if material.get("imagenes"):

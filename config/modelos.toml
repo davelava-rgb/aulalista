@@ -67,3 +67,11 @@ max_turns = 15
 modelo = "claude-sonnet-5-5"
 tope_usd = 0.60
 max_turns = 3
+
+# Corrección de las diapositivas que nombran los problemas (desborde, palabras, diseño): devuelve solo esas
+# diapositivas, no el documento entero (PLAN.md §0, decisión 31).
+[correccion_diapositivas]
+modelo = "claude-sonnet-5-5"
+tope_usd = 0.80
+max_turns = 10
+esfuerzo = "medium"
