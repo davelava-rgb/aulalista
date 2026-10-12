@@ -6,12 +6,13 @@ número de página y estilos reales de Título 1, 2 y 3. El laboratorio, la guí
 la evaluación usan este mismo diseño.
 """
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from docx import Document
 from docx.enum.section import WD_SECTION
-from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.enum.table import WD_ROW_HEIGHT_RULE, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -28,6 +29,7 @@ class Portada:
     sesion: str        # «Sesión 1 · Agilidad y fundamentos de Scrum»
     material: str      # «Lectura», «Laboratorio», «Guía del profesor»…
     docente: str = ""
+    contacto: str = ""   # «enlace; correo»: una línea por dato en la portada
 
 
 def _rgb(color: str) -> RGBColor:
@@ -64,12 +66,16 @@ def documento_base(identidad: Identidad, portada: Portada) -> Document:
     formato.space_before = Pt(0)
     formato.alignment = WD_ALIGN_PARAGRAPH.LEFT
     titular = estilo.para_texto(identidad.principal)
-    for nombre, tamano, antes in (("Heading 1", 16, 18), ("Heading 2", 13, 12), ("Heading 3", 11.5, 10)):
-        _fuente(estilos[nombre], identidad, tamano, titular, negrita=True)
+    diseno = identidad.estilo
+    for (nombre, antes), tamano in zip((("Heading 1", 18), ("Heading 2", 12), ("Heading 3", 10)), diseno.titulos_pt):
+        color = estilo.para_texto(identidad.acento) if nombre == "Heading 2" and diseno.acento_en_titulo2 else titular
+        _fuente(estilos[nombre], identidad, tamano, color, negrita=True)
         estilos[nombre].paragraph_format.space_before = Pt(antes)
         estilos[nombre].paragraph_format.space_after = Pt(6)
         estilos[nombre].paragraph_format.keep_with_next = True
-    _fuente(estilos["Title"], identidad, 26, titular, negrita=True)
+    if diseno.linea_titulo1:
+        _linea_inferior(estilos["Heading 1"], identidad.principal)
+    _fuente(estilos["Title"], identidad, diseno.titulo_pt, titular, negrita=True)
     estilos["Title"].paragraph_format.space_after = Pt(12)
     _quitar_borde_del_titulo(estilos["Title"])
 
@@ -90,6 +96,27 @@ def _quitar_borde_del_titulo(estilo_word) -> None:
         ppr.remove(borde)
 
 
+def _linea_inferior(estilo_word, color: str) -> None:
+    """Línea fina del color principal bajo el párrafo (estilos académico y corporativo)."""
+    ppr = estilo_word.element.get_or_add_pPr()
+    bordes = OxmlElement("w:pBdr")
+    abajo = OxmlElement("w:bottom")
+    for atributo, valor in (("w:val", "single"), ("w:sz", "6"), ("w:space", "2"), ("w:color", color)):
+        abajo.set(qn(atributo), valor)
+    bordes.append(abajo)
+    ppr.append(bordes)
+
+
+def _franja(documento: Document, identidad: Identidad) -> None:
+    """Franja del color principal arriba de la portada (estilos moderno y corporativo)."""
+    tabla = documento.add_table(rows=1, cols=1)
+    _bordes(tabla)
+    fila = tabla.rows[0]
+    fila.height = Cm(1.2)
+    fila.height_rule = WD_ROW_HEIGHT_RULE.EXACTLY
+    _sombrear(fila.cells[0], identidad.principal)
+
+
 def _numero_de_pagina(parrafo, identidad: Identidad) -> None:
     parrafo.alignment = WD_ALIGN_PARAGRAPH.CENTER
     campo = OxmlElement("w:fldSimple")
@@ -103,8 +130,15 @@ def _numero_de_pagina(parrafo, identidad: Identidad) -> None:
 
 
 def _portada(documento: Document, identidad: Identidad, portada: Portada) -> None:
-    """Portada limpia: logo si existe, curso, sesión y material. Sin imágenes decorativas."""
-    for _ in range(4):
+    """Portada limpia: logo si existe, curso, sesión, material, docente y contacto. Sin imágenes decorativas.
+
+    El estilo decide si va centrada y si lleva una franja de color arriba (decisión 27).
+    """
+    diseno = identidad.estilo
+    inicio = len(documento.paragraphs)
+    if diseno.franja:
+        _franja(documento, identidad)
+    for _ in range(3 if diseno.franja else 4):
         documento.add_paragraph()
     if identidad.logo is not None:
         documento.add_picture(str(identidad.logo), width=Cm(4))
@@ -115,10 +149,20 @@ def _portada(documento: Document, identidad: Identidad, portada: Portada) -> Non
     material.runs[0].font.size = Pt(20)
     material.runs[0].font.bold = True
     material.runs[0].font.color.rgb = _rgb(estilo.para_texto(identidad.acento))
-    if portada.docente:
+    if portada.docente or portada.contacto:
         documento.add_paragraph()
+    if portada.docente:
         documento.add_paragraph(f"Docente: {portada.docente}")
+    for dato in lineas_de_contacto(portada.contacto):
+        documento.add_paragraph(dato).paragraph_format.space_after = Pt(0)
+    if diseno.portada_centrada:
+        for parrafo in documento.paragraphs[inicio:]:
+            parrafo.alignment = WD_ALIGN_PARAGRAPH.CENTER
     documento.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
+
+
+def lineas_de_contacto(contacto: str) -> list[str]:
+    return [p.strip() for p in re.split(r";|\n", contacto or "") if p.strip()]
 
 
 # ---------- Bloques comunes ----------
@@ -172,7 +216,7 @@ def recuadro(documento: Document, identidad: Identidad, titulo: str, parrafos: l
     """Recuadro sombreado con borde izquierdo de color. Mismo estilo en todos los materiales."""
     tabla = documento.add_table(rows=1, cols=1)
     tabla.alignment = WD_TABLE_ALIGNMENT.LEFT
-    _bordes(tabla, left=(color_borde or identidad.principal, 24))
+    _bordes(tabla, left=(color_borde or identidad.principal, identidad.estilo.borde_recuadro))
     _margen_interior(tabla)
     celda = tabla.cell(0, 0)
     _sombrear(celda, identidad.fondo)

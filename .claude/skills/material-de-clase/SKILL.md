@@ -104,6 +104,7 @@ Estas reglas valen para todo ejercicio que el alumno ejecuta en una herramienta:
 - Usa la identidad visual de la ficha en todos los materiales. Máximo tres colores, más los fondos de recuadro.
 - Si no hay logo, deja las portadas sin logo y avísalo. Si no hay paleta, propón una sobria de tres colores y pide confirmación.
 - Si un color no alcanza el contraste mínimo de lectura como texto, oscurécelo solo en el texto.
+- El estilo de la ficha cambia el diseño y el tono, nunca las reglas de lenguaje claro ni las secciones de cada material. Si la ficha deja vacíos los colores o la tipografía, se toman de los modelos aprobados. Los modelos guían el tono, nunca el contenido.
 - Recuadros sombreados con borde izquierdo de color para ejemplos listos para copiar, "Aplícalo así" y "Cuidado con". Mismo estilo en todos los materiales.
 - Tablas con encabezado en el color principal, filas alternas en gris muy claro y sin bordes verticales.
 - Nada de texto justificado con huecos, páginas casi vacías ni viñetas de más de dos niveles.
@@ -366,6 +367,7 @@ FICHA DEL CURSO
 - Fondos de recuadro:
 - Color del texto:
 - Tipografía:
+- Estilo (profesional, académico, moderno, corporativo, minimalista o cercano):
 
 6. Portada
 - Docente:

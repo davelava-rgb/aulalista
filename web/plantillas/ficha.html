@@ -3,9 +3,80 @@
 {% block titulo %}{{ titulo }} · AulaLista{% endblock %}
 {% block ruta %} › <a href="/cursos/{{ curso }}">{{ nombre }}</a> › {{ titulo }}{% endblock %}
 
+{% macro control(c) %}
+{% set k = c.control %}
+{% if k.tipo == "lista" %}
+  <select id="{{ c.id }}" name="{{ c.id }}" data-otro="{{ c.id }}.otro">
+    <option value="">Sin elegir</option>
+    {% for o in k.opciones %}
+    <option value="{{ o }}" {% if c.valor == o %}selected{% endif %}>{{ o | capitalize }}{% if k.descripciones %}: {{ k.descripciones[o] }}{% endif %}</option>
+    {% endfor %}
+    {% if k.otro %}<option value="__otro" {% if k.es_otro %}selected{% endif %}>Otro…</option>{% endif %}
+  </select>
+  {% if k.otro %}
+  <input type="text" class="texto otro" name="{{ c.id }}.otro" value="{{ c.valor if k.es_otro else '' }}"
+         aria-label="Escribe otra opción" placeholder="Escribe otra opción" {% if not k.es_otro %}hidden{% endif %}>
+  {% endif %}
+{% elif k.tipo == "opciones" %}
+  <div role="radiogroup" aria-labelledby="t-{{ c.id }}" id="{{ c.id }}">
+    {% for valor, texto in k.opciones %}
+    <label class="opcion"><input type="radio" name="{{ c.id }}" value="{{ valor }}" {% if c.valor | lower == valor %}checked{% endif %}> {{ texto }}</label>
+    {% endfor %}
+  </div>
+{% elif k.tipo == "casillas" %}
+  <input type="hidden" name="{{ c.id }}.casillas" value="1">
+  <div role="group" aria-labelledby="t-{{ c.id }}" id="{{ c.id }}" class="casillas">
+    {% for o in k.opciones %}
+    <label class="opcion"><input type="checkbox" name="{{ c.id }}" value="{{ o }}" {% if o in k.marcadas %}checked{% endif %}> {{ o | capitalize }}</label>
+    {% endfor %}
+  </div>
+  {% if k.otros %}
+  <label class="opcion">Otros <input type="text" class="texto" name="{{ c.id }}.otros" value="{{ k.texto_otros }}"></label>
+  {% endif %}
+{% elif k.tipo == "color" %}
+  {% if k.paletas %}
+  <div class="paletas" role="radiogroup" aria-label="Paletas listas">
+    {% for nombre, p in k.paletas.items() %}
+    <label class="paleta"><input type="radio" name="paleta" value="{{ nombre }}" data-colores='{{ p | tojson }}'>
+      <span class="muestras" aria-hidden="true">{% for clave in ["principal", "acento", "advertencia", "fondo", "texto"] %}<span style="background:#{{ p[clave] }}"></span>{% endfor %}</span>
+      {{ nombre }}</label>
+    {% endfor %}
+    <label class="paleta"><input type="radio" name="paleta" value=""> Personalizada</label>
+  </div>
+  {% endif %}
+  <div class="color">
+    <input type="color" data-para="{{ c.id }}" value="{{ k.hex or '#ffffff' }}" aria-label="Elegir {{ c.etiqueta | lower }}">
+    <input type="text" class="texto" id="{{ c.id }}" name="{{ c.id }}" value="{{ c.valor }}" placeholder="Ejemplo: #0F4C5C">
+  </div>
+{% elif k.tipo == "logo" %}
+  <div class="fila">
+    <input type="text" class="texto" id="{{ c.id }}" name="{{ c.id }}" value="{{ c.valor }}" placeholder="sin logo">
+    <button type="button" class="secundario" data-sin-logo="{{ c.id }}">Sin logo</button>
+  </div>
+  <input type="file" name="{{ c.id }}.archivo" accept=".png,.jpg,.jpeg" aria-label="Subir logo">
+{% elif k.tipo == "archivos" %}
+  <input type="hidden" name="{{ c.id }}.casillas" value="1">
+  <input type="hidden" name="{{ c.id }}" value="{{ c.valor }}">
+  {% if k.archivos %}
+  <ul class="archivos">
+    {% for a in k.archivos %}<li>{{ a }} <label class="opcion"><input type="checkbox" name="{{ c.id }}.quitar" value="{{ a }}"> Quitar</label></li>{% endfor %}
+  </ul>
+  {% endif %}
+  <input type="file" id="{{ c.id }}" name="{{ c.id }}.archivos" accept=".pdf" multiple>
+{% else %}
+  <textarea id="{{ c.id }}" name="{{ c.id }}" rows="1" class="corto">{{ c.valor }}</textarea>
+{% endif %}
+{% if k.ayuda %}<p class="ayuda">{{ k.ayuda }}</p>{% endif %}
+{% endmacro %}
+
 {% macro campo(c) %}
-<div class="campo{% if c.estado %} estado-{{ c.estado | replace(' ', '-') }}{% endif %}" id="campo-{{ c.id }}">
+<div class="campo{% if c.estado %} estado-{{ c.estado | replace(' ', '-') }}{% endif %}" id="campo-{{ c.id }}"
+     {% if c.control and c.control.depende %}data-depende-de="{{ c.control.depende[0] }}" data-depende-valor="{{ c.control.depende[1] }}"{% endif %}>
+  {% if c.control and c.control.tipo in ("opciones", "casillas") %}
+  <p class="titulo-campo" id="t-{{ c.id }}">{{ c.etiqueta }}</p>
+  {% else %}
   <label for="{{ c.id }}">{{ c.etiqueta }}</label>
+  {% endif %}
   <p class="marcas">
     {% if c.estado == "propuesto" %}<span class="marca">Propuesto</span>{% endif %}
     {% if c.estado == "falta definir" %}<span class="marca alerta">Falta definir</span>{% endif %}
@@ -20,7 +91,9 @@
     {% endfor %}
   </fieldset>
   {% endif %}
-  {% if c.multilinea %}
+  {% if c.control %}
+  {{ control(c) }}
+  {% elif c.multilinea %}
   <textarea id="{{ c.id }}" name="{{ c.id }}" rows="{{ [3, (c.valor.count('\n') + 2)] | max }}">{{ c.valor }}</textarea>
   {% else %}
   <textarea id="{{ c.id }}" name="{{ c.id }}" rows="{{ 1 if c.valor | length < 80 else 3 }}" class="corto">{{ c.valor }}</textarea>
@@ -59,7 +132,7 @@
 </section>
 {% endif %}
 
-<form method="post" id="form-ficha">
+<form method="post" id="form-ficha" enctype="multipart/form-data">
   {% for s in secciones %}
   <section class="seccion">
     <h2>{{ s.titulo }}</h2>
@@ -116,7 +189,60 @@
   if (document.getElementById("propuesta-en-curso")) {
     setTimeout(() => location.reload(), 5000);
   }
-  document.getElementById("form-ficha").addEventListener("submit", (evento) => {
+  // Controles de la ficha (decisión 27).
+  const formulario = document.getElementById("form-ficha");
+  const COLORES = { principal: "visual.principal", acento: "visual.acento", advertencia: "visual.advertencia",
+                    fondo: "visual.fondos", texto: "visual.texto" };
+  const porId = (id) => document.getElementById(id);
+  const hexDe = (texto) => { const m = /#?\b([0-9a-f]{6})\b/i.exec(texto || ""); return m ? "#" + m[1].toUpperCase() : ""; };
+
+  formulario.querySelectorAll("select[data-otro]").forEach((lista) => {
+    const otro = formulario.querySelector(`[name="${lista.dataset.otro}"]`);
+    if (!otro) return;
+    lista.addEventListener("change", () => { otro.hidden = lista.value !== "__otro"; if (!otro.hidden) otro.focus(); });
+  });
+
+  formulario.querySelectorAll("input[type=color][data-para]").forEach((selector) => {
+    const texto = porId(selector.dataset.para);
+    selector.addEventListener("input", () => { texto.value = selector.value.toUpperCase(); marcarPaleta(); });
+    texto.addEventListener("input", () => { const hex = hexDe(texto.value); if (hex) selector.value = hex; marcarPaleta(); });
+  });
+
+  const paletas = formulario.querySelectorAll("input[name=paleta]");
+  function marcarPaleta() {
+    let elegida = null;
+    paletas.forEach((radio) => {
+      if (!radio.dataset.colores) return;
+      const colores = JSON.parse(radio.dataset.colores);
+      if (Object.entries(COLORES).every(([clave, id]) => hexDe(porId(id).value) === "#" + colores[clave])) elegida = radio;
+    });
+    const hayColores = Object.values(COLORES).some((id) => porId(id).value.trim());
+    paletas.forEach((radio) => { radio.checked = elegida ? radio === elegida : radio.value === "" && hayColores; });
+  }
+  paletas.forEach((radio) => radio.addEventListener("change", () => {
+    if (!radio.dataset.colores) return;
+    const colores = JSON.parse(radio.dataset.colores);
+    Object.entries(COLORES).forEach(([clave, id]) => {
+      porId(id).value = "#" + colores[clave];
+      formulario.querySelector(`input[type=color][data-para="${id}"]`).value = "#" + colores[clave];
+    });
+  }));
+  if (paletas.length) marcarPaleta();
+
+  formulario.querySelectorAll("[data-sin-logo]").forEach((boton) =>
+    boton.addEventListener("click", () => { porId(boton.dataset.sinLogo).value = "sin logo"; }));
+
+  formulario.querySelectorAll("[data-depende-de]").forEach((campo) => {
+    const radios = formulario.querySelectorAll(`input[name="${campo.dataset.dependeDe}"]`);
+    const actualizar = () => {
+      const elegido = [...radios].find((r) => r.checked);
+      campo.hidden = !elegido || elegido.value !== campo.dataset.dependeValor;
+    };
+    radios.forEach((r) => r.addEventListener("change", actualizar));
+    actualizar();
+  });
+
+  formulario.addEventListener("submit", (evento) => {
     const boton = evento.submitter;
     if (boton && boton.value !== "guardar") {
       boton.textContent = boton.value === "proponer" ? "Leyendo las fuentes… puede tardar" : "Revisando…";

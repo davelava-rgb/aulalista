@@ -110,6 +110,7 @@ def _contexto(carpeta_curso: Path, sesion: int) -> str:
         "",
         "FICHA DEL CURSO (confirmada):", ficha_curso,
         "FICHA DE LA SESIÓN (confirmada):", ficha_sesion,
+        estilo.guia_de_tono(carpeta_curso),
         "FUENTES DEL CURSO que puedes citar (archivos .jsonl de esta carpeta, un pasaje por línea con su ubicación):",
         *([f"- {f}" for f in fuentes] or ["- (ninguna: no cites fuentes)"]),
         *lineas_referencia,
@@ -246,6 +247,7 @@ def _portada(carpeta_curso: Path, sesion: int) -> docx.Portada:
         sesion=titulo if titulo.lower().startswith("sesión") else f"Sesión {titulo}",
         material=MATERIAL,
         docente=almacen.valor(ficha_curso, "portada.docente").strip(),
+        contacto=almacen.valor(ficha_curso, "portada.contacto").strip(),
     )
 
 

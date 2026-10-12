@@ -3,6 +3,8 @@
 - Máximo tres colores (principal, acento y advertencia), más los fondos de recuadro y el texto.
 - Si un color no alcanza el contraste mínimo como texto, se oscurece solo en el texto.
 - Si la ficha no trae paleta, se usa una sobria de tres colores y se avisa en la entrega.
+- Lo que la ficha deja vacío (colores, tipografía) se toma de los modelos en PDF; la ficha manda (decisión 27).
+- El estilo de la ficha cambia la portada, los títulos, el borde de los recuadros y el tono (decisión 27).
 """
 
 import re
@@ -10,18 +12,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.fichas import almacen
+from app.materiales import catalogo, modelos
+from app.materiales.catalogo import Estilo
 
-PALETA_SOBRIA = {
-    "principal": "0F4C5C",
-    "acento": "B7791F",
-    "advertencia": "A3261F",
-    "fondo": "F2F4F5",
-    "texto": "1F2933",
-}
+PALETA_SOBRIA = catalogo.PALETAS["Sobria"]
 GRIS_FILA_ALTERNA = "F5F5F5"
 BLANCO = "FFFFFF"
 CONTRASTE_MINIMO = 4.5
 TIPOGRAFIA_POR_OMISION = "Calibri"
+TIPOGRAFIAS_CONOCIDAS = ("Calibri", "Aptos", "Segoe UI", "Arial", "Verdana", "Cambria", "Georgia", "Garamond",
+                         "Times New Roman", "Tahoma", "Trebuchet MS", "Century Gothic", "Candara", "Corbel", "Constantia")
 EXTENSIONES_LOGO = (".png", ".jpg", ".jpeg")
 
 
@@ -35,6 +35,7 @@ class Identidad:
     tipografia: str
     logo: Path | None
     avisos: list[str] = field(default_factory=list)
+    estilo: Estilo = field(default_factory=lambda: catalogo.estilo(""))
 
     def colores_permitidos(self) -> set[str]:
         """Todos los colores que un material puede usar (prueba de diseño uniforme)."""
@@ -86,7 +87,20 @@ def desde_ficha(carpeta_curso: Path) -> Identidad:
         for clave, campo in (("principal", "principal"), ("acento", "acento"), ("advertencia", "advertencia"),
                              ("fondo", "fondos"), ("texto", "texto"))
     }
+    tipografia = almacen.valor(ficha, "visual.tipografia").strip()
     avisos = []
+    # La ficha manda: el modelo solo llena lo que la ficha deja vacío (decisión 27).
+    modelo = modelos.apariencia(carpeta_curso, TIPOGRAFIAS_CONOCIDAS) if not all(leidos.values()) or not tipografia else {}
+    tomados = [clave for clave in PALETA_SOBRIA if not leidos[clave] and modelo.get(clave)]
+    for clave in tomados:
+        leidos[clave] = modelo[clave]
+    if not tipografia and modelo.get("tipografia"):
+        tipografia = modelo["tipografia"]
+        tomados.append("tipografia")
+    if tomados:
+        nombres = {"principal": "color principal", "acento": "color de acento", "fondo": "fondo de recuadro",
+                   "texto": "color del texto", "tipografia": "tipografía"}
+        avisos.append(f"Tomé del modelo ({modelo['origen']}): " + ", ".join(nombres[c] for c in tomados) + ".")
     if not any(leidos[c] for c in ("principal", "acento", "advertencia")):
         avisos.append("La ficha no trae paleta. Usé una sobria de tres colores: "
                       f"#{PALETA_SOBRIA['principal']}, #{PALETA_SOBRIA['acento']} y #{PALETA_SOBRIA['advertencia']}. "
@@ -99,5 +113,25 @@ def desde_ficha(carpeta_curso: Path) -> Identidad:
             avisos.append(f"No encontré el logo «{nombre_logo}» en la carpeta del curso. La portada va sin logo.")
         else:
             avisos.append("La ficha no trae logo. La portada va sin logo.")
-    tipografia = almacen.valor(ficha, "visual.tipografia").strip() or TIPOGRAFIA_POR_OMISION
-    return Identidad(tipografia=tipografia, logo=logo, avisos=avisos, **colores)
+    return Identidad(tipografia=tipografia or TIPOGRAFIA_POR_OMISION, logo=logo, avisos=avisos,
+                     estilo=catalogo.estilo(almacen.valor(ficha, "visual.estilo")), **colores)
+
+
+def guia_de_tono(carpeta_curso: Path) -> str:
+    """Instrucción de tono para el redactor: la del estilo de la ficha y, si hay modelo, un pasaje corto.
+
+    El pasaje es solo una guía de tono. Su contenido no se usa ni se cita (decisión 27).
+    """
+    datos = catalogo.estilo(almacen.valor(almacen.cargar(carpeta_curso, "curso"), "visual.estilo"))
+    lineas = [
+        f"TONO DEL MATERIAL (estilo «{datos.nombre}»): {datos.tono}",
+        "El tono nunca cambia las reglas: una idea por oración, sin jerga, sin lenguaje publicitario.",
+    ]
+    archivo, muestra = modelos.muestra_de_tono(carpeta_curso)
+    if muestra:
+        lineas += [
+            f"MODELO DE TONO (pasaje de {archivo}, un material ya aprobado). Imita solo su tono y su forma de "
+            "dirigirse al alumno. No uses su contenido, sus datos ni sus ejemplos, y no lo cites:",
+            f"«{muestra}»",
+        ]
+    return "\n".join(lineas)

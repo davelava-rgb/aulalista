@@ -21,7 +21,7 @@ def test_la_pagina_muestra_la_plantilla_y_las_preguntas_pendientes(curso):
     r = cliente.get("/cursos/scrum/ficha")
     assert r.status_code == 200
     assert "Nombre del curso (obligatorio)" in r.text
-    assert "¿Material neutral respecto a marcas? (sí o no)" in r.text
+    assert "¿El material habla en general o nombra una herramienta?" in r.text
     assert "Responde primero estas 2" in r.text   # nombre y sesiones: los dos obligatorios del curso
 
 

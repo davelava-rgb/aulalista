@@ -12,7 +12,7 @@ from fastapi.templating import Jinja2Templates
 
 from app import agente, cursos, tokens
 from app.config import RAIZ, FaltaClave
-from app.fichas import almacen, flujo
+from app.fichas import almacen, controles, flujo
 from app.fichas import plantillas as plantillas_fichas
 from app.fuentes import convertir
 from app.materiales import diapositivas, lectura
@@ -203,7 +203,8 @@ def _exigir_ficha_del_curso(carpeta, curso):
 
 async def _accion_ficha(request: Request, curso: str, tipo: str, sesion: int | None):
     carpeta = _carpeta(curso)
-    formulario = dict(await request.form())
+    # Los controles (casillas, listas, archivos) se convierten en el texto de la ficha (decisión 27).
+    formulario = await controles.leer(await request.form(), carpeta)
     accion = formulario.pop("accion", "guardar")
     ficha = almacen.cargar(carpeta, tipo, sesion)
     if almacen.aplicar_formulario(ficha, formulario) or not almacen.ruta_ficha(carpeta, tipo, sesion).exists():

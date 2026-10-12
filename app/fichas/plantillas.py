@@ -10,6 +10,8 @@ Tipos de campo:
 
 from dataclasses import dataclass, field
 
+from app.fichas import controles
+
 MAX_EJERCICIOS = 5
 MAX_PREGUNTAS = 5
 
@@ -87,6 +89,7 @@ FICHA_DEL_CURSO = (
             _c("visual.fondos", "Fondos de recuadro"),
             _c("visual.texto", "Color del texto"),
             _c("visual.tipografia", "Tipografía"),
+            _c("visual.estilo", "Estilo (profesional, académico, moderno, corporativo, minimalista o cercano)"),
         )),
         Seccion("6. Portada", (
             _c("portada.docente", "Docente"),
@@ -252,15 +255,17 @@ def vista(tipo: str, campos: dict) -> list[dict]:
     """Estructura para el formulario de la página: secciones con sus campos y bloques repetidos."""
     def dato(campo: Campo, campo_id: str, seccion: Seccion, etiqueta: str | None = None) -> dict:
         guardado = campos.get(campo_id) or {}
+        control = controles.vista(campo_id, guardado.get("valor", ""))
         return {
             "id": campo_id,
-            "etiqueta": etiqueta or campo.etiqueta,
+            "etiqueta": (control or {}).get("titulo") or etiqueta or campo.etiqueta,
             "multilinea": campo.tipo in ("lista", "lineas"),
             "obligatorio": campo.obligatorio or seccion.obligatoria,
             "valor": guardado.get("valor", ""),
             "origen": guardado.get("origen", ""),
             "estado": guardado.get("estado", ""),
             "versiones": guardado.get("versiones", []),
+            "control": control,
         }
 
     secciones = []

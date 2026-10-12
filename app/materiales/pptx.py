@@ -22,7 +22,7 @@ from pptx.util import Cm, Emu, Pt
 
 from app.materiales import estilo
 from app.materiales.contenido import Diapositiva, Diapositivas, Notas, Tabla
-from app.materiales.docx import Portada
+from app.materiales.docx import Portada, lineas_de_contacto
 from app.materiales.estilo import Identidad
 
 ANCHO, ALTO = Cm(33.867), Cm(19.05)          # 16:9
@@ -215,12 +215,18 @@ def _nueva(presentacion, diseno: int = DISENO_SOLO_TITULO):
 def _portada(presentacion, identidad: Identidad, portada: Portada, notas: Notas) -> None:
     diapositiva = _nueva(presentacion, DISENO_EN_BLANCO)
     arriba = Cm(4.2)
+    if identidad.estilo.franja:  # estilos moderno y corporativo (decisión 27)
+        franja = diapositiva.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, presentacion.slide_width, Cm(0.9))
+        franja.fill.solid()
+        franja.fill.fore_color.rgb = _rgb(identidad.principal)
+        _sin_sombra_ni_linea(franja)
     if identidad.logo is not None:
         diapositiva.shapes.add_picture(str(identidad.logo), MARGEN, Cm(1.4), height=Cm(2.4))
     for texto, tamano, color, negrita, alto in (
             (portada.curso, 40, estilo.para_texto(identidad.principal), True, Cm(4.6)),
             (portada.sesion, 26, identidad.texto, False, Cm(3.2)),
-            (f"Docente: {portada.docente}" if portada.docente else "", 20, identidad.texto, False, Cm(1.6))):
+            (f"Docente: {portada.docente}" if portada.docente else "", 20, identidad.texto, False, Cm(1.6)),
+            *((dato, 16, identidad.texto, False, Cm(1.0)) for dato in lineas_de_contacto(portada.contacto))):
         if not texto:
             continue
         marco = _caja(diapositiva, MARGEN, arriba, CUERPO_ANCHO, alto)

@@ -174,6 +174,7 @@ def _contexto(carpeta_curso: Path, sesion: int, contenido_lectura: Lectura | Non
         "",
         "FICHA DEL CURSO (confirmada):", ficha_curso,
         "FICHA DE LA SESIÓN (confirmada):", ficha_sesion,
+        estilo.guia_de_tono(carpeta_curso),
     ]
     if contenido_lectura is not None:
         return "\n".join(partes + [

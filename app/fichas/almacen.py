@@ -12,7 +12,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from app.fichas import plantillas
+from app.fichas import controles, plantillas
 
 NOMBRES = {"curso": "ficha_del_curso", "sesion": "ficha_de_la_sesion"}
 PROPUESTO = "propuesto"
@@ -53,14 +53,27 @@ def _carpeta_versiones(carpeta_curso: Path, tipo: str, sesion: int | None) -> Pa
 # ---------- Leer y guardar ----------
 
 def nueva(tipo: str) -> dict:
-    return {"tipo": tipo, "confirmada": False, "fecha_confirmacion": "", "campos": {}}
+    ficha = {"tipo": tipo, "confirmada": False, "fecha_confirmacion": "", "campos": {}}
+    poner_por_omision(ficha)
+    return ficha
 
 
 def cargar(carpeta_curso: Path, tipo: str, sesion: int | None = None) -> dict:
     ruta = ruta_ficha(carpeta_curso, tipo, sesion)
     ficha = json.loads(ruta.read_text(encoding="utf-8")) if ruta.exists() else nueva(tipo)
     quitar_faltas_viejas(ficha)
+    poner_por_omision(ficha)
     return ficha
+
+
+def poner_por_omision(ficha: dict) -> None:
+    """El docente y el contacto vacíos de la ficha del curso toman su valor por defecto. Se pueden cambiar,
+    pero no quedar vacíos (decisión 27)."""
+    if ficha["tipo"] != "curso":
+        return
+    for campo_id, texto in controles.POR_OMISION_DEL_CURSO.items():
+        if not valor(ficha, campo_id):
+            ficha["campos"][campo_id] = {"valor": texto, "origen": PROFESOR, "estado": ""}
 
 
 def quitar_faltas_viejas(ficha: dict) -> None:
