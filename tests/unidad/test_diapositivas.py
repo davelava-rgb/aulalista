@@ -10,7 +10,7 @@ import openpyxl
 import pytest
 from fastapi.testclient import TestClient
 from pptx import Presentation
-from pptx.util import Pt
+from pptx.util import Cm, Pt
 
 from app import office, servidor
 from app.materiales import comun, diapositivas, estilo, lectura
@@ -43,23 +43,28 @@ LIMPIAS = {
     "portada": {"notas": NOTAS},
     "idea_central": {"frases": ["Scrum ayuda a un equipo a trabajar con lo que observa."], "notas": NOTAS},
     "diapositivas": [
-        diapositiva(MANIFIESTO, "El Manifiesto Ágil", frases=["El Manifiesto Ágil tiene cuatro aspectos."]),
+        diapositiva(MANIFIESTO, "El Manifiesto Ágil", "tarjetas", frases=["El Manifiesto Ágil tiene cuatro aspectos."],
+                    grafico=grafico(elemento("Personas"), elemento("Producto"))),
         diapositiva(MANIFIESTO, "Qué valora más", "tabla", frases=["Cada aspecto valora más un elemento."],
                     tabla={"titulo": "", "encabezados": ["Aspecto", "Qué valora más"],
                            "filas": [["Primero", "Las personas"], ["Segundo", "El producto que funciona"]]}),
-        diapositiva(MANIFIESTO, "Ejemplo: la tienda", "ejemplo", frases=["Una tienda conversa con sus clientes cada semana."]),
+        diapositiva(MANIFIESTO, "Quién valora qué", "organigrama",
+                    grafico=grafico(elemento("Personas"), elemento("Producto"), centro="El Manifiesto Ágil")),
         diapositiva(MANIFIESTO, "Personas y producto", "columnas",
                     columnas=[{"titulo": "Primero", "frases": ["Las personas."]},
                               {"titulo": "Segundo", "frases": ["El producto que funciona."]}]),
         diapositiva(MANIFIESTO, "Para recordar", "tarjetas",
                     grafico=grafico(elemento("Personas", "Las personas."), elemento("Producto", "El producto que funciona."))),
-        diapositiva(PILARES, "Pilares de Scrum", frases=["Los pilares de Scrum son tres."]),
-        diapositiva(PILARES, "Cómo se usan", "pasos", frases=["Observa el tablero.", "Decide qué cambiar."]),
+        diapositiva(PILARES, "Pilares de Scrum", "proceso", frases=["Los pilares de Scrum son tres."],
+                    grafico=grafico(elemento("Ver"), elemento("Revisar"), elemento("Ajustar"))),
+        diapositiva(PILARES, "Cómo se usan", "ciclo",
+                    grafico=grafico(elemento("Observa"), elemento("Decide"), elemento("Cambia"))),
         diapositiva(PILARES, "Ejemplo: el tablero", "ejemplo", frases=["El equipo muestra su tablero a todos."]),
         diapositiva(PILARES, "Todos ven el trabajo", "mapa", frases=["El equipo muestra su tablero a todos."],
                     grafico=grafico(elemento("Transparencia"), elemento("Inspección"), elemento("Adaptación"),
                                     centro="Los tres pilares")),
-        diapositiva(PILARES, "Para recordar", frases=["Los pilares de Scrum son tres."]),
+        diapositiva(PILARES, "Para recordar", "tarjetas", frases=["Los pilares de Scrum son tres."],
+                    grafico=grafico(elemento("Transparencia"), elemento("Inspección"), elemento("Adaptación"))),
     ],
     "aplicalo": {"frases": ["Usa estas dos preguntas al cerrar cada semana."],
                  "plantilla": ["Qué observamos esta semana.", "Qué cambiamos la próxima semana."], "notas": NOTAS},
@@ -132,15 +137,31 @@ def test_letra_legible_a_distancia(presentacion):
     assert tamanos and min(tamanos) >= Pt(generador.TAMANO_MINIMO)
 
 
-def test_recuadros_con_borde_izquierdo_y_tabla_del_diseno_comun(presentacion):
+def _xml_de(ruta, titulo: str) -> str:
+    """El XML de la diapositiva que tiene ese título."""
+    p = Presentation(ruta)
+    numero = next(i for i, s in enumerate(p.slides, start=1) if s.shapes.title is not None and s.shapes.title.text == titulo)
+    return zipfile.ZipFile(ruta).read(f"ppt/slides/slide{numero}.xml").decode("utf-8")
+
+
+def test_tarjetas_con_encabezado_de_color_y_tabla_del_diseno_comun(presentacion):
+    """Decisión 30: en las diapositivas, tarjetas con encabezado de color, sin el borde izquierdo de los Word."""
     ruta, identidad = presentacion
-    xml = zipfile.ZipFile(ruta).read("ppt/slides/slide5.xml").decode("utf-8")   # el ejemplo de la tienda
-    assert f'<a:srgbClr val="{identidad.principal}"/>' in xml and f'<a:srgbClr val="{identidad.fondo}"/>' in xml
-    tabla = zipfile.ZipFile(ruta).read("ppt/slides/slide4.xml").decode("utf-8")
+    ejemplo = _xml_de(ruta, "Ejemplo: el tablero")
+    assert f'<a:srgbClr val="{identidad.acento}"/>' in ejemplo and f'<a:srgbClr val="{identidad.fondo}"/>' in ejemplo
+    assert ">Ejemplo<" in ejemplo
+    tabla = _xml_de(ruta, "Qué valora más")
     assert generador.SIN_ESTILO_NI_CUADRICULA in tabla          # sin bordes de la plantilla
     assert f'<a:srgbClr val="{estilo.GRIS_FILA_ALTERNA}"/>' in tabla
-    cuidado = zipfile.ZipFile(ruta).read("ppt/slides/slide14.xml").decode("utf-8")
-    assert f'<a:srgbClr val="{identidad.advertencia}"/>' in cuidado
+    assert f'<a:srgbClr val="{identidad.advertencia}"/>' in _xml_de(ruta, "Cuidado con")
+
+
+def test_cada_diapositiva_de_concepto_lleva_su_bloque_y_su_avance(presentacion):
+    p = Presentation(presentacion[0])
+    textos = [f.text_frame.text for f in p.slides[2].shapes if f.has_text_frame]
+    assert MANIFIESTO.upper() in textos
+    puntos = [f for f in p.slides[2].shapes if f.shape_type == 1 and f.width == f.height and f.top < Cm(1.5)]
+    assert len(puntos) == 2                                     # dos bloques
 
 
 def test_diseno_uniforme_solo_usa_los_colores_de_la_identidad(presentacion):
@@ -378,12 +399,33 @@ def test_sin_lectura_la_ficha_pide_temas_o_referencia_y_riesgos():
 
 def test_al_menos_la_mitad_con_recursos_graficos():
     solo_texto = copy.deepcopy(LIMPIAS["diapositivas"])
-    for d in solo_texto[:4]:
+    for d in solo_texto[:6]:
         d.update(tipo="frases", frases=d["frases"] or ["El Manifiesto Ágil tiene cuatro aspectos."], tabla=None,
                  columnas=[], grafico=None)
     _, problemas = diapositivas._validar(con(diapositivas=solo_texto), lectura_limpia())
     assert any("deben ser al menos la mitad" in p for p in problemas)
     assert any("más de 2 diapositivas seguidas solo con texto" in p for p in problemas)
+
+
+def test_las_tablas_las_columnas_y_los_pasos_no_cuentan_como_diagrama():
+    sin_diagramas = copy.deepcopy(LIMPIAS["diapositivas"])
+    for d in sin_diagramas:
+        if d["grafico"]:
+            d.update(tipo="pasos", frases=["Observa el tablero.", "Decide qué cambiar."], grafico=None)
+    _, problemas = diapositivas._validar(con(diapositivas=sin_diagramas), lectura_limpia())
+    assert any("0 de 10 diapositivas de concepto son un diagrama" in p for p in problemas)
+
+
+def test_treinta_palabras_como_maximo_y_dos_tablas():
+    cargada = copy.deepcopy(LIMPIAS["diapositivas"])
+    cargada[3]["columnas"][0]["frases"] = ["Las personas que trabajan juntas cada día conversan sobre lo que hacen, "
+                                           "lo que les falta y lo que van a cambiar en la próxima semana de trabajo."]
+    _, problemas = diapositivas._validar(con(diapositivas=cargada), lectura_limpia())
+    assert any("diapositiva 6 («Personas y producto»): muestra" in p and "el máximo es 30" in p for p in problemas)
+    tres_tablas = copy.deepcopy(LIMPIAS["diapositivas"])
+    tres_tablas[3] = tres_tablas[7] = copy.deepcopy(LIMPIAS["diapositivas"][1])
+    _, problemas = diapositivas._validar(con(diapositivas=tres_tablas), lectura_limpia())
+    assert any("tablas: hay 3" in p for p in problemas)
 
 
 def test_cada_recurso_trae_sus_elementos():
@@ -404,11 +446,11 @@ def test_la_grafica_solo_usa_cifras_de_la_lectura():
     lectura_ = lectura_limpia()
     texto = diapositivas._texto_de_la_lectura(lectura_)
     _, problemas = diapositivas._validar(con(diapositivas=con_grafica), lectura_)
-    faltan = [p for p in problemas if "la gráfica usa cifras" in p]
+    faltan = [p for p in problemas if "usa cifras que no están" in p]
     assert ("4" in texto and "3" in texto) == (not faltan)
     con_grafica[0]["grafico"]["elementos"][0]["valor"] = 1986
     _, problemas = diapositivas._validar(con(diapositivas=con_grafica), lectura_)
-    assert any("la gráfica usa cifras que no están en la lectura: 1986" in p for p in problemas)
+    assert any("usa cifras que no están en la lectura: 1986" in p for p in problemas)
 
 
 def test_la_frase_de_cierre_sale_de_la_idea_central():
@@ -451,3 +493,42 @@ def test_cada_recurso_se_dibuja_con_formas_y_colores_de_la_ficha(tmp_path):
     tamanos = [r.font.size for s in p.slides for f in s.shapes if f.has_text_frame
                for par in f.text_frame.paragraphs for r in par.runs]
     assert min(tamanos) >= Pt(generador.TAMANO_MINIMO)
+
+
+# ---------- Revisión visual (PLAN.md §0, decisión 30) ----------
+
+def medir_con_imagenes(ruta, carpeta):
+    """Como PowerPoint: una imagen por diapositiva, sin desbordes."""
+    carpeta.mkdir(parents=True, exist_ok=True)
+    total = len(Presentation(ruta).slides)
+    imagenes = []
+    for n in range(1, total + 1):
+        imagen = carpeta / f"diapositiva_{n:02d}.png"
+        imagen.write_bytes(b"\x89PNG-de-prueba")
+        imagenes.append(imagen)
+    return office.Medicion(diapositivas=total, desbordes=[], imagenes=imagenes)
+
+
+def test_la_revision_visual_mira_las_imagenes_y_pide_una_correccion(con_lectura):
+    visual = {"cambios": [{"numero": 4, "problema": "Una tabla con mucho texto.",
+                           "propuesta": "Pasar a tarjetas."},
+                          {"numero": 1, "problema": "La portada.", "propuesta": "Nada."}]}   # la portada no se toca
+    corregidas = {"diapositivas": LIMPIAS, "explicaciones": [], "datos_nuevos": []}
+    material, consulta = generar(con_lectura, LIMPIAS, visual, corregidas, medir=medir_con_imagenes)
+    assert material["estado"] == "verificada", material.get("problemas")
+    pedido_visual = consulta.llamadas[1]
+    assert pedido_visual["options"].output_format["schema"] == diapositivas.ESQUEMA_VISUAL
+    correccion = consulta.llamadas[2]["prompt"]
+    assert "DISEÑO · diapositiva 4 («Qué valora más»): Una tabla con mucho texto. Propuesta: Pasar a tarjetas." in correccion
+    assert "La portada." not in correccion
+    assert material["revision_visual"] == [visual["cambios"][0]]
+    assert any("Revisión visual" in l for l in material["avance"])
+    entrega = {s["clave"]: s["lineas"] for s in material["entrega"]["secciones"]}
+    assert any("Revisión visual de las imágenes" in l and "Pasar a tarjetas" in l for l in entrega["valide"])
+
+
+def test_sin_cambios_visuales_sigue_sin_corregir(con_lectura):
+    material, consulta = generar(con_lectura, LIMPIAS, {"cambios": []}, medir=medir_con_imagenes)
+    assert material["estado"] == "verificada"
+    assert len(consulta.llamadas) == 3          # redacción, revisión visual y revisión del contenido
+    assert material["revision_visual"] == []

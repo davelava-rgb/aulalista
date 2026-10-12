@@ -212,11 +212,11 @@ CÓMO ENTREGAR LAS DIAPOSITIVAS
   {LIMITES['diapositivas_min'] - FIJAS} a {LIMITES['diapositivas_max'] - FIJAS}.
 {{orden}}
 - tipo y lo que lleva cada uno. Deja vacío lo que el tipo no usa, y «tabla» y «grafico» en null si no los usa:
-  - «frases»: de 1 a 5 frases cortas. Solo texto.
-  - «ejemplo»: un ejemplo en un recuadro legible a distancia. Solo texto.
+  - «frases»: de 1 a 3 frases cortas. Con una sola frase, se muestra grande, como idea destacada.
+  - «ejemplo»: un ejemplo en una tarjeta legible a distancia.
   - «pasos»: de 2 a 6 pasos numerados, uno por frase.
   - «columnas»: dos columnas comparativas, cada una con su título y sus frases.
-  - «tabla»: una tabla de 4 columnas y 6 filas como máximo; en «frases», una línea de introducción o nada.
+  - «tabla»: una tabla pequeña; en «frases», una línea de introducción o nada. Dos tablas como máximo en total.
   - Recursos dibujados: van en «grafico». Cada elemento lleva «texto» (de 1 a 4 palabras), «detalle» (una frase
     de 12 palabras como máximo, o vacío), «hijos» (de 0 a 3 textos cortos) y «valor» (null salvo en la gráfica).
     En «frases», una línea de introducción o nada.
@@ -230,10 +230,19 @@ CÓMO ENTREGAR LAS DIAPOSITIVAS
     - «tarjetas»: de 2 a 6 tarjetas: tipos, componentes, principios o roles, cada uno con su detalle.
     - «grafica»: barras con cifras. De 2 a 6 elementos con su «valor». «centro»: qué mide y en qué unidad. Úsala
       solo con cifras que la fuente dice tal cual. Nunca inventes una cifra.
-- Recursos gráficos (PLAN.md §0, decisión 29): al menos la mitad de las diapositivas de «diapositivas» usa un tipo
-  distinto de «frases» y «ejemplo», y nunca hay más de {MAX_SOLO_TEXTO_SEGUIDAS} de «frases» o «ejemplo» seguidas. Elige el
-  recurso que muestra mejor la relación entre las ideas: secuencia, ciclo, jerarquía, ramas, comparación o cifras.
-  El recurso no agrega contenido: dibuja lo que dice la fuente.
+    - «cifras»: de 1 a 3 cifras grandes. «valor» es la cifra, «texto» lo que cuenta y «detalle» una frase corta.
+      Solo cifras que la fuente dice tal cual.
+- DISEÑO (PLAN.md §0, decisiones 29 y 30). Piensa como un diseñador de presentaciones, no como quien resume un texto:
+  - Cada diapositiva muestra {contenido_.MAX_PALABRAS} palabras como máximo, sin contar el título. Lo que no cabe va a las
+    notas del profesor. Pasar un detalle a las notas no es una decisión: no lo anotes en «decisiones».
+  - Recursos gráficos: al menos la mitad de las diapositivas de «diapositivas» es un diagrama ({", ".join(contenido_.TIPOS_GRAFICOS)}).
+    Las tablas, las columnas y los pasos no cuentan como diagrama. Nunca hay más de {MAX_SOLO_TEXTO_SEGUIDAS} diapositivas
+    seguidas sin diagrama.
+  - Elige el diagrama por la relación entre las ideas: instancias, cargos o quién depende de quién → «organigrama»;
+    una secuencia o un flujo → «proceso»; algo que se repite → «ciclo»; un tema con sus partes → «mapa»; tipos,
+    principios, roles o componentes → «tarjetas»; dos criterios que se cruzan → «matriz»; cifras → «cifras» o «grafica».
+    Una tabla de varias filas sobre organizaciones o roles casi siempre es un organigrama o unas tarjetas.
+  - El recurso no agrega contenido: dibuja lo que dice la fuente.
 - Frases cortas, no párrafos: una idea por frase, que se lea de un vistazo.
 {{contenido}}
 - notas: en todas, también en la portada, la idea central, «Aplícalo así» y «Cuidado con». En «destacar», qué
@@ -380,6 +389,7 @@ def _validar(datos: dict, contenido_lectura: Lectura | None) -> tuple[Diapositiv
     else:
         problemas += _orden_de_la_lectura(contenido, contenido_lectura)
     problemas += _recursos_graficos(contenido)
+    problemas += _palabras_y_tablas(contenido)
     problemas += _cifras_de_las_graficas(contenido, contenido_lectura)
     problemas += _frase_de_cierre(contenido)
     return (None if problemas else contenido), problemas
@@ -392,15 +402,35 @@ def _recursos_graficos(contenido: Diapositivas) -> list[str]:
     total = len(contenido.diapositivas)
     graficas = sum(1 for d in contenido.diapositivas if d.es_grafica)
     if graficas * 2 < total:
-        problemas.append(f"FALLA · estructura · recursos gráficos: {graficas} de {total} diapositivas de concepto usan "
-                         "un recurso gráfico; deben ser al menos la mitad. Cambia el tipo de las que muestran una "
-                         "secuencia, un ciclo, una jerarquía, ramas, una comparación o cifras.")
+        problemas.append(f"FALLA · estructura · recursos gráficos: {graficas} de {total} diapositivas de concepto son un "
+                         "diagrama; deben ser al menos la mitad. Las tablas, las columnas y los pasos no cuentan. Cambia "
+                         "el tipo de las que muestran instancias o cargos (organigrama), una secuencia (proceso), un "
+                         "ciclo, un tema con sus partes (mapa), tipos o principios (tarjetas) o cifras.")
     seguidas = 0
     for numero, d in enumerate(contenido.diapositivas, start=3):
         seguidas = 0 if d.es_grafica else seguidas + 1
         if seguidas == MAX_SOLO_TEXTO_SEGUIDAS + 1:
             problemas.append(f"FALLA · estructura · diapositiva {numero} («{d.titulo}»): hay más de "
                              f"{MAX_SOLO_TEXTO_SEGUIDAS} diapositivas seguidas solo con texto. Usa un recurso gráfico.")
+    return problemas
+
+
+def _palabras_y_tablas(contenido: Diapositivas) -> list[str]:
+    """Decisión 30: 30 palabras como máximo por diapositiva, sin el título, y dos tablas como máximo."""
+    problemas = []
+    maximo = contenido_.MAX_PALABRAS
+    idea = sum(len(f.split()) for f in contenido.idea_central.frases)
+    if idea > maximo:
+        problemas.append(f"FALLA · estructura · idea central: tiene {idea} palabras; el máximo es {maximo}. Acórtala.")
+    for numero, d in enumerate(contenido.diapositivas, start=3):
+        palabras = sum(len(t.split()) for t in d.textos_visibles())
+        if palabras > maximo:
+            problemas.append(f"FALLA · estructura · diapositiva {numero} («{d.titulo}»): muestra {palabras} palabras; el "
+                             f"máximo es {maximo}, sin el título. Deja lo esencial y pasa el detalle a las notas.")
+    tablas = [n for n, d in enumerate(contenido.diapositivas, start=3) if d.tipo == "tabla"]
+    if len(tablas) > contenido_.MAX_TABLAS:
+        problemas.append(f"FALLA · estructura · tablas: hay {len(tablas)} (diapositivas {', '.join(map(str, tablas))}); "
+                         f"el máximo es {contenido_.MAX_TABLAS}. Cambia las demás por un diagrama.")
     return problemas
 
 
@@ -414,7 +444,7 @@ def _numero(valor: float) -> str:
 
 def _cifras_de_las_graficas(contenido: Diapositivas, contenido_lectura: Lectura | None) -> list[str]:
     """Una gráfica solo usa cifras de la lectura o, sin lectura, de un pasaje copiado de una fuente."""
-    graficas = [(n, d) for n, d in enumerate(contenido.diapositivas, start=3) if d.tipo == "grafica"]
+    graficas = [(n, d) for n, d in enumerate(contenido.diapositivas, start=3) if d.tipo in contenido_.CON_CIFRAS]
     if not graficas:
         return []
     if contenido_lectura is not None:
@@ -425,7 +455,7 @@ def _cifras_de_las_graficas(contenido: Diapositivas, contenido_lectura: Lectura 
     for numero, d in graficas:
         faltan = [_numero(e.valor) for e in d.grafico.elementos if _numero(e.valor) not in base]
         if faltan:
-            problemas.append(f"FALLA · estructura · diapositiva {numero} («{d.titulo}»): la gráfica usa cifras que no "
+            problemas.append(f"FALLA · estructura · diapositiva {numero} («{d.titulo}»): usa cifras que no "
                              f"están en {de_donde}: {', '.join(faltan)}. Usa solo cifras de la fuente o cambia el recurso.")
     return problemas
 
@@ -516,6 +546,7 @@ class _Trabajo:
         self.medicion: office.Medicion | None = None
         self.fallas: list[str] = []
         self.descartados: list[dict] = []
+        self.revision_visual: list[dict] = []
         self.vuelta = 0
 
     def avance(self, texto: str) -> None:
@@ -599,6 +630,51 @@ class _Trabajo:
                 for numero in almacen.sesiones_confirmadas(self.carpeta_curso):
                     verificacion.escribir(self.carpeta_curso, numero)
                 self.avance(f"Datos nuevos del caso agregados a la ficha del curso: {len(nuevos)}.")
+
+
+PEDIDO_VISUAL = """Eres diseñador de presentaciones. Mira la imagen de cada diapositiva de una clase.
+Señala solo las que tienen un problema de diseño real:
+- cargada: mucho texto, letra que parece pequeña o poco aire;
+- monótona: se parece demasiado a las anteriores (texto o cajas una tras otra);
+- recurso: su contenido se entendería mejor con otro recurso (organigrama, proceso, ciclo, mapa, tarjetas, matriz,
+  cifras, gráfica, columnas o pasos).
+No señales la portada ni el cierre. No propongas contenido nuevo: solo cómo mostrar lo que ya está.
+Para cada una, di el número, el problema en una frase y una propuesta concreta (por ejemplo: «pasar a organigrama con
+el Consejo arriba», «dejar dos frases y pasar el resto a las notas»). Si ninguna tiene problemas, devuelve la lista vacía."""
+
+ESQUEMA_VISUAL = {
+    "type": "object",
+    "properties": {"cambios": {"type": "array", "items": {
+        "type": "object",
+        "properties": {"numero": {"type": "integer"}, "problema": {"type": "string"}, "propuesta": {"type": "string"}},
+        "required": ["numero", "problema", "propuesta"], "additionalProperties": False}}},
+    "required": ["cambios"], "additionalProperties": False,
+}
+
+
+async def revision_visual(trabajo) -> int:
+    """Decisión 30: Sonnet mira las imágenes una sola vez. Sus propuestas van a una corrección completa y el
+    verificador corre otra vez. Sin imágenes (PowerPoint no las guardó) no se hace. Devuelve los cambios pedidos."""
+    imagenes = trabajo.medicion.imagenes if trabajo.medicion else []
+    if not imagenes or trabajo.contenido is None:
+        return 0
+    nombres = titulos(trabajo.contenido)
+    trabajo.avance(f"Revisión visual: Claude mira las {len(imagenes)} diapositivas.")
+    respuesta = await agente.consultar_con_imagenes(
+        PEDIDO_VISUAL, [(f"Diapositiva {n} («{nombres[n - 1] if n <= len(nombres) else ''}»)", ruta.read_bytes())
+                        for n, ruta in enumerate(imagenes, start=1)],
+        tarea="revision_visual", esquema=ESQUEMA_VISUAL, curso=trabajo.curso, sesion=f"S{trabajo.sesion}",
+        material=CLAVE, etapa="revisión visual", consulta=trabajo.consulta)
+    cambios = [c for c in respuesta["cambios"] if 2 < c["numero"] < len(nombres)]
+    trabajo.revision_visual = cambios
+    if not cambios:
+        trabajo.avance("Revisión visual: sin cambios.")
+        return 0
+    problemas = [f"DISEÑO · diapositiva {c['numero']} («{nombres[c['numero'] - 1]}»): {c['problema']} "
+                 f"Propuesta: {c['propuesta']}" for c in cambios]
+    await trabajo.corregir(problemas, True)
+    await trabajo.verificar()
+    return len(cambios)
 
 
 INDICACIONES_DE_REVISION = (
@@ -697,6 +773,8 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, medir) -> dict
     errores: list[revision.Error] = []
     revisados = 0
     if await trabajo.verificar():
+        await revision_visual(trabajo)
+    if not trabajo.fallas and trabajo.contenido is not None:
         errores, revisados = await comun.revisar_y_corregir(trabajo, bloques_de)
 
     pendientes = [e for e in errores if e.estado == "pendiente"]
@@ -731,6 +809,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, medir) -> dict
         base="lectura" if trabajo.lectura is not None else "fuentes",
         referencia=[t.describir() for t in lectura._referencia(carpeta_curso, sesion)[0]] if trabajo.lectura is None else [],
         datos_agregados=trabajo.datos_agregados,
+        revision_visual=trabajo.revision_visual,
         archivos={"pptx": rutas["pptx"].name, "excel": rutas["excel"].name, "entrega": rutas["entrega"].name},
         carpeta_imagenes=str(rutas["imagenes"].relative_to(carpeta_curso)),
         costo=tokens.total(curso, sesion=f"S{sesion}", material=CLAVE, desde_linea=inicio),
@@ -823,6 +902,12 @@ def _entrega(material: dict) -> dict:
               *([f"Avisos informativos de relleno o palabras imprecisas: {material['avisos_informativos']}. "
                  "Están en la hoja Hallazgos; no obligan a corregir."] if material.get("avisos_informativos") else []),
               f"Fallas del verificador y de la medición corregidas: {c['verificador']}."]
+    if material.get("imagenes"):
+        visual = material.get("revision_visual") or []
+        valide.append("Revisión visual de las imágenes (decisión 30): " + (
+            f"{comun.cuantos(len(visual), 'cambio')} de diseño, enviados a una corrección: "
+            + "; ".join(f"diapositiva {v['numero']}, {v['propuesta'].rstrip('.')}" for v in visual) + "."
+            if visual else "sin cambios."))
     if r.get("bloques"):
         contra = "la lectura aprobada" if material.get("base", "lectura") == "lectura" else "las fuentes y las fichas"
         texto = (f"Revisión del contenido contra {contra}: {comun.cuantos(r['bloques'], 'bloque')}, "

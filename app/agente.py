@@ -187,3 +187,35 @@ async def consultar(
     if resultado.is_error or not isinstance(resultado.structured_output, dict):
         raise ErrorDeAgente(_describir_error(resultado))
     return resultado.structured_output
+
+
+async def consultar_con_imagenes(
+    pedido: str,
+    imagenes: list[tuple[str, bytes]],
+    *,
+    tarea: str,
+    esquema: dict,
+    curso: str,
+    etapa: str,
+    sesion: str = "-",
+    material: str = "-",
+    consulta: Consulta = query,
+) -> dict:
+    """Pedido con imágenes PNG y respuesta en JSON validado contra `esquema`. Mismo envío que leer_imagen:
+    cada imagen va precedida de su etiqueta, y el pedido va al final. Sin herramientas."""
+    opciones = opciones_base(tarea, leer_clave(), output_format={"type": "json_schema", "schema": esquema})
+    contenido = []
+    for etiqueta, imagen in imagenes:
+        contenido.append({"type": "text", "text": etiqueta})
+        contenido.append({"type": "image", "source": {"type": "base64", "media_type": "image/png",
+                                                      "data": base64.b64encode(imagen).decode("ascii")}})
+    contenido.append({"type": "text", "text": pedido})
+
+    async def mensajes():
+        yield {"type": "user", "message": {"role": "user", "content": contenido}, "parent_tool_use_id": None}
+
+    _, resultado = await ejecutar(mensajes(), opciones, consulta)
+    tokens.registrar(resultado, curso=curso, sesion=sesion, material=material, etapa=etapa)
+    if resultado.is_error or not isinstance(resultado.structured_output, dict):
+        raise ErrorDeAgente(_describir_error(resultado))
+    return resultado.structured_output

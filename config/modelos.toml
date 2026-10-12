@@ -61,3 +61,9 @@ max_turns = 30
 modelo = "claude-sonnet-5-5"
 tope_usd = 0.40
 max_turns = 15
+
+# Revisión visual de las diapositivas: mira la imagen de cada una y propone cambios de diseño (decisión 30).
+[revision_visual]
+modelo = "claude-sonnet-5-5"
+tope_usd = 0.60
+max_turns = 3

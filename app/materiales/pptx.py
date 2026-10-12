@@ -2,9 +2,10 @@
 
 Diapositivas (SKILL.md, «Material 2»): PowerPoint 16:9, una idea por diapositiva, frases cortas,
 ejemplos en recuadros legibles a distancia y notas del profesor en cada diapositiva.
-Diseño común: la identidad visual de la ficha, tres colores como máximo más los fondos de recuadro,
-recuadros sombreados con borde izquierdo de color y tablas con encabezado en el color principal,
-filas alternas en gris muy claro y sin bordes verticales.
+Diseño común: la identidad visual de la ficha, tres colores como máximo más los fondos de recuadro, y
+tablas con encabezado en el color principal, filas alternas en gris muy claro y sin bordes verticales.
+En las diapositivas, los recuadros son tarjetas con encabezado de color, sin borde izquierdo; cada diapositiva
+de concepto lleva el nombre de su bloque y una marca de avance (PLAN.md §0, decisión 30).
 
 El generador elige el tamaño de letra que cabe según una estimación. Quien mide de verdad es
 PowerPoint (app/office.py, medir_diapositivas): un texto que se sale de su recuadro es una falla.
@@ -29,12 +30,13 @@ from app.materiales.estilo import Identidad
 
 ANCHO, ALTO = Cm(33.867), Cm(19.05)          # 16:9
 MARGEN = Cm(1.6)
-TITULO_ARRIBA, TITULO_ALTO = Cm(0.9), Cm(2.3)
-CUERPO_ARRIBA = Cm(3.6)
+BLOQUE_ARRIBA, BLOQUE_ALTO = Cm(0.7), Cm(1.0)      # nombre del bloque, arriba del título (decisión 30)
+TITULO_ARRIBA, TITULO_ALTO = Cm(1.5), Cm(2.0)
+CUERPO_ARRIBA = Cm(3.9)
 CUERPO_ALTO = ALTO - CUERPO_ARRIBA - Cm(1.2)
 CUERPO_ANCHO = ANCHO - 2 * MARGEN
 SEPARACION = Cm(0.8)
-BORDE = Cm(0.25)                              # borde izquierdo de color de los recuadros
+ENCABEZADO = Cm(1.3)                          # encabezado de color de las tarjetas
 
 TAMANO_TITULO = 32
 TAMANO_CUERPO = 26
@@ -122,7 +124,28 @@ def _caja(diapositiva, izquierda, arriba, ancho, alto):
     return caja.text_frame
 
 
-def _titulo(diapositiva, texto: str, identidad: Identidad) -> None:
+def _titulo(diapositiva, texto: str, identidad: Identidad, bloque: str = "", avance: tuple[int, int] | None = None) -> None:
+    """Título de la diapositiva. Arriba, el nombre del bloque en el color de acento y, a la derecha, un punto por
+    bloque con el actual relleno (decisión 30)."""
+    if bloque:
+        ancho_bloque = CUERPO_ANCHO - (Cm(0.75) * avance[1] if avance else 0)
+        marco = _caja(diapositiva, MARGEN, BLOQUE_ARRIBA, ancho_bloque, BLOQUE_ALTO)
+        marco.word_wrap = True
+        marco.auto_size = MSO_AUTO_SIZE.NONE
+        corrida = marco.paragraphs[0].add_run()
+        corrida.text = bloque.upper()
+        _letra(corrida, identidad, TAMANO_MINIMO, estilo.para_texto(identidad.acento), negrita=True)
+    if avance:
+        actual, total = avance
+        for i in range(total):
+            x = ANCHO - MARGEN - (total - i) * Cm(0.75) + Cm(0.2)
+            punto = diapositiva.shapes.add_shape(MSO_SHAPE.OVAL, int(x), int(BLOQUE_ARRIBA + Cm(0.3)), int(Cm(0.4)),
+                                                 int(Cm(0.4)))
+            punto.fill.solid()
+            punto.fill.fore_color.rgb = _rgb(identidad.principal if i == actual else identidad.fondo)
+            punto.line.color.rgb = _rgb(identidad.principal)
+            punto.line.width = Pt(1)
+            punto.shadow.inherit = False
     titulo = diapositiva.shapes.title
     titulo.left, titulo.top, titulo.width, titulo.height = MARGEN, TITULO_ARRIBA, CUERPO_ANCHO, TITULO_ALTO
     marco = titulo.text_frame
@@ -146,13 +169,13 @@ MARGEN_RECUADRO_LADO, MARGEN_RECUADRO_ALTO = Cm(0.6), Cm(0.4)
 
 def medida_de_recuadro(parrafos: list[str], ancho, alto_maximo, titulo: str = "",
                        base: int = TAMANO_CUERPO) -> tuple[int, Emu]:
-    """Tamaño de letra y alto del recuadro: el alto justo para su texto, sin pasar del espacio disponible."""
-    textos = ([titulo] if titulo else []) + parrafos
-    interior_ancho = ancho - BORDE - 2 * MARGEN_RECUADRO_LADO - Cm(0.8)   # la sangría de las viñetas
-    interior_alto = alto_maximo - 2 * MARGEN_RECUADRO_ALTO
-    tamano = tamano_que_cabe(textos, interior_ancho, interior_alto, base)
-    alto = alto_estimado(textos, interior_ancho, tamano) + 2 * MARGEN_RECUADRO_ALTO + Cm(0.6)
-    return tamano, min(alto_maximo, max(Cm(3), alto))
+    """Tamaño de letra y alto de la tarjeta: el alto justo para su texto, sin pasar del espacio disponible."""
+    interior_ancho = ancho - 2 * MARGEN_RECUADRO_LADO - Cm(0.8)   # la sangría de las viñetas
+    encabezado = ENCABEZADO if titulo else Cm(0.3)
+    interior_alto = alto_maximo - encabezado - 2 * MARGEN_RECUADRO_ALTO
+    tamano = tamano_que_cabe(parrafos, interior_ancho, interior_alto, base)
+    alto = encabezado + alto_estimado(parrafos, interior_ancho, tamano) + 2 * MARGEN_RECUADRO_ALTO + Cm(0.6)
+    return tamano, min(alto_maximo, max(Cm(5.5), alto))
 
 
 def _sin_sombra_ni_linea(figura) -> None:
@@ -163,22 +186,33 @@ def _sin_sombra_ni_linea(figura) -> None:
 def recuadro(diapositiva, identidad: Identidad, izquierda, arriba, ancho, alto_maximo, parrafos: list[str], *,
              titulo: str = "", color_borde: str | None = None, vinetas: bool = False,
              base: int = TAMANO_CUERPO, medida: tuple[int, Emu] | None = None) -> None:
-    """Recuadro sombreado con borde izquierdo de color. Mismo estilo que en los Word."""
+    """Tarjeta: encabezado del color (con su título, si lo tiene) y cuerpo sobre el fondo de recuadro.
+    En las diapositivas reemplaza al recuadro con borde izquierdo de los Word (decisión 30)."""
     color = color_borde or identidad.principal
     tamano, alto = medida or medida_de_recuadro(parrafos, ancho, alto_maximo, titulo, base)
-    borde = diapositiva.shapes.add_shape(MSO_SHAPE.RECTANGLE, izquierda, arriba, BORDE, alto)
-    borde.fill.solid()
-    borde.fill.fore_color.rgb = _rgb(color)
-    _sin_sombra_ni_linea(borde)
-    caja = diapositiva.shapes.add_shape(MSO_SHAPE.RECTANGLE, izquierda + BORDE, arriba, ancho - BORDE, alto)
-    caja.fill.solid()
-    caja.fill.fore_color.rgb = _rgb(identidad.fondo)
-    _sin_sombra_ni_linea(caja)
-    marco = caja.text_frame
+    encabezado = ENCABEZADO if titulo else Cm(0.3)
+    cuerpo = diapositiva.shapes.add_shape(MSO_SHAPE.RECTANGLE, izquierda, arriba, ancho, alto)
+    cuerpo.fill.solid()
+    cuerpo.fill.fore_color.rgb = _rgb(identidad.fondo)
+    _sin_sombra_ni_linea(cuerpo)
+    banda = diapositiva.shapes.add_shape(MSO_SHAPE.RECTANGLE, izquierda, arriba, ancho, encabezado)
+    banda.fill.solid()
+    banda.fill.fore_color.rgb = _rgb(color)
+    _sin_sombra_ni_linea(banda)
+    if titulo:
+        marco = banda.text_frame
+        marco.margin_left = marco.margin_right = MARGEN_RECUADRO_LADO
+        marco.vertical_anchor = MSO_ANCHOR.MIDDLE
+        marco.word_wrap = True
+        corrida = marco.paragraphs[0].add_run()
+        corrida.text = titulo
+        claro = estilo.BLANCO if estilo.contraste(color, estilo.BLANCO) >= estilo.CONTRASTE_MINIMO else identidad.texto
+        _letra(corrida, identidad, min(tamano, 24), claro, negrita=True)
+    texto = diapositiva.shapes.add_textbox(izquierda, arriba + encabezado, ancho, alto - encabezado)
+    marco = texto.text_frame
     marco.margin_left = marco.margin_right = MARGEN_RECUADRO_LADO
     marco.margin_top = marco.margin_bottom = MARGEN_RECUADRO_ALTO
-    _escribir(marco, parrafos, identidad, tamano, titulo=titulo,
-              color_titulo=estilo.para_texto(color, identidad.fondo), vinetas=vinetas)
+    _escribir(marco, parrafos, identidad, tamano, vinetas=vinetas)
 
 
 def tabla(diapositiva, identidad: Identidad, datos: Tabla, arriba, alto_disponible) -> None:
@@ -611,14 +645,90 @@ DIBUJOS = {"proceso": _proceso, "ciclo": _ciclo, "organigrama": _organigrama, "m
            "tarjetas": _tarjetas, "grafica": _grafica}
 
 
-def _con_frases(presentacion, identidad: Identidad, titulo: str, frases: list[str], notas: Notas, *,
-                vinetas: bool = True, numerada: bool = False, base: int = TAMANO_CUERPO) -> None:
+def _filas_con_marca(diapositiva, identidad: Identidad, frases: list[str], izquierda, arriba, ancho, alto, *,
+                     marca: str = "", color: str | None = None, base: int = 26) -> None:
+    """Frases en filas, cada una con una marca de color a la izquierda: un cuadro, un número o un signo."""
+    color = color or identidad.acento
+    n = len(frases)
+    hueco = Cm(0.45)
+    fila = min(Cm(2.3), (alto - (n - 1) * hueco) / n)
+    lado = Cm(1.4) if marca else Cm(0.45)
+    texto_ancho = ancho - lado - Cm(0.7)
+    tamano = min(_tamano([f], texto_ancho, fila, base) for f in frases)
+    arriba = arriba + max(0, (alto - n * fila - (n - 1) * hueco) // 2)
+    for i, frase in enumerate(frases):
+        y = arriba + i * (fila + hueco)
+        figura = _rectangulo(diapositiva, MSO_SHAPE.OVAL if marca else MSO_SHAPE.RECTANGLE, izquierda,
+                             y + (fila - lado) / 2, lado, lado, color)
+        if marca:
+            _en_figura(figura, [(str(i + 1) if marca == "#" else marca, TAMANO_MINIMO + 2, _sobre(color, identidad), True)],
+                       identidad)
+        _lineas(diapositiva, izquierda + lado + Cm(0.7), y, texto_ancho, fila, [(frase, tamano, identidad.texto, False)],
+                identidad, anclaje=MSO_ANCHOR.MIDDLE)
+
+
+def _destacada(diapositiva, identidad: Identidad, frase: str, izquierda, arriba, ancho, alto, color: str) -> None:
+    """Una sola frase, grande, con una línea de acento arriba: la idea que se quiere fijar."""
+    tamano = tamano_que_cabe([frase], ancho - Cm(2), alto - Cm(2.5), base=40)
+    alto_texto = min(alto - Cm(1.5), alto_estimado([frase], ancho - Cm(2), tamano) + Cm(0.8))
+    y = arriba + max(Cm(0.8), (alto - alto_texto) // 2)            # el bloque, centrado en el espacio
+    _rectangulo(diapositiva, MSO_SHAPE.RECTANGLE, izquierda, y - Cm(0.7), Cm(3.5), Cm(0.25), identidad.acento)
+    _lineas(diapositiva, izquierda, y, ancho - Cm(2), alto_texto, [(frase, tamano, color, True)],
+            identidad, anclaje=MSO_ANCHOR.TOP)
+
+
+def _frases(diapositiva, identidad: Identidad, frases: list[str], izquierda, arriba, ancho, alto) -> None:
+    if len(frases) == 1:
+        _destacada(diapositiva, identidad, frases[0], izquierda, arriba, ancho, alto,
+                   estilo.para_texto(identidad.principal))
+    else:
+        _filas_con_marca(diapositiva, identidad, frases, izquierda, arriba, ancho, alto)
+
+
+def _idea_central(presentacion, identidad: Identidad, frases: list[str], notas: Notas) -> None:
+    """La idea central sobre el fondo de recuadro, en letra grande."""
     diapositiva = _nueva(presentacion)
-    _titulo(diapositiva, titulo, identidad)
-    marco = _caja(diapositiva, MARGEN, CUERPO_ARRIBA, CUERPO_ANCHO, CUERPO_ALTO)
-    tamano = tamano_que_cabe(frases, CUERPO_ANCHO - Cm(0.5), CUERPO_ALTO - Cm(0.3), base)
-    _escribir(marco, frases, identidad, tamano, vinetas=vinetas and not numerada, numerada=numerada)
+    fondo = _rectangulo(diapositiva, MSO_SHAPE.RECTANGLE, 0, 0, ANCHO, ALTO, identidad.fondo)
+    diapositiva.shapes._spTree.remove(fondo._element)
+    diapositiva.shapes._spTree.insert(2, fondo._element)          # detrás del título
+    titulo = diapositiva.shapes.title
+    titulo.left, titulo.top, titulo.width, titulo.height = MARGEN, Cm(1.6), CUERPO_ANCHO, Cm(1.4)
+    marco = titulo.text_frame
+    marco.clear()
+    corrida = marco.paragraphs[0].add_run()
+    corrida.text = "Idea central"
+    marco.paragraphs[0].alignment = PP_ALIGN.LEFT
+    _letra(corrida, identidad, TAMANO_MINIMO + 4, estilo.para_texto(identidad.acento, identidad.fondo), negrita=True)
+    texto = " ".join(frases)
+    tamano = tamano_que_cabe([texto], CUERPO_ANCHO - Cm(3), Cm(11), base=40)
+    _rectangulo(diapositiva, MSO_SHAPE.RECTANGLE, MARGEN, Cm(3.4), Cm(3.5), Cm(0.25), identidad.acento)
+    _lineas(diapositiva, MARGEN, Cm(4.2), CUERPO_ANCHO - Cm(3), Cm(12), [(texto, tamano,
+            estilo.para_texto(identidad.principal, identidad.fondo), True)], identidad, anclaje=MSO_ANCHOR.MIDDLE)
     _notas(diapositiva, notas)
+
+
+def _cifras(diapositiva, identidad: Identidad, g: Grafico, izquierda, arriba, ancho, alto) -> None:
+    """De 1 a 3 cifras grandes con lo que cuentan (decisión 30). Las cifras salen de la lectura o de una fuente."""
+    n = len(g.elementos)
+    hueco = Cm(1.0)
+    columna = (ancho - (n - 1) * hueco) / n
+    alto_tarjeta = min(alto - Cm(1.2), Cm(8.5))
+    y = arriba + (alto - alto_tarjeta) // 2
+    for i, e in enumerate(g.elementos):
+        x = izquierda + i * (columna + hueco)
+        tarjeta = _rectangulo(diapositiva, MSO_SHAPE.RECTANGLE, x, y, columna, alto_tarjeta, identidad.fondo)
+        _rectangulo(diapositiva, MSO_SHAPE.RECTANGLE, x, y, columna, Cm(0.3), identidad.acento)
+        partes = [(f"{e.valor:g}", 66, estilo.para_texto(identidad.principal, identidad.fondo), True),
+                  (e.texto, 24, identidad.texto, True)]
+        if e.detalle:
+            partes.append((e.detalle, 20, identidad.texto, False))
+        _en_figura(tarjeta, partes, identidad)
+    if g.centro:
+        _lineas(diapositiva, izquierda, arriba + alto - Cm(0.6), ancho, Cm(0.9),
+                [(g.centro, TAMANO_MINIMO, identidad.texto, False)], identidad, centrado=True)
+
+
+DIBUJOS["cifras"] = _cifras
 
 
 def _introduccion(diapositiva, identidad: Identidad, frases: list[str], arriba, alto):
@@ -631,28 +741,31 @@ def _introduccion(diapositiva, identidad: Identidad, frases: list[str], arriba, 
     return arriba + alto_frases + Cm(0.2), alto - alto_frases - Cm(0.2)
 
 
-def _de_concepto(presentacion, identidad: Identidad, d: Diapositiva) -> None:
-    if d.tipo == "frases":
-        _con_frases(presentacion, identidad, d.titulo, d.frases, d.notas)
-        return
+def _de_concepto(presentacion, identidad: Identidad, d: Diapositiva, avance: tuple[int, int]) -> None:
     diapositiva = _nueva(presentacion)
-    _titulo(diapositiva, d.titulo, identidad)
+    _titulo(diapositiva, d.titulo, identidad, d.bloque, avance)
     arriba, alto = CUERPO_ARRIBA, CUERPO_ALTO
-    if d.tipo in DIBUJOS:
+    if d.tipo == "frases":
+        _frases(diapositiva, identidad, d.frases, MARGEN, arriba, CUERPO_ANCHO, alto)
+    elif d.tipo in DIBUJOS:
         arriba, alto = _introduccion(diapositiva, identidad, d.frases, arriba, alto)
         DIBUJOS[d.tipo](diapositiva, identidad, d.grafico, MARGEN, arriba, CUERPO_ANCHO, alto)
     elif d.tipo == "pasos":
         _pasos(diapositiva, identidad, d.frases, MARGEN, arriba, CUERPO_ANCHO, alto)
     elif d.tipo == "ejemplo":
-        recuadro(diapositiva, identidad, MARGEN, arriba, CUERPO_ANCHO, alto, d.frases)
+        medida = medida_de_recuadro(d.frases, CUERPO_ANCHO, alto, "Ejemplo", base=28)
+        recuadro(diapositiva, identidad, MARGEN, arriba + (alto - medida[1]) // 2, CUERPO_ANCHO, alto, d.frases,
+                 titulo="Ejemplo", color_borde=identidad.acento, medida=medida)
     elif d.tipo == "columnas":
         ancho = (CUERPO_ANCHO - SEPARACION) // 2
         # Las dos columnas con la misma letra y el mismo alto, para que se comparen a la vista.
-        medidas = [medida_de_recuadro(c.frases, ancho, alto, c.titulo, base=24) for c in d.columnas]
+        medidas = [medida_de_recuadro(c.frases, ancho, alto, c.titulo, base=26) for c in d.columnas]
         medida = (min(m[0] for m in medidas), max(m[1] for m in medidas))
+        arriba = arriba + (alto - medida[1]) // 2
         for i, columna in enumerate(d.columnas):
             recuadro(diapositiva, identidad, MARGEN + i * (ancho + SEPARACION), arriba, ancho, alto, columna.frases,
-                     titulo=columna.titulo, vinetas=True, medida=medida)
+                     titulo=columna.titulo, vinetas=True, medida=medida,
+                     color_borde=identidad.principal if i == 0 else identidad.acento)
     elif d.tipo == "tabla":
         if d.frases:
             alto_frases = Cm(1.6) * len(d.frases)
@@ -667,27 +780,28 @@ def generar_diapositivas(contenido: Diapositivas, identidad: Identidad, portada:
     presentacion = Presentation()
     presentacion.slide_width, presentacion.slide_height = ANCHO, ALTO
     _portada(presentacion, identidad, portada, contenido.portada.notas)
-    _con_frases(presentacion, identidad, "Idea central", contenido.idea_central.frases, contenido.idea_central.notas,
-                vinetas=False, base=30)
+    _idea_central(presentacion, identidad, contenido.idea_central.frases, contenido.idea_central.notas)
+    bloques = list(dict.fromkeys(d.bloque for d in contenido.diapositivas))
     for d in contenido.diapositivas:
-        _de_concepto(presentacion, identidad, d)
+        _de_concepto(presentacion, identidad, d, (bloques.index(d.bloque), len(bloques)))
 
     aplicalo = contenido.aplicalo
     diapositiva = _nueva(presentacion)
-    _titulo(diapositiva, "Aplícalo así", identidad)
+    _titulo(diapositiva, "Aplícalo así", identidad, "Para tu trabajo")
     arriba, alto = CUERPO_ARRIBA, CUERPO_ALTO
     if aplicalo.frases:
         alto_frases = Cm(1.7) * len(aplicalo.frases)
         marco = _caja(diapositiva, MARGEN, arriba, CUERPO_ANCHO, alto_frases)
         _escribir(marco, aplicalo.frases, identidad, tamano_que_cabe(aplicalo.frases, CUERPO_ANCHO, alto_frases, 24))
         arriba, alto = arriba + alto_frases + Cm(0.3), alto - alto_frases - Cm(0.3)
-    recuadro(diapositiva, identidad, MARGEN, arriba, CUERPO_ANCHO, alto, aplicalo.plantilla, base=24)
+    _filas_con_marca(diapositiva, identidad, aplicalo.plantilla, MARGEN, arriba, CUERPO_ANCHO, alto, marca="#",
+                     color=identidad.principal, base=24)
     _notas(diapositiva, aplicalo.notas)
 
     diapositiva = _nueva(presentacion)
-    _titulo(diapositiva, "Cuidado con", identidad)
-    recuadro(diapositiva, identidad, MARGEN, CUERPO_ARRIBA, CUERPO_ANCHO, CUERPO_ALTO, contenido.cuidado.riesgos,
-             color_borde=identidad.advertencia, vinetas=True)
+    _titulo(diapositiva, "Cuidado con", identidad, "Riesgos")
+    _filas_con_marca(diapositiva, identidad, contenido.cuidado.riesgos, MARGEN, CUERPO_ARRIBA, CUERPO_ANCHO, CUERPO_ALTO,
+                     marca="!", color=identidad.advertencia)
     _notas(diapositiva, contenido.cuidado.notas)
 
     _cierre(presentacion, identidad, portada, contenido.cierre.frase, contenido.cierre.notas)

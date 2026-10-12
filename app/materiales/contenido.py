@@ -111,13 +111,16 @@ ESQUEMA_LECTURA = _objeto({
 
 # ---------- Diapositivas (SKILL.md, «Material 2 · Diapositivas») ----------
 
-TIPOS_DE_TEXTO = ("frases", "ejemplo")
-TIPOS_GRAFICOS = ("pasos", "columnas", "tabla", "proceso", "ciclo", "organigrama", "mapa", "matriz", "tarjetas",
-                  "grafica")   # PLAN.md §0, decisión 29
+TIPOS_DE_TEXTO = ("frases", "ejemplo", "pasos", "columnas", "tabla")
+# Solo los diagramas cuentan como recurso gráfico (PLAN.md §0, decisiones 29 y 30).
+TIPOS_GRAFICOS = ("proceso", "ciclo", "organigrama", "mapa", "matriz", "tarjetas", "grafica", "cifras")
 TIPOS_DE_DIAPOSITIVA = TIPOS_DE_TEXTO + TIPOS_GRAFICOS
 # Cuántos elementos lleva cada recurso dibujado: (mínimo, máximo).
 ELEMENTOS_POR_TIPO = {"proceso": (3, 6), "ciclo": (3, 6), "organigrama": (2, 5), "mapa": (3, 6), "matriz": (4, 4),
-                      "tarjetas": (2, 6), "grafica": (2, 6)}
+                      "tarjetas": (2, 6), "grafica": (2, 6), "cifras": (1, 3)}
+CON_CIFRAS = ("grafica", "cifras")
+MAX_PALABRAS = 30          # por diapositiva de concepto, sin el título (decisión 30)
+MAX_TABLAS = 2
 
 
 class Notas(BaseModel):
@@ -157,7 +160,7 @@ class Diapositiva(BaseModel):
     bloque: str
     titulo: str
     tipo: Literal["frases", "ejemplo", "pasos", "columnas", "tabla", "proceso", "ciclo", "organigrama", "mapa",
-                  "matriz", "tarjetas", "grafica"]
+                  "matriz", "tarjetas", "grafica", "cifras"]
     frases: list[str] = Field(default_factory=list, max_length=6)
     columnas: list[Columna] = Field(default_factory=list, max_length=2)
     tabla: Tabla | None = None
@@ -167,6 +170,19 @@ class Diapositiva(BaseModel):
     @property
     def es_grafica(self) -> bool:
         return self.tipo in TIPOS_GRAFICOS
+
+    def textos_visibles(self) -> list[str]:
+        """Lo que el alumno lee en la diapositiva, sin el título: para el límite de palabras."""
+        textos = list(self.frases)
+        for c in self.columnas:
+            textos += [c.titulo, *c.frases]
+        if self.tabla:
+            textos += [self.tabla.titulo, *self.tabla.encabezados, *[celda for fila in self.tabla.filas for celda in fila]]
+        if self.grafico:
+            textos += [self.grafico.centro, *self.grafico.ejes]
+            for e in self.grafico.elementos:
+                textos += [e.texto, e.detalle, *e.hijos]
+        return [t for t in textos if t]
 
     @model_validator(mode="after")
     def segun_su_tipo(self):
@@ -185,8 +201,8 @@ class Diapositiva(BaseModel):
                 raise ValueError(f"una diapositiva de {self.tipo} necesita «centro»")
             if self.tipo == "matriz" and len(g.ejes) != 2:
                 raise ValueError("una matriz necesita sus dos ejes: el horizontal y el vertical")
-            if self.tipo == "grafica" and any(e.valor is None for e in g.elementos):
-                raise ValueError("cada barra de la gráfica necesita su «valor»")
+            if self.tipo in CON_CIFRAS and any(e.valor is None for e in g.elementos):
+                raise ValueError(f"cada elemento de «{self.tipo}» necesita su «valor»")
         return self
 
 
