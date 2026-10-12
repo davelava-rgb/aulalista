@@ -221,7 +221,12 @@ def _portada(presentacion, identidad: Identidad, portada: Portada, notas: Notas)
         franja.fill.fore_color.rgb = _rgb(identidad.principal)
         _sin_sombra_ni_linea(franja)
     if identidad.logo is not None:
-        diapositiva.shapes.add_picture(str(identidad.logo), MARGEN, Cm(1.4), height=Cm(2.4))
+        imagen = diapositiva.shapes.add_picture(str(identidad.logo), MARGEN, Cm(1.4), height=Cm(2.4))
+        lugar = identidad.estilo.logo or ("centro" if identidad.estilo.portada_centrada else "izquierda")
+        if lugar == "centro":
+            imagen.left = int((presentacion.slide_width - imagen.width) / 2)
+        elif lugar == "derecha":
+            imagen.left = int(presentacion.slide_width - MARGEN - imagen.width)
     for texto, tamano, color, negrita, alto in (
             (portada.curso, 40, estilo.para_texto(identidad.principal), True, Cm(4.6)),
             (portada.sesion, 26, identidad.texto, False, Cm(3.2)),
@@ -232,6 +237,8 @@ def _portada(presentacion, identidad: Identidad, portada: Portada, notas: Notas)
         marco = _caja(diapositiva, MARGEN, arriba, CUERPO_ANCHO, alto)
         marco.word_wrap = True
         marco.auto_size = MSO_AUTO_SIZE.NONE
+        if identidad.estilo.portada_centrada:
+            marco.paragraphs[0].alignment = PP_ALIGN.CENTER
         corrida = marco.paragraphs[0].add_run()
         corrida.text = texto
         _letra(corrida, identidad, tamano, color, negrita)

@@ -6,7 +6,7 @@
 {% block contenido %}
 <h1>Sesión {{ sesion }}</h1>
 <p><a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">Ficha de la sesión</a>:
-  {{ 'confirmada' if puede_empezar else 'falta confirmar las fichas. Ningún material empieza sin ellas.' }}</p>
+  {{ 'confirmada' if puede_empezar else 'falta confirmar las fichas. Ningún material empieza sin ellas. Una ficha queda confirmada al guardarla completa.' }}</p>
 
 {% for m in materiales %}
 {% set e = m.estado %}

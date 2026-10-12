@@ -5,10 +5,12 @@
 - Si la ficha no trae paleta, se usa una sobria de tres colores y se avisa en la entrega.
 - Lo que la ficha deja vacío (colores, tipografía) se toma de los modelos en PDF; la ficha manda (decisión 27).
 - El estilo de la ficha cambia la portada, los títulos, el borde de los recuadros y el tono (decisión 27).
+- Con un modelo, la portada sigue la disposición de su carátula, con los colores, la tipografía y el logo de la
+  ficha: la identidad visual de la ficha manda (decisión 28).
 """
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from app.fichas import almacen
@@ -113,8 +115,14 @@ def desde_ficha(carpeta_curso: Path) -> Identidad:
             avisos.append(f"No encontré el logo «{nombre_logo}» en la carpeta del curso. La portada va sin logo.")
         else:
             avisos.append("La ficha no trae logo. La portada va sin logo.")
+    diseno = catalogo.estilo(almacen.valor(ficha, "visual.estilo"))
+    nombre_modelo, caratula = modelos.disposicion_de_portada(carpeta_curso)
+    if caratula:
+        diseno = replace(diseno, portada_centrada=caratula["centrada"], franja=caratula["franja"], logo=caratula["logo"])
+        avisos.append(f"La portada sigue la carátula del modelo ({nombre_modelo}), con los colores, la tipografía "
+                      "y el logo de la ficha.")
     return Identidad(tipografia=tipografia or TIPOGRAFIA_POR_OMISION, logo=logo, avisos=avisos,
-                     estilo=catalogo.estilo(almacen.valor(ficha, "visual.estilo")), **colores)
+                     estilo=diseno, **colores)
 
 
 def guia_de_tono(carpeta_curso: Path) -> str:

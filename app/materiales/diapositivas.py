@@ -165,7 +165,7 @@ def _texto_de_la_lectura(contenido: Lectura) -> str:
 # ---------- Pedidos al agente ----------
 
 def _contexto(carpeta_curso: Path, sesion: int, contenido_lectura: Lectura | None) -> str:
-    ficha_curso = almacen.ruta_ficha(carpeta_curso, "curso", extension=".md").read_text(encoding="utf-8")
+    ficha_curso = almacen.texto_para_materiales(carpeta_curso, "curso")
     ficha_sesion = almacen.ruta_ficha(carpeta_curso, "sesion", sesion, ".md").read_text(encoding="utf-8")
     fuentes = verificacion.fuentes_utilizables(carpeta_curso)
     partes = [

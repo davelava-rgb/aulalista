@@ -193,12 +193,13 @@ def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, m
         "versiones": almacen.listar_versiones(carpeta, tipo, sesion),
         "url_restaurar": _url_ficha(curso, sesion) + "/restaurar",
         "desactualizados": desactualizados,
+        "completar": {d["seccion"]: {"clave": c, **d} for c, d in flujo.COMPLETAR.items()} if tipo == "curso" else {},
     })
 
 
 def _exigir_ficha_del_curso(carpeta, curso):
     if not almacen.cargar(carpeta, "curso")["confirmada"]:
-        raise HTTPException(409, "Confirma primero la ficha del curso.")
+        raise HTTPException(409, "Guarda primero la ficha del curso completa: así queda confirmada.")
 
 
 async def _accion_ficha(request: Request, curso: str, tipo: str, sesion: int | None):
@@ -206,15 +207,18 @@ async def _accion_ficha(request: Request, curso: str, tipo: str, sesion: int | N
     # Los controles (casillas, listas, archivos) se convierten en el texto de la ficha (decisión 27).
     formulario = await controles.leer(await request.form(), carpeta)
     accion = formulario.pop("accion", "guardar")
+    if accion == "confirmar":   # una página abierta antes de la decisión 28 todavía trae ese botón
+        accion = "guardar"
     ficha = almacen.cargar(carpeta, tipo, sesion)
     if almacen.aplicar_formulario(ficha, formulario) or not almacen.ruta_ficha(carpeta, tipo, sesion).exists():
         almacen.guardar(carpeta, tipo, sesion, ficha, "editada por el profesor")
     mensaje, errores = "Ficha guardada.", []
     try:
         if accion == "aceptar":
-            flujo.aceptar_propuestos(ficha)
+            if flujo.aceptar_propuestos(ficha):
+                ficha["confirmada"] = False
             almacen.guardar(carpeta, tipo, sesion, ficha, "propuesta aceptada")
-            accion = "confirmar"
+            accion = "guardar"
         if accion == "proponer":
             resumen = await asyncio.to_thread(
                 lambda: asyncio.run(flujo.proponer(carpeta, curso, tipo, sesion))
@@ -224,22 +228,34 @@ async def _accion_ficha(request: Request, curso: str, tipo: str, sesion: int | N
             else:
                 mensaje = (f"Datos tomados de las fuentes: {resumen['de_las_fuentes']}. "
                            f"Propuestos: {resumen['propuestos']}. Con dos versiones: {resumen['conflictos']}.")
-        if accion == "confirmar":
-            if tipo == "curso":
-                resultado = flujo.confirmar_curso(carpeta)
-                sesiones = ", ".join(f"S{n}" for n in resultado["desactualizados"])
-                mensaje = "Ficha del curso confirmada." + (
-                    f" Se actualizó la verificación de las sesiones {sesiones}." if sesiones else "")
-            else:
-                await asyncio.to_thread(lambda: asyncio.run(flujo.confirmar_sesion(carpeta, curso, sesion)))
-                mensaje = "Ficha de la sesión confirmada. Se escribió verificacion.json."
+        elif accion.startswith("completar.") and tipo == "curso" and accion.removeprefix("completar.") in flujo.COMPLETAR:
+            mensaje = await asyncio.to_thread(
+                lambda: asyncio.run(flujo.completar(carpeta, curso, accion.removeprefix("completar.")))
+            )
+        elif accion == "guardar":
+            # Guardar también confirma: una ficha completa queda confirmada (decisión 28).
+            mensaje = await _guardar_y_confirmar(carpeta, curso, tipo, sesion)
     except almacen.FichaIncompleta as error:
-        mensaje, errores = "La ficha no se confirmó.", error.errores
+        mensaje, errores = "Ficha guardada. Todavía no está confirmada.", error.errores
     except flujo.FichaDelCursoSinConfirmar as error:
         mensaje = str(error)
     except (FaltaClave, agente.ErrorDeAgente) as error:
         mensaje = str(error)
     return _pagina_ficha(request, curso, tipo, sesion, mensaje, errores)
+
+
+async def _guardar_y_confirmar(carpeta, curso: str, tipo: str, sesion: int | None) -> str:
+    """Confirma la ficha guardada si está completa. Si ya estaba confirmada y no cambió, no hace nada:
+    confirmar de nuevo dejaría desactualizados los materiales sin motivo."""
+    if almacen.cargar(carpeta, tipo, sesion)["confirmada"]:
+        return "Ficha guardada. Sigue confirmada."
+    if tipo == "curso":
+        resultado = flujo.confirmar_curso(carpeta)
+        sesiones = ", ".join(f"S{n}" for n in resultado["desactualizados"])
+        return "Ficha del curso guardada y confirmada." + (
+            f" Se actualizó la verificación de las sesiones {sesiones}." if sesiones else "")
+    await asyncio.to_thread(lambda: asyncio.run(flujo.confirmar_sesion(carpeta, curso, sesion)))
+    return "Ficha de la sesión guardada y confirmada. Se escribió verificacion.json."
 
 
 def _proponer_si_corresponde(curso: str, tipo: str, sesion: int | None) -> None:
@@ -363,7 +379,7 @@ def generar_material(curso: str, sesion: int, material: str):
     carpeta = _carpeta(curso)
     destino = f"/cursos/{curso}/sesiones/{sesion}"
     if not almacen.puede_empezar_material(carpeta, sesion):
-        return RedirectResponse(destino + "?mensaje=" + quote("Confirma las dos fichas antes de generar."), status_code=303)
+        return RedirectResponse(destino + "?mensaje=" + quote("Guarda completas las dos fichas antes de generar: así quedan confirmadas."), status_code=303)
     faltan = modulo.faltan(carpeta, sesion)
     if faltan["ficha"]:
         mensaje = "Falta en la ficha de la sesión: " + " ".join(faltan["ficha"])

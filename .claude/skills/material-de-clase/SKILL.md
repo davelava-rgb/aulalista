@@ -27,6 +27,7 @@ Todo parte de dos fichas: la ficha del curso, que se llena una vez, y la ficha d
 5. Si dos archivos dicen cosas distintas sobre el mismo dato, no elijas: anota las dos versiones y pregunta cuál vale.
 6. Muestra la ficha llena. Pregunta solo por los datos marcados como "(propuesto)", "Falta definir" o en conflicto, en un máximo de cuatro preguntas. Si quedan más, pregunta primero por los obligatorios.
 7. Si no hay ningún archivo del que leer, haz hasta cuatro preguntas, llena tú la ficha con las respuestas y muéstrala para que la confirmen.
+   Con las horas, el número de sesiones y el público, propón las sesiones: una línea por sesión, con su número, su título y su alcance. Con el curso y el público, propón el caso ficticio. Con el curso, el público y el caso, propón los datos fijos del caso. Todo lo que propones va marcado "(propuesto)".
 8. Guarda la ficha confirmada en el proyecto con el nombre "Ficha del curso". Si no hay proyecto, entrégala como archivo y pide que la adjunten en la siguiente sesión.
 9. Si durante el trabajo se define un dato nuevo del caso (una cifra, una regla, un nombre), agrégalo a "Datos fijos del caso" y guarda la ficha de nuevo.
 10. Al empezar cada sesión, compara la ficha con los archivos del proyecto. Si hay archivos nuevos que la ficha no menciona, léelos y propón los cambios antes de seguir.
@@ -104,7 +105,7 @@ Estas reglas valen para todo ejercicio que el alumno ejecuta en una herramienta:
 - Usa la identidad visual de la ficha en todos los materiales. Máximo tres colores, más los fondos de recuadro.
 - Si no hay logo, deja las portadas sin logo y avísalo. Si no hay paleta, propón una sobria de tres colores y pide confirmación.
 - Si un color no alcanza el contraste mínimo de lectura como texto, oscurécelo solo en el texto.
-- El estilo de la ficha cambia el diseño y el tono, nunca las reglas de lenguaje claro ni las secciones de cada material. Si la ficha deja vacíos los colores o la tipografía, se toman de los modelos aprobados. Los modelos guían el tono, nunca el contenido.
+- El estilo de la ficha cambia el diseño y el tono, nunca las reglas de lenguaje claro ni las secciones de cada material. Si la ficha deja vacíos los colores o la tipografía, se toman de los modelos aprobados. Si hay un modelo, la portada sigue la disposición de su carátula (alineación, franja de color y lugar del logo) con los colores, la tipografía y el logo de la ficha: la identidad visual de la ficha manda. Los modelos guían el tono, nunca el contenido.
 - Recuadros sombreados con borde izquierdo de color para ejemplos listos para copiar, "Aplícalo así" y "Cuidado con". Mismo estilo en todos los materiales.
 - Tablas con encabezado en el color principal, filas alternas en gris muy claro y sin bordes verticales.
 - Nada de texto justificado con huecos, páginas casi vacías ni viñetas de más de dos niveles.
@@ -340,6 +341,8 @@ FICHA DEL CURSO
 1. Curso
 - Nombre del curso (obligatorio):
 - Idioma del material:
+- Horas del curso:
+- Número de sesiones:
 - Sesiones (obligatorio). Una línea por sesión: número, título y alcance.
   1.
   2.

@@ -126,6 +126,16 @@ def guardar(carpeta_curso: Path, tipo: str, sesion: int | None, ficha: dict, mot
     return ruta
 
 
+# Las horas solo sirven para repartir el tema en sesiones. Ningún material muestra tiempos (SPEC §6).
+SOLO_PARA_LA_FICHA = ("- Horas del curso:",)
+
+
+def texto_para_materiales(carpeta_curso: Path, tipo: str, sesion: int | None = None) -> str:
+    """El .md de la ficha que recibe el redactor, sin los datos que no van a ningún material."""
+    texto = ruta_ficha(carpeta_curso, tipo, sesion, ".md").read_text(encoding="utf-8")
+    return "".join(l for l in texto.splitlines(keepends=True) if not l.startswith(SOLO_PARA_LA_FICHA))
+
+
 def _slug(texto: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", texto.lower()).strip("-") or "guardada"
 
@@ -411,7 +421,7 @@ def puede_empezar_material(carpeta_curso: Path, sesion: int) -> bool:
 def faltantes_para(carpeta_curso: Path, sesion: int, material: str) -> list[str]:
     """Lo que falta para producir un material: las dos fichas confirmadas y los datos de ese material."""
     if not puede_empezar_material(carpeta_curso, sesion):
-        return ["Confirma la ficha del curso y la ficha de la sesión."]
+        return ["Guarda completas la ficha del curso y la ficha de la sesión: al guardarlas completas quedan confirmadas."]
     from app.fichas import referencia   # importa este módulo: se carga aquí para no formar un círculo
     ficha = cargar(carpeta_curso, "sesion", sesion)
     return errores_del_material(ficha, material) + referencia.interpretar(carpeta_curso, ficha)[1]

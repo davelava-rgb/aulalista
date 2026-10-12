@@ -30,6 +30,7 @@ class Estilo:
     linea_titulo1: bool = False   # línea fina del color principal bajo cada Título 1
     borde_recuadro: int = 24  # grosor del borde izquierdo, en octavos de punto (Word)
     acento_en_titulo2: bool = False
+    logo: str = ""            # lugar del logo en la portada: izquierda, centro o derecha; vacío, como el texto
 
 
 ESTILOS = {

@@ -67,6 +67,8 @@
   </ul>
   {% endif %}
   <input type="file" id="{{ c.id }}" name="{{ c.id }}.archivos" accept=".pdf" multiple>
+{% elif k.tipo == "numero" %}
+  <input type="number" class="texto numero" id="{{ c.id }}" name="{{ c.id }}" value="{{ c.valor }}" min="1" step="1" inputmode="numeric">
 {% else %}
   <textarea id="{{ c.id }}" name="{{ c.id }}" rows="1" class="corto">{{ c.valor }}</textarea>
 {% endif %}
@@ -110,7 +112,7 @@
 
 <p class="estado-ficha {{ 'confirmada' if ficha.confirmada else 'pendiente' }}">
   {% if ficha.confirmada %}Confirmada.{% if desactualizados %} Los materiales {{ desactualizados | join(', ') }} quedaron desactualizados.{% endif %}
-  {% else %}Sin confirmar. Ningún material empieza sin las dos fichas confirmadas.{% endif %}
+  {% else %}Sin confirmar. Queda confirmada al guardarla completa. Ningún material empieza sin las dos fichas confirmadas.{% endif %}
 </p>
 
 {% if propuesta.estado == "trabajando" %}
@@ -122,7 +124,7 @@
 
 {% if errores %}
 <section class="mensaje" role="alert">
-  <h2>Antes de confirmar</h2>
+  <h2>Para confirmarla falta</h2>
   <ul>{% for e in errores %}<li>{{ e }}</li>{% endfor %}</ul>
 </section>
 {% endif %}
@@ -156,21 +158,28 @@
         {{ campo(e) }}
       {% endif %}
     {% endfor %}
+    {% set extra = completar.get(s.titulo) %}
+    {% if extra %}
+    <div class="completar">
+      <button type="submit" name="accion" value="completar.{{ extra.clave }}" class="secundario" {% if propuesta.estado == "trabajando" %}disabled{% endif %}>{{ extra.boton }}</button>
+      <p class="ayuda">{{ extra.ayuda }} Gasta tokens.</p>
+    </div>
+    {% endif %}
   </section>
   {% endfor %}
 
   {% set ocupada = propuesta.estado == "trabajando" %}
   <div class="acciones">
     {% if hay_propuestos and not ficha.confirmada %}
-    <button type="submit" name="accion" value="aceptar" {% if ocupada %}disabled{% endif %}>Aceptar lo propuesto y confirmar</button>
+    <button type="submit" name="accion" value="aceptar" {% if ocupada %}disabled{% endif %}>Aceptar lo propuesto y guardar</button>
     {% endif %}
     <button type="submit" name="accion" value="guardar" {% if hay_propuestos and not ficha.confirmada %}class="secundario"{% endif %} {% if ocupada %}disabled{% endif %}>Guardar</button>
     <button type="submit" name="accion" value="proponer" class="secundario" {% if ocupada %}disabled{% endif %}>Proponer desde las fuentes</button>
-    <button type="submit" name="accion" value="confirmar" class="secundario" {% if ocupada %}disabled{% endif %}>Confirmar ficha</button>
   </div>
-  <p class="nota">Con fuentes convertidas, la ficha se propone sola la primera vez que la abres. «Proponer desde las fuentes»
-    solo llena campos vacíos y gasta tokens. «Aceptar lo propuesto y confirmar» guarda lo que corregiste, acepta lo
-    marcado «Propuesto» y confirma.</p>
+  <p class="nota">«Guardar» guarda la ficha y, si está completa, la confirma. Con fuentes convertidas, la ficha se
+    propone sola la primera vez que la abres. «Proponer desde las fuentes» y los botones «Completar» solo llenan
+    campos vacíos y gastan tokens. «Aceptar lo propuesto y guardar» guarda lo que corregiste, acepta lo marcado
+    «Propuesto» y confirma.</p>
 </form>
 
 {% if versiones %}
@@ -248,8 +257,9 @@
 
   formulario.addEventListener("submit", (evento) => {
     const boton = evento.submitter;
-    if (boton && boton.value !== "guardar") {
-      boton.textContent = boton.value === "proponer" ? "Leyendo las fuentes… puede tardar" : "Revisando…";
+    if (boton) {
+      boton.textContent = boton.value === "proponer" ? "Leyendo las fuentes… puede tardar"
+        : boton.value.startsWith("completar.") ? "Completando… puede tardar" : "Guardando…";
       setTimeout(() => document.querySelectorAll("#form-ficha button").forEach((b) => (b.disabled = true)), 0);
     }
   });

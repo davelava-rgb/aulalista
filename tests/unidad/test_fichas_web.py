@@ -25,16 +25,18 @@ def test_la_pagina_muestra_la_plantilla_y_las_preguntas_pendientes(curso):
     assert "Responde primero estas 2" in r.text   # nombre y sesiones: los dos obligatorios del curso
 
 
-def test_guardar_y_confirmar_con_datos_faltantes(curso):
-    r = cliente.post("/cursos/scrum/ficha", data={"accion": "confirmar", "curso.nombre": "Scrum Master con IA"})
-    assert "La ficha no se confirmó." in r.text
+def test_guardar_con_datos_faltantes_guarda_sin_confirmar(curso):
+    r = cliente.post("/cursos/scrum/ficha", data={"accion": "guardar", "curso.nombre": "Scrum Master con IA"})
+    assert "Ficha guardada. Todavía no está confirmada." in r.text
+    assert "Para confirmarla falta" in r.text
     assert "Falta «Sesiones. Una línea por sesión: número, título y alcance.»." in r.text
     assert almacen.valor(almacen.cargar(curso, "curso"), "curso.nombre") == "Scrum Master con IA"
 
 
-def test_confirmar_la_ficha_del_curso_abre_las_sesiones(curso):
-    r = cliente.post("/cursos/scrum/ficha", data={"accion": "confirmar", **datos.CURSO})
-    assert "Ficha del curso confirmada." in r.text
+def test_guardar_la_ficha_del_curso_completa_la_confirma_y_abre_las_sesiones(curso):
+    r = cliente.post("/cursos/scrum/ficha", data={"accion": "guardar", **datos.CURSO})
+    assert "Ficha del curso guardada y confirmada." in r.text
+    assert almacen.cargar(curso, "curso")["confirmada"] is True
     pagina = cliente.get("/cursos/scrum").text
     assert "1. Agilidad y fundamentos de Scrum" in pagina
     assert "/cursos/scrum/sesiones/2/ficha" in pagina
@@ -44,15 +46,15 @@ def test_la_ficha_de_la_sesion_espera_a_la_del_curso(curso):
     assert cliente.get("/cursos/scrum/sesiones/1/ficha").status_code == 409
 
 
-def test_confirmar_la_ficha_de_la_sesion_desde_la_pagina(curso, entorno, monkeypatch):
+def test_guardar_la_ficha_de_la_sesion_completa_la_confirma(curso, entorno, monkeypatch):
     entorno["env"].write_text("ANTHROPIC_API_KEY=sk-ant-de-prueba\n", encoding="utf-8")
-    cliente.post("/cursos/scrum/ficha", data={"accion": "confirmar", **datos.CURSO})
+    cliente.post("/cursos/scrum/ficha", data={"accion": "guardar", **datos.CURSO})
     revisor = consulta_simulada(structured_output={"ejercicios": [
         {"numero": n, "funciona_solo": True, "sin_llenar_a_mano": True, "motivo": "Cumple"} for n in (1, 2, 3)]})
     original = flujo.confirmar_sesion
     monkeypatch.setattr(flujo, "confirmar_sesion", lambda c, cu, s: original(c, cu, s, consulta=revisor))
-    r = cliente.post("/cursos/scrum/sesiones/1/ficha", data={"accion": "confirmar", **datos.SESION})
-    assert "Ficha de la sesión confirmada. Se escribió verificacion.json." in r.text
+    r = cliente.post("/cursos/scrum/sesiones/1/ficha", data={"accion": "guardar", **datos.SESION})
+    assert "Ficha de la sesión guardada y confirmada. Se escribió verificacion.json." in r.text
     assert (curso / "sesiones" / "S1" / "verificacion.json").exists()
     assert "Confirmada" in cliente.get("/cursos/scrum").text
 
@@ -127,7 +129,7 @@ def test_con_fuentes_la_ficha_se_propone_sola_una_vez(curso, monkeypatch):
     _esperar_hilos()
     pagina = cliente.get("/cursos/scrum/ficha").text
     assert "AulaLista llenó la ficha desde las fuentes." in pagina
-    assert "Jefes de proyecto" in pagina and "Aceptar lo propuesto y confirmar" in pagina
+    assert "Jefes de proyecto" in pagina and "Aceptar lo propuesto y guardar" in pagina
     cliente.get("/cursos/scrum/ficha")
     _esperar_hilos()
     assert llamadas == ["curso"]          # una sola vez: recargar no vuelve a gastar tokens
@@ -146,7 +148,7 @@ def test_mientras_se_propone_los_botones_esperan(curso):
     flujo.marcar_propuesta_en_curso(curso, "curso")
     pagina = cliente.get("/cursos/scrum/ficha").text
     assert 'id="propuesta-en-curso"' in pagina
-    assert 'value="confirmar" class="secundario" disabled' in pagina
+    assert 'value="guardar"  disabled' in pagina
 
 
 def test_si_la_propuesta_falla_la_pagina_lo_dice(curso, monkeypatch):
@@ -166,7 +168,7 @@ def test_aceptar_lo_propuesto_confirma_la_ficha(curso):
     almacen.guardar(curso, "curso", None, ficha)
     formulario = {k: v for k, v in datos.CURSO.items()}
     r = cliente.post("/cursos/scrum/ficha", data={"accion": "aceptar", **formulario})
-    assert "Ficha del curso confirmada." in r.text
+    assert "Ficha del curso guardada y confirmada." in r.text
     guardada = almacen.cargar(curso, "curso")
     assert guardada["confirmada"] is True
     assert guardada["campos"]["caso.empresa"]["estado"] == ""
@@ -194,3 +196,43 @@ def test_un_estado_a_medio_escribir_no_rompe_la_pagina(curso):
     ruta.write_text("", encoding="utf-8")          # el instante en que el archivo se está escribiendo
     assert flujo.estado_propuesta(curso, "curso")["estado"] == "trabajando"
     assert cliente.get("/cursos/scrum/ficha").status_code == 200
+
+
+# ---------- Guardar confirma y botones «Completar» (PLAN.md §0, decisión 28) ----------
+
+def test_la_ficha_no_tiene_boton_confirmar(curso):
+    pagina = cliente.get("/cursos/scrum/ficha").text
+    assert 'value="confirmar"' not in pagina and "Confirmar ficha" not in pagina
+    assert 'value="guardar"' in pagina
+
+
+def test_guardar_una_ficha_confirmada_sin_cambios_no_desactualiza_materiales(curso, monkeypatch):
+    cliente.post("/cursos/scrum/ficha", data={"accion": "guardar", **datos.CURSO})
+    llamadas = []
+    monkeypatch.setattr(flujo, "confirmar_curso", lambda c: llamadas.append(c))
+    r = cliente.post("/cursos/scrum/ficha", data={"accion": "guardar", **datos.CURSO})
+    assert "Ficha guardada. Sigue confirmada." in r.text and llamadas == []
+
+
+def test_la_ficha_del_curso_tiene_horas_numero_de_sesiones_y_tres_botones_completar(curso):
+    pagina = cliente.get("/cursos/scrum/ficha").text
+    assert 'id="curso.horas"' in pagina and 'type="number"' in pagina
+    assert 'id="curso.numero_sesiones"' in pagina
+    for clave in ("sesiones", "caso", "datos"):
+        assert f'value="completar.{clave}"' in pagina
+    almacen.guardar(curso, "curso", None, datos.ficha("curso", datos.CURSO))
+    flujo.confirmar_curso(curso)
+    assert 'value="completar.' not in cliente.get("/cursos/scrum/sesiones/1/ficha").text
+
+
+def test_completar_desde_la_pagina_llena_lo_vacio_con_lo_que_se_escribio(curso, monkeypatch):
+    vistos = []
+
+    async def completar(carpeta, nombre, clave, consulta=None):
+        vistos.append((clave, almacen.valor(almacen.cargar(carpeta, "curso"), "curso.numero_sesiones")))
+        return "Propuse «Sesiones». Revisa lo marcado «Propuesto» y guarda."
+    monkeypatch.setattr(flujo, "completar", completar)
+    r = cliente.post("/cursos/scrum/ficha", data={"accion": "completar.sesiones", "curso.nombre": "Excel",
+                                                  "curso.numero_sesiones": "4"})
+    assert "Propuse «Sesiones»." in r.text
+    assert vistos == [("sesiones", "4")]   # lo escrito se guarda antes de completar

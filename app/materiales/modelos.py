@@ -3,6 +3,8 @@
 Un programa, sin IA, saca de cada PDF los colores, la tipografía y un pasaje corto de prosa.
 - Los colores y la tipografía solo llenan lo que la ficha del curso deja vacío: la ficha manda.
 - El pasaje va al redactor solo como guía de tono. Las secciones siguen las de la skill.
+- De la primera página (la carátula) saca su disposición: si el título va centrado, si hay una franja de color
+  arriba y dónde va el logo. La portada copia esa disposición con los colores y el logo de la ficha (decisión 28).
 Cada modelo se analiza una sola vez: el resultado queda en modelos/analisis.json con su huella.
 """
 
@@ -21,6 +23,8 @@ ANALISIS = "analisis.json"
 PALABRAS_DE_MUESTRA = 180
 MINIMO_DE_PALABRAS_POR_PARRAFO = 25
 MAXIMO_DE_PAGINAS = 20
+CENTRADO = 0.05            # el título está centrado si su centro se aparta menos del 5 % del ancho
+MARGEN_IZQUIERDO = 0.15    # y si empieza después del 15 % del ancho
 
 
 def carpeta(carpeta_curso: Path) -> Path:
@@ -64,12 +68,44 @@ def _nombre_de_fuente(nombre: str) -> str:
     return re.sub(r"(PSMT|MT|PS)$", "", nombre).strip()
 
 
+def _disposicion(pagina) -> dict:
+    """Disposición de la carátula: título centrado, franja de color arriba y lugar del logo."""
+    ancho, alto = pagina.rect.width, pagina.rect.height
+    titulo = None   # (tamaño de letra, caja del renglón)
+    for bloque in pagina.get_text("dict")["blocks"]:
+        for linea in bloque.get("lines", []):
+            for tramo in linea["spans"]:
+                if tramo["text"].strip() and (titulo is None or tramo["size"] > titulo[0]):
+                    titulo = (tramo["size"], linea["bbox"])
+    centrada = False
+    if titulo:
+        x0, _, x1, _ = titulo[1]
+        centrada = abs((x0 + x1) / 2 - ancho / 2) < CENTRADO * ancho and x0 > MARGEN_IZQUIERDO * ancho
+    franja = False
+    for dibujo in pagina.get_drawings():
+        color, rect = _hex_de_relleno(dibujo.get("fill")), dibujo.get("rect")
+        if (color and rect and _luminancia(color) < 0.85 and rect.width >= 0.8 * ancho
+                and 0.01 * alto <= rect.height <= 0.2 * alto and rect.y0 <= 0.25 * alto):
+            franja = True
+    logo = ""
+    arriba_del_titulo = titulo[1][1] if titulo else alto
+    for imagen in pagina.get_image_info():
+        x0, y0, x1, y1 = imagen["bbox"]
+        if (x1 - x0) * (y1 - y0) < 0.3 * ancho * alto and y1 <= arriba_del_titulo + 0.02 * alto:
+            centro = (x0 + x1) / 2 / ancho
+            logo = "izquierda" if centro < 0.38 else "derecha" if centro > 0.62 else "centro"
+            break
+    return {"centrada": centrada, "franja": franja, "logo": logo}
+
+
 def analizar(ruta: Path) -> dict:
     """Colores del texto, rellenos, fuentes y un pasaje de prosa, contados por cantidad de letras."""
     texto_por_color, relleno_por_color, letras_por_fuente = Counter(), Counter(), Counter()
-    parrafos = []
+    parrafos, portada = [], {}
     with pymupdf.open(ruta) as documento:
         for numero, pagina in enumerate(documento):
+            if numero == 0:
+                portada = _disposicion(pagina)
             if numero >= MAXIMO_DE_PAGINAS:
                 break
             for bloque in pagina.get_text("dict")["blocks"]:
@@ -94,6 +130,7 @@ def analizar(ruta: Path) -> dict:
         "rellenos": relleno_por_color.most_common(12),
         "fuentes": letras_por_fuente.most_common(6),
         "muestra": _muestra(parrafos),
+        "portada": portada,
     }
 
 
@@ -117,7 +154,7 @@ def _analisis(carpeta_curso: Path) -> list[tuple[str, dict]]:
     for ruta in rutas:
         huella = convertir.huella(ruta)
         entrada = guardado.get(ruta.name)
-        if not entrada or entrada.get("huella") != huella:
+        if not entrada or entrada.get("huella") != huella or "portada" not in entrada:
             entrada = {"huella": huella, **analizar(ruta)}
             guardado[ruta.name] = entrada
             cambio = True
@@ -168,6 +205,14 @@ def apariencia(carpeta_curso: Path, tipografias_conocidas: tuple[str, ...]) -> d
 
 def _distancia(a: str, b: str) -> float:
     return sum(abs(int(a[i:i + 2], 16) - int(b[i:i + 2], 16)) for i in (0, 2, 4))
+
+
+def disposicion_de_portada(carpeta_curso: Path) -> tuple[str, dict]:
+    """La disposición de la carátula del primer modelo, con su archivo. Vacío si no hay modelo."""
+    for nombre, entrada in _analisis(carpeta_curso):
+        if entrada.get("portada"):
+            return nombre, entrada["portada"]
+    return "", {}
 
 
 def muestra_de_tono(carpeta_curso: Path) -> tuple[str, str]:

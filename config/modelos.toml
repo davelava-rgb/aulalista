@@ -55,3 +55,9 @@ esfuerzo = "medium"
 modelo = "claude-opus-5-5"
 tope_usd = 2.00
 max_turns = 30
+
+# Botones «Completar» de la ficha del curso: sesiones, caso y datos fijos (PLAN.md §0, decisión 28).
+[completar_ficha]
+modelo = "claude-sonnet-5-5"
+tope_usd = 0.40
+max_turns = 15

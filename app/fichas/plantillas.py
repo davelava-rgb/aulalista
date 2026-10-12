@@ -63,6 +63,8 @@ FICHA_DEL_CURSO = (
         Seccion("1. Curso", (
             _c("curso.nombre", "Nombre del curso (obligatorio)"),
             _c("curso.idioma", "Idioma del material"),
+            _c("curso.horas", "Horas del curso"),
+            _c("curso.numero_sesiones", "Número de sesiones"),
             _c("curso.sesiones", "Sesiones (obligatorio). Una línea por sesión: número, título y alcance.",
                tipo="lista", dos_puntos=False, vacio=("1.", "2.", "3.")),
         )),

@@ -8,6 +8,7 @@ el verificador y los generadores leen la ficha igual. Tipos:
 - "color": un color en hexadecimal; el primero muestra también las paletas listas.
 - "logo": un archivo PNG o JPG que se sube a la carpeta del curso, o «sin logo».
 - "archivos": uno o varios PDF que se suben a cursos/[curso]/modelos/.
+- "numero": un número entero positivo.
 """
 
 import re
@@ -38,6 +39,9 @@ _COLOR = {"tipo": "color"}
 
 CONTROLES = {
     "curso.idioma": {"tipo": "lista", "opciones": IDIOMAS, "otro": True},
+    "curso.horas": {"tipo": "numero", "titulo": "Horas del curso",
+                    "ayuda": "Solo sirve para repartir el tema en sesiones. Ningún material muestra tiempos."},
+    "curso.numero_sesiones": {"tipo": "numero", "titulo": "Número de sesiones"},
     "visual.logo": {"tipo": "logo", "titulo": "Logo",
                     "ayuda": "Sube un PNG o JPG. Queda guardado en la carpeta del curso."},
     "visual.principal": {"tipo": "color", "paletas": True,

@@ -132,7 +132,8 @@ def _numero_de_pagina(parrafo, identidad: Identidad) -> None:
 def _portada(documento: Document, identidad: Identidad, portada: Portada) -> None:
     """Portada limpia: logo si existe, curso, sesión, material, docente y contacto. Sin imágenes decorativas.
 
-    El estilo decide si va centrada y si lleva una franja de color arriba (decisión 27).
+    El estilo decide si va centrada y si lleva una franja de color arriba (decisión 27). Con un modelo, lo decide
+    su carátula, que también da el lugar del logo (decisión 28).
     """
     diseno = identidad.estilo
     inicio = len(documento.paragraphs)
@@ -140,8 +141,10 @@ def _portada(documento: Document, identidad: Identidad, portada: Portada) -> Non
         _franja(documento, identidad)
     for _ in range(3 if diseno.franja else 4):
         documento.add_paragraph()
+    parrafo_logo = None
     if identidad.logo is not None:
         documento.add_picture(str(identidad.logo), width=Cm(4))
+        parrafo_logo = documento.paragraphs[-1]
     documento.add_paragraph(portada.curso, style="Title")
     sesion = documento.add_paragraph(portada.sesion)
     sesion.runs[0].font.size = Pt(16)
@@ -158,7 +161,13 @@ def _portada(documento: Document, identidad: Identidad, portada: Portada) -> Non
     if diseno.portada_centrada:
         for parrafo in documento.paragraphs[inicio:]:
             parrafo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    if parrafo_logo is not None and diseno.logo in LUGAR_DEL_LOGO:
+        parrafo_logo.alignment = LUGAR_DEL_LOGO[diseno.logo]
     documento.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
+
+
+LUGAR_DEL_LOGO = {"izquierda": WD_ALIGN_PARAGRAPH.LEFT, "centro": WD_ALIGN_PARAGRAPH.CENTER,
+                  "derecha": WD_ALIGN_PARAGRAPH.RIGHT}
 
 
 def lineas_de_contacto(contacto: str) -> list[str]:

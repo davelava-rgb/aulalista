@@ -9,6 +9,7 @@ Reglas de la skill (Paso 1 y Paso 2):
 
 import hashlib
 import json
+import re
 import time
 import unicodedata
 from pathlib import Path
@@ -84,7 +85,7 @@ def _dice_literal(carpeta_curso: Path, archivo: str, texto: str) -> bool:
 # diseño, que elige el profesor. El docente y el contacto son datos de personas reales: solo se toman si la fuente
 # los dice tal cual; nunca se proponen.
 NO_SE_PROPONEN = ("visual.", "modelos.", "sesion.exclusiones")   # las exclusiones las decide el profesor (decisión 23)
-SOLO_TAL_CUAL = ("portada.",)
+SOLO_TAL_CUAL = ("portada.", "curso.horas", "curso.numero_sesiones")   # las horas y las sesiones las da el profesor
 _INTENTOS_DE_REEMPLAZO = 40   # 40 × 0,05 s: unos dos segundos
 
 
@@ -213,7 +214,7 @@ def aplicar_propuesta(carpeta_curso: Path, ficha: dict, propuesta: dict) -> dict
 
 async def proponer(carpeta_curso: Path, curso: str, tipo: str, sesion: int | None = None, consulta=agente.query) -> dict:
     if tipo == "sesion" and not almacen.cargar(carpeta_curso, "curso")["confirmada"]:
-        raise FichaDelCursoSinConfirmar("Confirma primero la ficha del curso.")
+        raise FichaDelCursoSinConfirmar("Guarda primero la ficha del curso completa: así queda confirmada.")
     ficha = almacen.cargar(carpeta_curso, tipo, sesion)
     if not verificacion.fuentes_utilizables(carpeta_curso) and tipo == "curso":
         almacen.marcar_faltantes(ficha)
@@ -229,6 +230,152 @@ async def proponer(carpeta_curso: Path, curso: str, tipo: str, sesion: int | Non
     resumen = aplicar_propuesta(carpeta_curso, ficha, propuesta)
     almacen.guardar(carpeta_curso, tipo, sesion, ficha, "propuesta desde las fuentes")
     return resumen
+
+
+# ---------- Completar secciones de la ficha del curso (PLAN.md §0, decisión 28) ----------
+
+_CURSO = ("curso.nombre", "curso.idioma", "curso.horas", "curso.numero_sesiones")
+_PUBLICO = ("publico.quienes", "publico.saben", "publico.valoran")
+_CASO = ("caso.empresa", "caso.areas", "caso.moneda")
+
+# Cada botón «Completar» llena los campos vacíos de su sección con lo que ya dicen las secciones anteriores.
+COMPLETAR = {
+    "sesiones": {
+        "seccion": "1. Curso", "boton": "Completar las sesiones", "destino": ("curso.sesiones",),
+        "usa": _CURSO + _PUBLICO, "exige": ("curso.nombre", "curso.numero_sesiones"),
+        "ayuda": "Reparte el tema en el número de sesiones, según las horas y el público (sección 2). "
+                 "Llena «Sesiones» si está vacío.",
+    },
+    "caso": {
+        "seccion": "3. Caso del curso", "boton": "Completar el caso", "destino": _CASO,
+        "usa": _CURSO + ("curso.sesiones",) + _PUBLICO, "exige": ("curso.nombre",),
+        "ayuda": "Propone una empresa o institución ficticia que encaje con el curso y el público. Llena solo lo vacío.",
+    },
+    "datos": {
+        "seccion": "4. Datos fijos del caso", "boton": "Completar los datos fijos", "destino": ("datos.fecha", "datos.fijos"),
+        "usa": _CURSO + ("curso.sesiones",) + _PUBLICO + _CASO, "exige": ("curso.nombre", "caso.empresa"),
+        "ayuda": "Propone la fecha de referencia y las cifras, reglas y nombres del caso. Llena solo lo vacío.",
+    },
+}
+
+ESQUEMA_COMPLETAR = {
+    "type": "object",
+    "properties": {"campos": {"type": "array", "items": {
+        "type": "object",
+        "properties": {"id": {"type": "string"}, "valor": {"type": "string"}},
+        "required": ["id", "valor"], "additionalProperties": False,
+    }}},
+    "required": ["campos"],
+    "additionalProperties": False,
+}
+
+_TIEMPOS = re.compile(r"\b(horas?|minutos?|segundos?|hrs?)\b", re.I)
+
+
+def _etiquetas() -> dict[str, str]:
+    return {c.id: c.nombre for c, _ in plantillas.campos_de("curso")}
+
+
+def pedido_de_completar(ficha: dict, clave: str, fuentes: list[str]) -> str:
+    datos = COMPLETAR[clave]
+    etiquetas = _etiquetas()
+    vacios = [c for c in datos["destino"] if not almacen.valor(ficha, c).strip()]
+    lineas = [
+        "Vas a completar una parte de la ficha de un curso. Lo que ya está escrito lo decidió el profesor.",
+        "",
+        "Lo que ya dice la ficha:",
+        *[f"- {etiquetas[c]}: {almacen.valor(ficha, c).strip()}" for c in datos["usa"] if almacen.valor(ficha, c).strip()],
+        "",
+        "Campos que debes llenar (id: etiqueta):",
+        *[f"- {c}: {etiquetas[c]}" for c in vacios],
+        "",
+        "Reglas:",
+        "- Devuelve un dato por campo, con su id y su valor. No devuelvas otros campos.",
+        "- Lo que propones encaja con todo lo que ya dice la ficha y no lo contradice.",
+        "- No inventes hechos del mundo real: ni cifras reales, ni estudios, ni personas reales, ni funciones de herramientas.",
+        "- No escribas horas, minutos ni ningún otro tiempo: ningún material muestra tiempos.",
+        "- Escribe en el idioma del curso, en oraciones cortas y claras, sin jerga ni lenguaje publicitario.",
+        "- En los campos de varias líneas, escribe un elemento por línea.",
+    ]
+    if clave == "sesiones":
+        numero = almacen.valor(ficha, "curso.numero_sesiones").strip()
+        lineas += [
+            f"- Escribe exactamente {numero} líneas, una por sesión, que empiecen con su número: «1. Título: alcance».",
+            "- Reparte el tema de forma pareja entre las sesiones. Usa las horas solo para medir cuánto cabe en cada una.",
+            "- El alcance dice qué temas cubre la sesión, en una o dos oraciones. Sigue el orden lógico del tema.",
+            "- Ajusta el nivel a lo que el público ya sabe y a lo que valora.",
+        ]
+        if fuentes:
+            lineas += [
+                "- Si las fuentes del curso cubren el tema, sigue sus capítulos y su orden. Son los archivos .jsonl de "
+                "esta carpeta: una línea por pasaje. Busca con Grep y lee con Read. Fuentes:",
+                *[f"  - {f}" for f in fuentes],
+            ]
+    elif clave == "caso":
+        lineas += [
+            "- El caso es ficticio: una empresa o institución que no existe, con su rubro, que encaja con el tema y el público.",
+            "- Las áreas son de 3 a 5, en una sola línea, separadas por comas. Entre ellas rotan los ejemplos.",
+            "- La moneda y el país van juntos, por ejemplo «Dólares estadounidenses (USD), El Salvador».",
+        ]
+    else:
+        lineas += [
+            "- La fecha de referencia es una fecha ficticia, con día, mes y año.",
+            "- En las cifras, reglas y nombres escribe de 5 a 8 líneas con la forma «Etiqueta: valor».",
+            "- Cada dato es ficticio y coherente con la empresa, sus áreas, su moneda y su país.",
+            "- Los nombres de personas son ficticios y no se parecen a los de personas reales conocidas.",
+        ]
+    return "\n".join(lineas)
+
+
+async def completar(carpeta_curso: Path, curso: str, clave: str, consulta=agente.query) -> str:
+    """Llena los campos vacíos de una sección de la ficha del curso. Devuelve el mensaje para la página."""
+    datos = COMPLETAR[clave]
+    ficha = almacen.cargar(carpeta_curso, "curso")
+    etiquetas = _etiquetas()
+    faltan = [etiquetas[c] for c in datos["exige"] if not almacen.valor(ficha, c).strip()]
+    if faltan:
+        return "Para completar, llena primero " + " y ".join(f"«{f}»" for f in faltan) + "."
+    vacios = [c for c in datos["destino"] if not almacen.valor(ficha, c).strip()]
+    if not vacios:
+        return "Esa parte ya está llena. Borra lo que quieras cambiar y pulsa otra vez «Completar»."
+    fuentes = verificacion.fuentes_utilizables(carpeta_curso) if clave == "sesiones" else []
+    opciones = {}
+    if fuentes:
+        (carpeta_curso / "fuentes_texto").mkdir(parents=True, exist_ok=True)
+        opciones = {"cwd": carpeta_curso / "fuentes_texto", "herramientas": ("Read", "Grep", "Glob")}
+    respuesta = await agente.consultar(
+        pedido_de_completar(ficha, clave, fuentes), tarea="completar_ficha", esquema=ESQUEMA_COMPLETAR,
+        curso=curso, etapa=f"completar ficha: {clave}", consulta=consulta, **opciones,
+    )
+    llenados = []
+    for dato in respuesta.get("campos", []):
+        texto = dato["valor"].strip()
+        if dato["id"] in vacios and texto and dato["id"] not in llenados:
+            ficha["campos"][dato["id"]] = {"valor": texto, "origen": "deducido", "estado": almacen.PROPUESTO}
+            llenados.append(dato["id"])
+    if not llenados:
+        return "La propuesta llegó vacía. No cambié nada."
+    ficha["confirmada"] = False
+    almacen.guardar(carpeta_curso, "curso", None, ficha, f"completada {clave}")
+    nombres = ", ".join(f"«{etiquetas[c]}»" for c in llenados)
+    return " ".join([f"Propuse {nombres}. Revisa lo marcado «Propuesto» y guarda.", *_avisos_de_completar(ficha, clave)])
+
+
+def _avisos_de_completar(ficha: dict, clave: str) -> list[str]:
+    """Lo que un programa comprueba en la propuesta. No la descarta: el profesor decide."""
+    avisos = []
+    if clave == "sesiones":
+        numero = almacen.valor(ficha, "curso.numero_sesiones").strip()
+        cuantas = len(almacen.sesiones_del_curso(ficha))
+        if numero.isdigit() and cuantas != int(numero):
+            avisos.append(f"Ojo: pediste {numero} sesiones y la propuesta trae {cuantas}.")
+    if clave == "datos":
+        _, sin_formato = almacen.datos_fijos(ficha)
+        if sin_formato:
+            avisos.append(f"Ojo: {len(sin_formato)} líneas de los datos fijos no tienen la forma «Etiqueta: valor».")
+    if any(_TIEMPOS.search(almacen.valor(ficha, c)) for c in COMPLETAR[clave]["destino"]):
+        avisos.append("Ojo: la propuesta menciona un tiempo. Bórralo: ningún material muestra tiempos.")
+    return avisos
 
 
 # ---------- Propuesta automática al abrir la ficha (PLAN.md §0, decisión 17) ----------
@@ -295,7 +442,7 @@ async def proponer_sola(carpeta_curso: Path, curso: str, tipo: str, sesion: int 
         carpeta_curso, tipo, sesion, estado="lista",
         mensaje=(f"AulaLista llenó la ficha desde las fuentes. Datos tomados tal cual: {resumen['de_las_fuentes']}. "
                  f"Propuestos: {resumen['propuestos']}. Con dos versiones: {resumen['conflictos']}. "
-                 "Revisa lo marcado «Propuesto» y confirma."))
+                 "Revisa lo marcado «Propuesto» y guarda."))
     return resumen
 
 
@@ -373,7 +520,7 @@ def confirmar_curso(carpeta_curso: Path) -> dict:
 
 async def confirmar_sesion(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.query) -> dict:
     if not almacen.cargar(carpeta_curso, "curso")["confirmada"]:
-        raise FichaDelCursoSinConfirmar("Confirma primero la ficha del curso.")
+        raise FichaDelCursoSinConfirmar("Guarda primero la ficha del curso completa: así queda confirmada.")
     ficha = almacen.cargar(carpeta_curso, "sesion", sesion)
     lista = almacen.errores(ficha)
     if lista:

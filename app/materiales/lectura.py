@@ -92,7 +92,7 @@ def _referencia(carpeta_curso: Path, sesion: int) -> tuple[list[referencia.Tramo
 
 
 def _contexto(carpeta_curso: Path, sesion: int) -> str:
-    ficha_curso = almacen.ruta_ficha(carpeta_curso, "curso", extension=".md").read_text(encoding="utf-8")
+    ficha_curso = almacen.texto_para_materiales(carpeta_curso, "curso")
     ficha_sesion = almacen.ruta_ficha(carpeta_curso, "sesion", sesion, ".md").read_text(encoding="utf-8")
     fuentes = verificacion.fuentes_utilizables(carpeta_curso)
     tramos, excluir = _referencia(carpeta_curso, sesion)
@@ -253,7 +253,7 @@ def _portada(carpeta_curso: Path, sesion: int) -> docx.Portada:
 
 async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.query, contar_paginas=None) -> dict:
     if not almacen.puede_empezar_material(carpeta_curso, sesion):
-        raise NoSePuedeEmpezar("Confirma la ficha del curso y la ficha de la sesión antes de generar la lectura.")
+        raise NoSePuedeEmpezar("Guarda completas la ficha del curso y la ficha de la sesión antes de generar la lectura: así quedan confirmadas.")
     faltan = almacen.faltantes_para(carpeta_curso, sesion, CLAVE)
     if faltan:
         raise NoSePuedeEmpezar("Completa la ficha de la sesión antes de generar la lectura: " + " ".join(faltan))
