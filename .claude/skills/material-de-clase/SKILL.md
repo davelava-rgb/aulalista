@@ -388,7 +388,7 @@ FICHA DEL CURSO
 - ¿La herramienta de los alumnos acepta archivos adjuntos? (sí, no o no sé):
 
 8. Materiales
-- Materiales por sesión (por defecto, los seis):
+- Materiales por sesión (por defecto, los cinco):
 - Lo que nunca se incluye (por defecto: tiempos, puntajes, objetivos de aprendizaje, requisitos previos, glosarios, relleno, emojis y lenguaje publicitario):
 
 9. Modelos
@@ -432,11 +432,7 @@ FICHA DE LA SESIÓN
 - Respuesta correcta o resultado que debe salir:
 - Si la herramienta debe preguntar algo, respuesta exacta del alumno:
 
-5. Práctica interactiva
-- Estaciones (de 5 a 7): nombre y qué decide el alumno en cada una:
-- Última estación: qué arma el alumno para su propio trabajo:
-
-6. Evaluación práctica (PBQ)
+5. Evaluación práctica (PBQ)
 - Material que el alumno puede consultar durante la evaluación:
 - Forma de entrega de las respuestas:
 - Preguntas (por defecto, 3; repite este bloque por cada una)
@@ -446,6 +442,6 @@ FICHA DE LA SESIÓN
   Problema que el archivo trae a propósito:
   Respuesta correcta:
 
-7. Materiales de esta sesión
-- Cuáles se producen (por defecto, los seis):
+6. Materiales de esta sesión
+- Cuáles se producen (por defecto, los cinco):
 ```

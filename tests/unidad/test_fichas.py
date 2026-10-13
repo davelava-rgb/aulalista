@@ -151,7 +151,6 @@ def test_ficha_de_la_sesion_revisa_bloques_ejercicios_estaciones_y_preguntas():
     valores.pop("ejercicio.3.area"); valores.pop("ejercicio.3.accion"); valores.pop("ejercicio.3.entregable")
     valores.pop("ejercicio.3.archivo"); valores.pop("ejercicio.3.problema"); valores.pop("ejercicio.3.respuesta")
     valores.pop("ejercicio.2.problema")
-    valores["practica.estaciones"] = "Una\nDos"
     valores.pop("pregunta.1.respuesta")
     ficha = datos.ficha("sesion", valores)
     assert almacen.errores(ficha) == []          # para confirmar no se exigen los datos de los materiales
@@ -159,13 +158,11 @@ def test_ficha_de_la_sesion_revisa_bloques_ejercicios_estaciones_y_preguntas():
     laboratorio = almacen.errores_del_material(ficha, "laboratorio")
     assert "El laboratorio necesita de 3 a 5 ejercicios; tiene 2." in laboratorio
     assert "Ejercicio 2: falta el problema que trae a propósito." in laboratorio
-    assert almacen.errores_del_material(ficha, "práctica interactiva") == [
-        "La práctica necesita de 5 a 7 estaciones, una por línea; tiene 2."]
     assert "Pregunta 1: falta la respuesta correcta." in almacen.errores_del_material(ficha, "evaluación")
 
 
 def test_si_la_sesion_no_produce_un_material_no_se_exigen_sus_datos():
-    valores = {k: v for k, v in datos.SESION.items() if not k.startswith(("ejercicio.", "pregunta.", "practica."))}
+    valores = {k: v for k, v in datos.SESION.items() if not k.startswith(("ejercicio.", "pregunta."))}
     valores["materiales.cuales"] = "Lectura y diapositivas"
     ficha = datos.ficha("sesion", valores)
     assert almacen.errores(ficha) == [] and almacen.errores_del_material(ficha, "lectura") == []

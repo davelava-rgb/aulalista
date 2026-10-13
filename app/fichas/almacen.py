@@ -21,7 +21,8 @@ CONFLICTO = "conflicto"
 PROFESOR = "profesor"
 MAX_PREGUNTAS_POR_VEZ = 4  # SPEC §3: cuatro preguntas como máximo por vez
 
-MATERIALES = ("lectura", "diapositivas", "laboratorio", "guía del profesor", "práctica interactiva", "evaluación")
+# Sin práctica interactiva: se quitó la etapa 8 (PLAN.md §0, decisión 34).
+MATERIALES = ("lectura", "diapositivas", "laboratorio", "guía del profesor", "evaluación")
 
 
 class FichaIncompleta(ValueError):
@@ -225,13 +226,13 @@ def marcar_faltantes(ficha: dict) -> None:
 # ---------- Revisión ----------
 
 def materiales_de_la_sesion(ficha_sesion: dict) -> set[str]:
-    """Materiales que se producen. Vacío o «los seis» significa todos."""
+    """Materiales que se producen. Vacío, «los cinco» o «los seis» (fichas anteriores) significa todos."""
     texto = valor(ficha_sesion, "materiales.cuales").lower()
-    if not texto.strip() or "seis" in texto or "todos" in texto:
+    if not texto.strip() or "cinco" in texto or "seis" in texto or "todos" in texto:
         return set(MATERIALES)
     sin_tildes = texto.replace("í", "i").replace("á", "a").replace("ó", "o")
     claves = {"lectura": "lectura", "diapositiva": "diapositivas", "laboratorio": "laboratorio",
-              "guia": "guía del profesor", "practica": "práctica interactiva", "evaluacion": "evaluación"}
+              "guia": "guía del profesor", "evaluacion": "evaluación"}
     return {material for clave, material in claves.items() if clave in sin_tildes}
 
 
@@ -292,10 +293,6 @@ def errores_del_material(ficha: dict, material: str) -> list[str]:
                                      ("respuesta", "la respuesta correcta"), ("accion", "la acción del alumno")):
                 if not valor(ficha, f"ejercicio.{n}.{campo_id}"):
                     lista.append(f"Ejercicio {n}: falta {nombre}.")
-    if material == "práctica interactiva":
-        estaciones = _renglones(valor(ficha, "practica.estaciones"))
-        if not 5 <= len(estaciones) <= 7:
-            lista.append(f"La práctica necesita de 5 a 7 estaciones, una por línea; tiene {len(estaciones)}.")
     if material == "evaluación":
         ids = ("concepto", "tarea", "archivo", "problema", "respuesta")
         preguntas = bloques_llenos(ficha, "pregunta", plantillas.MAX_PREGUNTAS, ids)
