@@ -158,7 +158,7 @@ El ejercicio no lleva las secciones "Cómo se ve un buen resultado" ni "Criterio
 
 Imágenes:
 
-- Agrega una imagen solo cuando hace más clara una indicación. Ejemplos: dónde está una columna o una celda en el archivo de práctica, qué parte de un documento se debe cambiar, o el orden de un proceso.
+- Agrega una imagen solo cuando hace más clara una indicación. Como máximo una imagen por ejercicio. Ejemplos: dónde está una columna o una celda en el archivo de práctica, qué parte de un documento se debe cambiar, o el orden de un proceso.
 - Si la indicación se entiende sin imagen, no pongas imagen. Ninguna imagen es decorativa.
 - Genera cada imagen con un programa a partir del archivo de práctica real. La imagen muestra los mismos datos que el alumno verá al abrir el archivo.
 - Marca en la imagen el lugar exacto con un recuadro o una flecha de color ámbar, y un número si hay más de una marca.

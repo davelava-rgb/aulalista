@@ -341,9 +341,28 @@ class Paso(BaseModel):
 
 
 class Recuadro(BaseModel):
-    """Lo que el alumno copia. Si es un prompt: rol, contexto, tarea, formato de salida y restricciones."""
+    """Lo que el alumno copia (PLAN.md §0, decisión 33).
+    - «prompt»: rol, contexto, tarea, formato de salida y restricciones.
+    - «formula»: título («Fórmula 1 · Revisa si el riesgo se puede aceptar»), una línea de explicación y la fórmula.
+    - «plantilla»: un texto que el alumno completa; sus espacios por llenar son el tema del ejercicio."""
+    tipo: Literal["prompt", "formula", "plantilla"] = "prompt"
     titulo: str
+    explicacion: str = ""
     lineas: list[str] = Field(min_length=1)
+
+
+class Mejora(BaseModel):
+    """«Mejora el resultado (opcional)»: un pedido de seguimiento que enseña a iterar, con sus pasos y recuadros."""
+    texto: str = Field(min_length=1)
+    pasos: list[str] = Field(default_factory=list, max_length=6)
+    copiar: list[Recuadro] = Field(default_factory=list, max_length=2)
+
+
+class AntesDeEmpezar(BaseModel):
+    """Lo que comparten todos los ejercicios: el caso, la fecha de referencia, tablas y reglas (decisión 33)."""
+    contexto: list[str] = Field(min_length=1, max_length=5)
+    tablas: list[Tabla] = Field(default_factory=list, max_length=2)
+    reglas: list[str] = Field(default_factory=list, max_length=8)
 
 
 class Ejercicio(BaseModel):
@@ -352,12 +371,13 @@ class Ejercicio(BaseModel):
     titulo: str                          # con una acción concreta
     situacion: str                       # de 2 a 3 líneas que indican el área
     archivos: list[str] = Field(default_factory=list)
-    pasos: list[Paso] = Field(min_length=2, max_length=10)
-    copiar: list[Recuadro] = Field(min_length=1, max_length=2)
-    mejora: str = Field(min_length=1)    # «Mejora el resultado (opcional)»: un pedido de seguimiento
+    pasos: list[Paso] = Field(min_length=2, max_length=20)
+    copiar: list[Recuadro] = Field(min_length=1, max_length=4)
+    mejora: Mejora
 
 
 class Laboratorio(BaseModel):
+    antes_de_empezar: AntesDeEmpezar
     ejercicios: list[Ejercicio] = Field(min_length=3, max_length=5)
     archivos: list[ArchivoPractica] = Field(default_factory=list)
     pasajes: list[Pasaje] = Field(default_factory=list)
@@ -365,7 +385,11 @@ class Laboratorio(BaseModel):
 
 
 _VALOR = {"anyOf": [{"type": "string"}, {"type": "number"}, {"type": "null"}]}
+_ESQUEMA_RECUADRO = _objeto({"tipo": {"type": "string", "enum": ["prompt", "formula", "plantilla"]},
+                             "titulo": {"type": "string"}, "explicacion": {"type": "string"}, "lineas": TEXTOS})
 ESQUEMA_LABORATORIO = _objeto({
+    "antes_de_empezar": _objeto({"contexto": TEXTOS, "tablas": {"type": "array", "items": ESQUEMA_TABLA},
+                                 "reglas": TEXTOS}),
     "ejercicios": {"type": "array", "items": _objeto({
         "numero": {"type": "integer"},
         "area": {"type": "string"},
@@ -381,8 +405,9 @@ ESQUEMA_LABORATORIO = _objeto({
                 "descripcion": {"type": "string"},
             }), {"type": "null"}]},
         })},
-        "copiar": {"type": "array", "items": _objeto({"titulo": {"type": "string"}, "lineas": TEXTOS})},
-        "mejora": {"type": "string"},
+        "copiar": {"type": "array", "items": _ESQUEMA_RECUADRO},
+        "mejora": _objeto({"texto": {"type": "string"}, "pasos": TEXTOS,
+                           "copiar": {"type": "array", "items": _ESQUEMA_RECUADRO}}),
     })},
     "archivos": {"type": "array", "items": _objeto({
         "nombre": {"type": "string"},

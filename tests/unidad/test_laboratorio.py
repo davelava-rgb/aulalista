@@ -58,11 +58,22 @@ def test_genera_la_guia_los_archivos_las_figuras_y_el_zip(sesion):  # noqa: F811
     assert [c.text for c in tabla.rows[0].cells] == ["Archivo", "Ejercicio", "Contenido"]
     assert [tabla.cell(i, 0).text for i in range(1, 4)] == nombres
     titulos = [p.text for p in guia.paragraphs if p.style.name.startswith("Heading")]
-    assert titulos[:2] == ["Archivos de práctica", "Ejercicio 1 · Clasifica los pedidos de la semana"]
+    assert titulos[:3] == ["Antes de empezar", "Archivos de práctica", "Ejercicio 1 · Clasifica los pedidos de la semana"]
     assert titulos.count("Mejora el resultado (opcional)") == 3
-    assert "2. Revisa la columna Entrega de la hoja Pedidos. Mira la figura 1." in textos
+    assert "Cada ejercicio funciona solo. Puedes hacerlos en cualquier orden." in textos
+    assert "Los 3 archivos están en el archivo comprimido S1_Laboratorio_Archivos.zip." in textos
+    assert "Área: Ventas" in textos and "Situación" in textos
+    assert "S1_E1_pedidos-semana.xlsx. Tiene una hoja: Pedidos." in textos
+    assert "2.	Revisa la columna Entrega de la hoja Pedidos. Mira la figura 1." in textos
     assert "Figura 1. La columna Entrega de la hoja Pedidos." in textos
     assert "Figura 2. La oración del aviso que habla del Sprint." in textos
+    # Ejercicio 3: fórmulas en español en la guía, recuadro «Antes de copiar una fórmula» con su tabla.
+    tablas = [[c.text for c in fila.cells] for tabla in guia.tables for fila in tabla.rows]
+    assert ["Función en español", "Función en inglés"] in tablas and ["SI", "IF"] in tablas and ["PROMEDIO", "AVERAGE"] in tablas
+    celdas = " ".join(c.text for tabla in guia.tables for fila in tabla.rows for c in fila.cells)
+    assert '=SI(B2<5,"REVISAR","OK")' in celdas and "Fórmula 2 · Promedio de horas" in celdas
+    pie = guia.sections[0].footer.paragraphs[0].text
+    assert pie.startswith("Sesión 1 · Laboratorio · Página")
     assert len(guia.inline_shapes) == 2
     redaccion = consulta.llamadas[0]["prompt"]
     assert "## Material 3 · Laboratorio y archivos de práctica" in redaccion
@@ -98,6 +109,21 @@ def test_las_figuras_salen_del_archivo_real_con_marcas_ambar(sesion):  # noqa: F
     assert otra.letra_pt >= figuras.LETRA_MINIMA_PT and otra.ancho_cm <= figuras.ANCHO_MAXIMO_CM
     word = Image.open(rutas["figuras"] / "E2_paso2.png").convert("RGB")
     assert figuras.AMBAR in {c for _, c in word.getcolors(maxcolors=1 << 20)}
+
+
+def test_una_formula_en_espanol_se_guarda_en_ingles_dentro_del_archivo(tmp_path):
+    from app.materiales import estilo
+    from app.materiales.contenido import ArchivoPractica
+    archivo = ArchivoPractica.model_validate({
+        "nombre": "S1_E1_horas.xlsx", "descripcion": "Horas.", "parrafos": [], "tabla": None, "problema": "",
+        "hojas": [{"nombre": "Horas", "encabezados": ["Persona", "Horas", "Revisión"],
+                   "filas": [["Analista 1", 4, '=SI(Y(B2<5;B2>0);"REVISAR";"OK")'], ["Total", "=SUMA(B2:B2)", None]]}]})
+    identidad = estilo.Identidad(**estilo.PALETA_SOBRIA, tipografia="Calibri", logo=None)
+    hoja = openpyxl.load_workbook(practica.crear_excel(archivo, identidad, tmp_path / archivo.nombre))["Horas"]
+    assert hoja["C2"].value == '=IF(AND(B2<5,B2>0),"REVISAR","OK")'
+    assert hoja["B3"].value == "=SUM(B2:B2)"
+    assert practica.funciones_usadas(['=SI(Y(A1>2,B1),1,0)', "=PROMEDIO(B2:B3)"]) == [
+        ("SI", "IF"), ("Y", "AND"), ("PROMEDIO", "AVERAGE")]
 
 
 # ---------- Errores sembrados: los detecta un programa antes de crear los archivos ----------

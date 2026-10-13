@@ -22,6 +22,49 @@ EXTENSIONES = ("xlsx", "docx")
 ANCHO_MAXIMO_COLUMNA = 45
 # Lo que el alumno copia funciona tal cual: sin espacios por llenar (SKILL.md, «Ejercicios que se ejecutan»).
 POR_LLENAR = re.compile(r"\[[^\]\n]{0,40}\]|_{3,}|<[^<>\n]{1,40}>|\bX{3,}\b|\{\{?[^{}\n]{0,40}\}?\}")
+# En una fórmula, «<» y «>» son operadores: solo se buscan corchetes vacíos, guiones bajos y «XXX».
+POR_LLENAR_EN_FORMULA = re.compile(r"\[\s*\]|_{3,}|\bX{3,}\b")
+FIGURAS_POR_EJERCICIO = 1     # PLAN.md §0, decisión 33: una como máximo, y solo si hace falta
+
+
+def textos_del_ejercicio(e) -> list[str]:
+    """Todo lo que el alumno lee en un ejercicio, también en «Mejora el resultado»."""
+    recuadros = [*e.copiar, *e.mejora.copiar]
+    return [e.situacion, *[p.texto for p in e.pasos], *[r.explicacion for r in recuadros],
+            *[l for r in recuadros for l in r.lineas], e.mejora.texto, *e.mejora.pasos]
+
+
+# Nombres de las funciones: la guía los escribe en español; dentro del archivo, Excel los guarda en inglés.
+FUNCIONES = {
+    "SI": "IF", "Y": "AND", "O": "OR", "NO": "NOT", "SUMA": "SUM", "PROMEDIO": "AVERAGE", "CONTAR": "COUNT",
+    "CONTARA": "COUNTA", "CONTAR.SI": "COUNTIF", "CONTAR.SI.CONJUNTO": "COUNTIFS", "SUMAR.SI": "SUMIF",
+    "SUMAR.SI.CONJUNTO": "SUMIFS", "PROMEDIO.SI": "AVERAGEIF", "BUSCARV": "VLOOKUP", "BUSCARH": "HLOOKUP",
+    "BUSCARX": "XLOOKUP", "INDICE": "INDEX", "COINCIDIR": "MATCH", "SI.ERROR": "IFERROR", "REDONDEAR": "ROUND",
+    "MAX": "MAX", "MIN": "MIN", "HOY": "TODAY", "FECHA": "DATE", "DIAS": "DAYS", "TEXTO": "TEXT",
+    "CONCATENAR": "CONCATENATE", "IZQUIERDA": "LEFT", "DERECHA": "RIGHT", "EXTRAE": "MID", "LARGO": "LEN",
+    "MAYUSC": "UPPER", "ESPACIOS": "TRIM", "SIFECHA": "DATEDIF", "ABS": "ABS", "ENTERO": "INT",
+}
+_FUNCION = re.compile(r"(?<![A-Za-z0-9_.])([A-ZÁÉÍÓÚ][A-ZÁÉÍÓÚ0-9]*(?:\.[A-ZÁÉÍÓÚ0-9]+)*)\s*\(")
+
+
+def funciones_usadas(formulas: list[str]) -> list[tuple[str, str]]:
+    """Las funciones de las fórmulas de la guía, en español y en inglés, en orden de aparición."""
+    vistas = []
+    for formula in formulas:
+        for m in _FUNCION.finditer(formula.upper()):
+            nombre = m.group(1).replace("Í", "I")
+            if nombre in FUNCIONES and nombre not in vistas:
+                vistas.append(nombre)
+    return [(n, FUNCIONES[n]) for n in vistas]
+
+
+def formula_para_excel(formula: str) -> str:
+    """«=SUMA(B2:B9)» → «=SUM(B2:B9)»; los separadores «;» pasan a «,», como los guarda Excel."""
+    def cambiar(m):
+        nombre = m.group(1).upper().replace("Í", "I")
+        return FUNCIONES.get(nombre, m.group(1)) + "("
+    partes = re.split(r'("[^"]*")', formula)        # no se toca el texto entre comillas
+    return "".join(p if p.startswith('"') else _FUNCION.sub(cambiar, p).replace(";", ",") for p in partes)
 
 
 def patron_de_nombre(sesion: int, ejercicio: int | None = None) -> re.Pattern:
@@ -41,6 +84,8 @@ def _valor(texto):
     if not isinstance(texto, str):
         return texto
     limpio = texto.strip()
+    if limpio.startswith("="):
+        return formula_para_excel(limpio)
     if re.fullmatch(r"-?\d+", limpio) and not (len(limpio) > 1 and limpio.lstrip("-").startswith("0")):
         return int(limpio)
     if re.fullmatch(r"-?\d+\.\d+", limpio):
@@ -171,20 +216,26 @@ def revisar(contenido: Laboratorio, sesion: int, ejercicios_de_la_ficha: int, fe
             elif numero_de_ejercicio(nombre) != e.numero:
                 problemas.append(f"FALLA · estructura · ejercicio {e.numero}: usa «{nombre}», que es de otro ejercicio. "
                                  "Cada ejercicio funciona solo, con sus archivos.")
-        texto = " ".join([e.situacion, *[p.texto for p in e.pasos], *[l for r in e.copiar for l in r.lineas], e.mejora])
+        texto = " ".join(textos_del_ejercicio(e))
         otro = re.search(r"\b(?:resultado|respuesta|salida|archivo)\s+del\s+ejercicio\s+(\d+)", texto, re.I)
         if otro and int(otro.group(1)) != e.numero:
             problemas.append(f"FALLA · estructura · ejercicio {e.numero}: usa el resultado del ejercicio {otro.group(1)}. "
                              "Cada ejercicio funciona solo.")
-        for recuadro in e.copiar:
+        for recuadro in [*e.copiar, *e.mejora.copiar]:
+            if recuadro.tipo == "plantilla":
+                continue                      # completar la plantilla es el tema del ejercicio
+            patron = POR_LLENAR_EN_FORMULA if recuadro.tipo == "formula" else POR_LLENAR
             for linea in recuadro.lineas:
-                m = POR_LLENAR.search(linea)
+                m = patron.search(linea)
                 if m:
                     problemas.append(f"FALLA · por llenar · ejercicio {e.numero}: «{m.group(0)}» en lo que el alumno "
                                      f"copia («{linea[:80]}»). Lo que copia funciona tal cual.")
-        for paso in e.pasos:
-            if paso.figura is not None:
-                problemas += _revisar_figura(e.numero, paso.figura, por_nombre, e.archivos)
+        con_figura = [paso for paso in e.pasos if paso.figura is not None]
+        if len(con_figura) > FIGURAS_POR_EJERCICIO:
+            problemas.append(f"FALLA · figura · ejercicio {e.numero}: tiene {len(con_figura)} figuras; va una como "
+                             "máximo, y solo si aclara dónde está algo en el archivo. Deja la más necesaria.")
+        for paso in con_figura:
+            problemas += _revisar_figura(e.numero, paso.figura, por_nombre, e.archivos)
         if fecha_de_referencia and re.search(r"\bplazos?\b|\bvenc\w*|\bfechas?\b", texto, re.I):
             de_sus_archivos = " ".join(_texto_de_archivo(por_nombre[n]) for n in e.archivos if n in por_nombre)
             if e.archivos and fecha_de_referencia.lower() not in de_sus_archivos.lower():

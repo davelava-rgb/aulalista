@@ -284,10 +284,89 @@ def generar_lectura(contenido: Lectura, identidad: Identidad, portada: Portada, 
     return destino
 
 
-# ---------- Laboratorio (SKILL.md, «Material 3») ----------
+# ---------- Laboratorio (SKILL.md, «Material 3»; PLAN.md §0, decisión 33) ----------
 
 MEJORA = "Mejora el resultado (opcional)"
+CADA_UNO_SOLO = "Cada ejercicio funciona solo. Puedes hacerlos en cualquier orden."
+ANTES_DE_COPIAR = [
+    "Las fórmulas de esta guía usan los nombres de las funciones en español y separan los datos con comas.",
+    "Si tu hoja de cálculo muestra un error al pegar una fórmula, cambia cada coma por un punto y coma.",
+    "Si tu hoja de cálculo está en inglés, cambia los nombres de las funciones con esta tabla.",
+    "Copiar una celda hacia abajo significa copiar la celda, seleccionar las celdas de abajo y pegar.",
+]
 _MENCION_DE_FIGURA = re.compile(r"\s*\(?\s*mira la figura\s*\d*\s*\.?\)?\s*", re.I)
+_NEGRITA = re.compile(r"\*\*(.+?)\*\*")
+MONOESPACIADA = "Consolas"
+
+
+def _con_negritas(parrafo, texto: str) -> None:
+    """«**Riesgos**» va en negrita: así los pasos destacan el nombre de una hoja o de una celda."""
+    posicion = 0
+    for m in _NEGRITA.finditer(texto):
+        if m.start() > posicion:
+            parrafo.add_run(texto[posicion:m.start()])
+        parrafo.add_run(m.group(1)).bold = True
+        posicion = m.end()
+    if posicion < len(texto):
+        parrafo.add_run(texto[posicion:])
+
+
+def sin_marcas(texto: str) -> str:
+    return _NEGRITA.sub(r"\1", texto)
+
+
+def _pie(documento: Document, texto: str, identidad: Identidad) -> None:
+    """Pie de página «Sesión N · Laboratorio · Página N», a la derecha (decisión 33)."""
+    parrafo = documento.sections[0].footer.paragraphs[0]
+    for hijo in list(parrafo._p):
+        if hijo.tag != qn("w:pPr"):
+            parrafo._p.remove(hijo)
+    parrafo.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    corrida = parrafo.add_run(f"{texto} · Página ")
+    campo = OxmlElement("w:fldSimple")
+    campo.set(qn("w:instr"), "PAGE")
+    numero = OxmlElement("w:r")
+    texto_ = OxmlElement("w:t")
+    texto_.text = "1"
+    numero.append(texto_)
+    campo.append(numero)
+    parrafo._p.append(campo)
+    corrida.font.size = Pt(9)
+    corrida.font.color.rgb = _rgb(identidad.texto)
+
+
+def _subtitulo(documento: Document, texto: str, identidad: Identidad) -> None:
+    """Subtítulo pequeño dentro de un ejercicio: «Situación», «Archivos de práctica», «Pasos»."""
+    parrafo = documento.add_paragraph()
+    parrafo.paragraph_format.space_before = Pt(8)
+    parrafo.paragraph_format.space_after = Pt(3)
+    parrafo.paragraph_format.keep_with_next = True
+    corrida = parrafo.add_run(texto)
+    corrida.bold = True
+    corrida.font.color.rgb = _rgb(estilo.para_texto(identidad.principal))
+
+
+def _lista_numerada(documento: Document, pasos: list[str], identidad: Identidad, imagenes: dict | None = None,
+                    figuras_: list | None = None, contador: list | None = None) -> None:
+    """Pasos numerados: el número en negrita y la figura justo después de su paso."""
+    for i, paso in enumerate(pasos, start=1):
+        texto = _MENCION_DE_FIGURA.sub(" ", paso).strip()
+        imagen = (imagenes or {}).get(i)
+        if imagen is not None:
+            contador[0] += 1
+            texto = f"{texto} Mira la figura {contador[0]}."
+        parrafo = documento.add_paragraph()
+        parrafo.paragraph_format.left_indent = Cm(0.7)
+        parrafo.paragraph_format.first_line_indent = Cm(-0.7)
+        parrafo.paragraph_format.space_after = Pt(3)
+        numero = parrafo.add_run(f"{i}.\t")
+        numero.bold = True
+        numero.font.color.rgb = _rgb(estilo.para_texto(identidad.principal))
+        parrafo.paragraph_format.tab_stops.add_tab_stop(Cm(0.7))
+        _con_negritas(parrafo, texto)
+        if imagen is not None:
+            parrafo.paragraph_format.keep_with_next = True
+            _figura(documento, imagen, contador[0], figuras_[i - 1].descripcion)
 
 
 def _figura(documento: Document, imagen, numero: int, descripcion: str) -> None:
@@ -305,44 +384,110 @@ def _figura(documento: Document, imagen, numero: int, descripcion: str) -> None:
         corrida.font.size = Pt(10)
 
 
+def recuadro_para_copiar(documento: Document, identidad: Identidad, recuadro_) -> None:
+    """Prompt, fórmula o plantilla: el título, una línea de explicación y lo que se copia en letra monoespaciada,
+    sobre fondo blanco dentro del recuadro (decisión 33)."""
+    tabla = documento.add_table(rows=1, cols=1)
+    tabla.alignment = WD_TABLE_ALIGNMENT.LEFT
+    _bordes(tabla, left=(identidad.principal, identidad.estilo.borde_recuadro))
+    _margen_interior(tabla)
+    celda = tabla.cell(0, 0)
+    _sombrear(celda, identidad.fondo)
+    _no_partir_fila(tabla.rows[0])
+    titulo = celda.paragraphs[0]
+    corrida = titulo.add_run(recuadro_.titulo)
+    corrida.bold = True
+    corrida.font.color.rgb = _rgb(estilo.para_texto(identidad.principal, identidad.fondo))
+    if recuadro_.explicacion:
+        celda.add_paragraph(recuadro_.explicacion)
+    monoespaciada = recuadro_.tipo in ("formula", "plantilla")
+    for linea in recuadro_.lineas:
+        parrafo = celda.add_paragraph()
+        parrafo.paragraph_format.space_after = Pt(0 if monoespaciada else 4)
+        corrida = parrafo.add_run(linea)
+        if monoespaciada:
+            corrida.font.name = MONOESPACIADA
+            corrida.font.size = Pt(9.5)
+            propiedades = parrafo._p.get_or_add_pPr()
+            sombra = OxmlElement("w:shd")
+            sombra.set(qn("w:val"), "clear")
+            sombra.set(qn("w:color"), "auto")
+            sombra.set(qn("w:fill"), estilo.BLANCO)
+            propiedades.append(sombra)
+    documento.add_paragraph()
+
+
 def generar_laboratorio(contenido, identidad: Identidad, portada: Portada, destino: Path, imagenes: dict,
-                        aviso_adjuntos: str = "") -> Path:
-    """Guía del alumno: portada «Laboratorio», tabla de archivos de práctica y cada ejercicio con su situación,
-    sus archivos, sus pasos (con sus figuras), lo que copia y «Mejora el resultado (opcional)».
-    `imagenes`: {(ejercicio, paso): Imagen} de app/materiales/figuras.py."""
+                        aviso_adjuntos: str = "", nombre_zip: str = "", hojas: dict | None = None,
+                        funciones: list[tuple[str, str]] | None = None, sesion: int | None = None) -> Path:
+    """Guía del alumno con la estructura de la referencia (decisión 33).
+    `imagenes`: {(ejercicio, paso): Imagen}; `hojas`: {archivo: [hojas]}; `funciones`: [(español, inglés)]."""
     documento = documento_base(identidad, portada)
-    documento.add_heading("Archivos de práctica", level=1)
+    if sesion is not None:
+        _pie(documento, f"Sesión {sesion} · Laboratorio", identidad)
+    antes = contenido.antes_de_empezar
+    documento.add_heading("Antes de empezar", level=1)
+    for texto in antes.contexto:
+        documento.add_paragraph(texto)
+    documento.add_paragraph(CADA_UNO_SOLO)
     if aviso_adjuntos:
         documento.add_paragraph(aviso_adjuntos)
+    documento.add_heading("Archivos de práctica", level=2)
+    if nombre_zip:
+        cuantos = len(contenido.archivos)
+        documento.add_paragraph(f"Los {cuantos} archivos están en el archivo comprimido {nombre_zip}."
+                                if cuantos > 1 else f"El archivo está en el archivo comprimido {nombre_zip}.")
     ejercicio_de = {n: e.numero for e in contenido.ejercicios for n in e.archivos}
     tabla_de_datos(documento, identidad, Tabla(
         titulo="", encabezados=["Archivo", "Ejercicio", "Contenido"],
-        filas=[[a.nombre, f"Ejercicio {ejercicio_de.get(a.nombre, '')}", a.descripcion] for a in contenido.archivos]))
-    numero_figura = 0
+        filas=[[a.nombre, str(ejercicio_de.get(a.nombre, "")), a.descripcion] for a in contenido.archivos]))
+    for tabla_ in antes.tablas:
+        if tabla_.titulo:
+            documento.add_heading(tabla_.titulo, level=2)
+        tabla_de_datos(documento, identidad, Tabla(titulo="", encabezados=tabla_.encabezados, filas=tabla_.filas))
+    for regla in antes.reglas:
+        documento.add_paragraph(regla, style="List Bullet")
+    if funciones:
+        recuadro(documento, identidad, "Antes de copiar una fórmula", ANTES_DE_COPIAR)
+        tabla_de_datos(documento, identidad, Tabla(titulo="", encabezados=["Función en español", "Función en inglés"],
+                                                   filas=[list(f) for f in funciones]))
+
+    contador = [0]
     for e in contenido.ejercicios:
-        documento.add_heading(f"Ejercicio {e.numero} · {e.titulo}", level=1)
+        titulo = documento.add_heading(f"Ejercicio {e.numero} · {e.titulo}", level=1)
+        titulo.paragraph_format.page_break_before = True       # cada ejercicio empieza en una página nueva
+        area = documento.add_paragraph()
+        area.add_run("Área: ").bold = True
+        area.add_run(e.area)
+        _subtitulo(documento, "Situación", identidad)
         documento.add_paragraph(e.situacion)
         if e.archivos:
-            archivos_ = documento.add_paragraph()
-            archivos_.add_run("Archivos de práctica: ").bold = True
-            archivos_.add_run(", ".join(e.archivos) + ".")
-        documento.add_heading("Pasos", level=2)
-        for i, paso in enumerate(e.pasos, start=1):
-            texto = _MENCION_DE_FIGURA.sub(" ", paso.texto).strip()
-            imagen = imagenes.get((e.numero, i))
-            if imagen is not None:
-                numero_figura += 1
-                texto = f"{texto} Mira la figura {numero_figura}."
-            parrafo = documento.add_paragraph(f"{i}. {texto}")
-            parrafo.paragraph_format.left_indent = Cm(0.6)
-            parrafo.paragraph_format.first_line_indent = Cm(-0.6)
-            if imagen is not None:
-                parrafo.paragraph_format.keep_with_next = True
-                _figura(documento, imagen, numero_figura, paso.figura.descripcion)
+            _subtitulo(documento, "Archivos de práctica", identidad)
+            for nombre in e.archivos:
+                parrafo = documento.add_paragraph(style="List Bullet")
+                parrafo.add_run(nombre).bold = True
+                nombres_de_hojas = (hojas or {}).get(nombre) or []
+                if len(nombres_de_hojas) > 1:
+                    parrafo.add_run(f". Tiene {len(nombres_de_hojas)} hojas: "
+                                    + ", ".join(nombres_de_hojas[:-1]) + f" y {nombres_de_hojas[-1]}.")
+                elif nombres_de_hojas:
+                    parrafo.add_run(f". Tiene una hoja: {nombres_de_hojas[0]}.")
+                else:
+                    parrafo.add_run(".")
+        _subtitulo(documento, "Pasos", identidad)
+        con_figura = {i: imagenes[(e.numero, i)] for i in range(1, len(e.pasos) + 1) if (e.numero, i) in imagenes}
+        _lista_numerada(documento, [p.texto for p in e.pasos], identidad, con_figura,
+                        [p.figura for p in e.pasos], contador)
+        documento.add_paragraph()
         for recuadro_ in e.copiar:
-            recuadro(documento, identidad, recuadro_.titulo, [], lineas_para_copiar=recuadro_.lineas)
+            recuadro_para_copiar(documento, identidad, recuadro_)
         documento.add_heading(MEJORA, level=2)
-        recuadro(documento, identidad, "Pedido de seguimiento", [], lineas_para_copiar=[e.mejora])
+        documento.add_paragraph(e.mejora.texto)
+        if e.mejora.pasos:
+            _lista_numerada(documento, e.mejora.pasos, identidad)
+            documento.add_paragraph()
+        for recuadro_ in e.mejora.copiar:
+            recuadro_para_copiar(documento, identidad, recuadro_)
     destino.parent.mkdir(parents=True, exist_ok=True)
     documento.save(destino)
     return destino

@@ -14,6 +14,12 @@ def _paso(texto, figura=None):
 
 
 LIMPIO = {
+    "antes_de_empezar": {
+        "contexto": ["Trabajas para Comercial Los Volcanes, una empresa de venta minorista.",
+                     "La fecha de referencia de todos los ejercicios es el lunes 5 de octubre de 2026."],
+        "tablas": [],
+        "reglas": ["Los pedidos se recogen en tienda."],
+    },
     "ejercicios": [
         {
             "numero": 1, "area": "Ventas", "titulo": "Clasifica los pedidos de la semana",
@@ -28,13 +34,13 @@ LIMPIO = {
                        "descripcion": "La columna Entrega de la hoja Pedidos."}),
                 _paso("Adjunta el archivo y copia el prompt del recuadro."),
             ],
-            "copiar": [{"titulo": "Prompt", "lineas": [
+            "copiar": [{"tipo": "prompt", "titulo": "Prompt", "explicacion": "", "lineas": [
                 "Rol: eres analista del área de Ventas.",
                 "Contexto: el archivo adjunto trae los pedidos de la semana.",
                 "Tarea: marca los pedidos que se recogen en tienda.",
                 "Formato de salida: una tabla con el número de pedido y la entrega.",
                 "Restricciones: " + NOTA]}],
-            "mejora": "Pide que ordene la tabla por número de pedido.",
+            "mejora": {"texto": "Pide que ordene la tabla por número de pedido.", "pasos": [], "copiar": []},
         },
         {
             "numero": 2, "area": "Almacén", "titulo": "Corrige el aviso del almacén",
@@ -48,13 +54,13 @@ LIMPIO = {
                        "descripcion": "La oración del aviso que habla del Sprint."}),
                 _paso("Adjunta el archivo y copia el prompt del recuadro."),
             ],
-            "copiar": [{"titulo": "Prompt", "lineas": [
+            "copiar": [{"tipo": "prompt", "titulo": "Prompt", "explicacion": "", "lineas": [
                 "Rol: eres responsable del área de Almacén.",
                 "Contexto: el archivo adjunto es un aviso para el equipo.",
                 "Tarea: revisa que el aviso sea claro.",
                 "Formato de salida: el aviso corregido.",
                 "Restricciones: " + NOTA]}],
-            "mejora": "Pide una versión más corta del aviso.",
+            "mejora": {"texto": "Pide una versión más corta del aviso.", "pasos": [], "copiar": []},
         },
         {
             "numero": 3, "area": "Recursos Humanos", "titulo": "Suma las horas de capacitación",
@@ -62,16 +68,17 @@ LIMPIO = {
                          "Necesita el total del mes.",
             "archivos": ["S1_E3_capacitacion.xlsx"],
             "pasos": [
-                _paso("Abre el archivo S1_E3_capacitacion.xlsx."),
-                _paso("Adjunta el archivo y copia el prompt del recuadro."),
+                _paso("Abre el archivo y entra a la hoja **Horas**."),
+                _paso("Copia la fórmula 1 en la celda C2."),
+                _paso("Copia la celda C2 hacia abajo, hasta la fila 3."),
             ],
-            "copiar": [{"titulo": "Prompt", "lineas": [
-                "Rol: eres analista del área de Recursos Humanos.",
-                "Contexto: el archivo adjunto registra las horas de capacitación.",
-                "Tarea: revisa que el total sea correcto.",
-                "Formato de salida: una oración con el total.",
-                "Restricciones: " + NOTA]}],
-            "mejora": "Pide el promedio por persona.",
+            "copiar": [{"tipo": "formula", "titulo": "Fórmula 1 · Revisa las horas de cada persona",
+                        "explicacion": "Avisa cuando una persona tiene menos de 5 horas.",
+                        "lineas": ['=SI(B2<5,"REVISAR","OK")']}],
+            "mejora": {"texto": "Agrega el promedio de horas del equipo.",
+                       "pasos": ["Escribe **Promedio** en la celda A5.", "Copia la fórmula 2 en la celda B5."],
+                       "copiar": [{"tipo": "formula", "titulo": "Fórmula 2 · Promedio de horas",
+                                   "explicacion": "Calcula el promedio de horas.", "lineas": ["=PROMEDIO(B2:B3)"]}]},
         },
     ],
     "archivos": [
@@ -130,4 +137,10 @@ SEMBRADOS = {
                                           {"texto": "Marca los pedidos con plazo vencido.", "figura": None}),
                                       "no trae la fecha de referencia"),
     "faltan ejercicios": (lambda d: d["ejercicios"].pop(), "at least 3"),
+    "dos figuras en un ejercicio": (lambda d: d["ejercicios"][0]["pasos"][0].update(figura={
+                                        "archivo": "S1_E1_pedidos-semana.xlsx", "hoja": "Pedidos", "rango": "A1:C5",
+                                        "marcas": [{"lugar": "A1", "numero": None}], "descripcion": "La hoja."}),
+                                    "tiene 2 figuras; va una como máximo"),
+    "espacio por llenar en una fórmula": (lambda d: d["ejercicios"][2]["copiar"][0].update(lineas=['=SI(B2<___,"X","OK")']),
+                                          "«___» en lo que el alumno copia"),
 }

@@ -151,33 +151,50 @@ def _contexto(carpeta_curso: Path, sesion: int) -> str:
 
 def instrucciones_de_formato(sesion: int, aviso: str) -> str:
     return f"""
-CÓMO ENTREGAR EL LABORATORIO
-- Devuelve solo los datos del esquema. Un programa crea la guía en Word (portada, tabla de archivos, títulos,
-  recuadros y «{docx.MEJORA}»), los archivos de práctica reales, las figuras y el .zip.
+CÓMO ENTREGAR EL LABORATORIO (PLAN.md §0, decisión 33)
+- Devuelve solo los datos del esquema. Un programa crea la guía en Word con esta estructura: portada, «Antes de
+  empezar», la tabla de archivos, el recuadro «Antes de copiar una fórmula» si hay fórmulas, y cada ejercicio con
+  «Área:», «Situación», «Archivos de práctica», «Pasos», sus recuadros y «{docx.MEJORA}». También crea los archivos
+  de práctica reales, la figura de cada ejercicio que la necesite y el .zip.
+- antes_de_empezar:
+  - contexto: de 2 a 4 oraciones con la empresa o institución del caso, qué hace y qué debe hacer ahora, y la fecha
+    de referencia de la ficha. El programa agrega «{docx.CADA_UNO_SOLO}».
+  - tablas: las tablas que usan varios ejercicios (por ejemplo, unos criterios), o ninguna. Sin la tabla de archivos:
+    la pone el programa.
+  - reglas: las reglas del caso que valen en todos los ejercicios, una por elemento. Una regla propia del curso
+    dice «en este curso».
 - ejercicios: los de la ficha de la sesión, en su orden, numerados desde 1. De menor a mayor dificultad. Las áreas
   rotan: dos ejercicios seguidos no son de la misma área.
-  - titulo: una acción concreta («Clasifica los pedidos según su urgencia»). Sin «Ejercicio N»: lo pone el programa.
-  - situacion: de 2 a 3 oraciones que dicen el área y para qué sirve el entregable en el trabajo.
+  - titulo: una acción concreta («Revisa la opción de tratamiento de cada riesgo»). Sin «Ejercicio N».
+  - area: el área del caso.
+  - situacion: de 2 a 3 oraciones: quién pide qué y para qué sirve el entregable.
   - archivos: los nombres exactos de los archivos de práctica de ese ejercicio.
-  - pasos: de 2 a 10, en el orden real. Cada paso es una sola acción. Si un archivo hace falta, el paso dice
-    «adjunta el archivo». Si la herramienta debe detenerse a preguntar, ordénalo y escribe la respuesta exacta del alumno.
-  - figura: solo cuando aclara dónde está algo en el archivo (una columna, una celda, un párrafo que cambiar). Si el
-    paso se entiende sin imagen, deja «figura» en null. No menciones la figura en el texto: el programa agrega
-    «Mira la figura N». La figura no muestra la respuesta.
+  - pasos: en el orden real. Cada paso es una sola acción y nombra la hoja y la celda o la columna exactas. Puedes
+    poner en negrita el nombre de una hoja o de un apartado con **dos asteriscos**. Si un archivo hace falta, el paso
+    dice «adjunta el archivo». Si la herramienta debe detenerse a preguntar, ordénalo y escribe la respuesta exacta.
+  - figura: una por ejercicio como máximo, y solo si aclara dónde está algo en el archivo. En casi todos los
+    ejercicios va en null. No menciones la figura en el texto: el programa agrega «Mira la figura N». La figura no
+    muestra la respuesta.
     - Excel: «hoja», «rango» (hasta 8 columnas y 16 filas, por ejemplo «A1:E9») y «marcas» con la celda o el rango
       que señala («C5», «B2:B9»). La fila 1 es la de los encabezados.
     - Word: «marcas» con un trozo del texto del archivo, copiado tal cual. «hoja» y «rango» vacíos.
     - descripcion: una línea que dice qué muestra.
-  - copiar: uno o dos recuadros con lo que el alumno copia, una línea por elemento. Si es un prompt, escribe sus
-    partes: rol, contexto, tarea, formato de salida y restricciones. Funciona tal cual: sin corchetes, guiones
-    bajos, «<…>» ni espacios por llenar.
-  - mejora: un pedido de seguimiento que enseña a iterar sobre el resultado.
+  - copiar: de uno a cuatro recuadros, con su «tipo»:
+    - «prompt»: una línea por parte: rol, contexto, tarea, formato de salida y restricciones.
+    - «formula»: «titulo» como «Fórmula 1 · Revisa si el riesgo se puede aceptar», «explicacion» con una línea que
+      dice qué avisa o calcula, y en «lineas» la fórmula con los nombres de las funciones en español y los datos
+      separados por comas («=SI(Y(H2="Aceptar",E2>4),"NO SE PUEDE ACEPTAR","OK")»). Los pasos dicen en qué celda se
+      copia cada fórmula: «Copia la fórmula 1 en la celda L2».
+    - «plantilla»: un texto que el alumno completa; solo si completarlo es el tema del ejercicio.
+    Lo que se copia funciona tal cual: sin corchetes, guiones bajos ni espacios por llenar, salvo en una plantilla.
+  - mejora: «texto» con lo que se agrega y para qué; «pasos» y «copiar» si hacen falta, con las mismas reglas.
+  - No escribas «Cómo se ve un buen resultado» ni «Criterio de calidad»: la skill no los permite.
 - archivos: cada archivo de práctica, con nombre S{sesion}_E[ejercicio]_[descripcion-corta] en minúsculas y con
-  guiones («S{sesion}_E1_pedidos-semana.xlsx»). Excel (.xlsx) para datos y Word (.docx) para textos. Cada ejercicio
+  guiones («S{sesion}_E1_riesgos-rrhh.xlsx»). Excel (.xlsx) para datos y Word (.docx) para textos. Cada ejercicio
   usa solo sus archivos: ninguno necesita el resultado de otro.
-  - descripcion: lo que dirá la tabla de archivos de la guía.
-  - Excel: «hojas», cada una con «encabezados» y «filas». Datos ficticios y coherentes con los datos fijos del caso.
-    Los números van como números. Una fórmula empieza con «=».
+  - descripcion: lo que dirá la tabla de archivos («Ocho riesgos de Recursos Humanos con su opción de tratamiento»).
+  - Excel: «hojas», cada una con un nombre corto, «encabezados» y «filas». Datos ficticios y coherentes con los datos
+    fijos del caso. Los números van como números. Deja vacías las columnas donde el alumno copiará las fórmulas.
   - Word: «parrafos» (estilo «titulo», «texto» o «lista») y, si hace falta, «tabla».
   - Si el ejercicio depende de fechas o plazos, escribe la fecha de referencia de la ficha dentro del archivo.
   - problema: el problema que el archivo trae a propósito, según la ficha. No va en la guía del alumno.
@@ -253,11 +270,17 @@ def bloques_de(contenido: Laboratorio) -> list[pasada2.Bloque]:
     def oraciones(*textos):
         return [o for t in textos if t for o in separar(t)]
 
-    bloques = []
+    antes = contenido.antes_de_empezar
+    bloques = [pasada2.Bloque("Antes de empezar", oraciones(
+        *antes.contexto, *antes.reglas,
+        *[" | ".join(fila) for tabla in antes.tablas for fila in [tabla.encabezados, *tabla.filas]]))]
     for e in contenido.ejercicios:
-        textos = [e.titulo, e.situacion, *[p.texto for p in e.pasos],
+        recuadros = [*e.copiar, *e.mejora.copiar]
+        textos = [e.titulo, e.situacion, *[docx.sin_marcas(p.texto) for p in e.pasos],
                   *[p.figura.descripcion for p in e.pasos if p.figura],
-                  *[f"{r.titulo}: {linea}" for r in e.copiar for linea in r.lineas], e.mejora]
+                  *[f"{r.titulo}: {r.explicacion}" for r in recuadros if r.explicacion],
+                  *[f"{r.titulo}: {linea}" for r in recuadros for linea in r.lineas],
+                  e.mejora.texto, *[docx.sin_marcas(p) for p in e.mejora.pasos]]
         for nombre in e.archivos:
             archivo = por_nombre.get(nombre)
             if archivo is None:
@@ -335,7 +358,12 @@ class _Trabajo:
                     problemas.append(f"FALLA · figura · ejercicio {e.numero}, paso {i}: en la página, su letra queda de "
                                      f"{imagen.letra_pt} puntos y no se lee sin ampliar. Muestra menos columnas o filas.")
                 self.imagenes[(e.numero, i)] = imagen
-        docx.generar_laboratorio(contenido, self.identidad, self.portada, self.rutas["word"], self.imagenes, self.aviso)
+        hojas = {a.nombre: [h.nombre for h in a.hojas] for a in contenido.archivos}
+        formulas = [l for e in contenido.ejercicios for r in [*e.copiar, *e.mejora.copiar] if r.tipo == "formula"
+                    for l in r.lineas]
+        docx.generar_laboratorio(contenido, self.identidad, self.portada, self.rutas["word"], self.imagenes, self.aviso,
+                                 nombre_zip=self.rutas["zip"].name, hojas=hojas,
+                                 funciones=practica.funciones_usadas(formulas), sesion=self.sesion)
         practica.empaquetar(rutas_practica, self.rutas["zip"])
         en_zip, en_carpeta = practica.nombres_del_zip(self.rutas["zip"]), sorted(a.nombre for a in contenido.archivos)
         if en_zip != en_carpeta:
