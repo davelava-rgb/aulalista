@@ -9,7 +9,9 @@ Flujo, igual al de la lectura:
    en Word y el .zip.
 5. Primera pasada: el verificador, sobre la guía y los archivos de práctica. Segunda pasada: la revisión del
    contenido, un bloque por ejercicio. Una sola corrección; lo que quede va a la entrega como pendiente.
-La ejecución de cada ejercicio y la guía del profesor son de la etapa 7b.
+6. Ejecución de cada ejercicio como un alumno: las fórmulas con Excel y los prompts con Claude, y la comparación con
+   la respuesta correcta de la ficha (PLAN.md §0, decisión 35). Una fórmula que da error se corrige una vez; una
+   diferencia con la ficha va a la entrega como pendiente. No hay guía del profesor.
 """
 
 import asyncio
@@ -24,7 +26,7 @@ from pydantic import ValidationError
 
 from app import agente, entrega, office, skill, tokens
 from app.fichas import almacen, plantillas, verificacion
-from app.materiales import comun, docx, estilo, figuras, lectura, practica
+from app.materiales import comun, docx, ejecucion, estilo, figuras, lectura, practica
 from app.materiales.contenido import ESQUEMA_LABORATORIO, Laboratorio
 from app.validacion import excel, pasada2, revision, revisor, verificador
 from app.validacion.pasajes import Corpus
@@ -65,6 +67,9 @@ def archivos(carpeta_curso: Path, sesion: int) -> dict[str, Path]:
         "figuras": carpeta / CLAVE / "figuras",
         "revision": carpeta / CLAVE / "revisor",
         "contenido": carpeta / CLAVE / "contenido.json",
+        "ejecucion": carpeta / CLAVE / "ejecucion",
+        "ejecucion_json": carpeta / CLAVE / "ejecucion.json",
+        "registro": carpeta / f"S{sesion}_Laboratorio_Ejecucion.md",
         "explicaciones": carpeta / CLAVE / "explicaciones.json",
     }
 
@@ -119,6 +124,19 @@ def respuestas_a_la_herramienta(carpeta_curso: Path, sesion: int) -> dict[int, s
         if texto and not re.match(r"^(no aplica|no|ninguna|n/?a|-)", texto, re.I):
             respuestas[n] = texto
     return respuestas
+
+
+def respuestas_para_ejecutar(carpeta_curso: Path, sesion: int) -> tuple[dict[int, str], dict[int, str]]:
+    """La respuesta correcta y la respuesta exacta del alumno de cada ejercicio de la ficha, por el número que tiene
+    en el laboratorio: el laboratorio sigue el orden de la ficha."""
+    ficha = _ficha_sesion(carpeta_curso, sesion)
+    del_alumno = respuestas_a_la_herramienta(carpeta_curso, sesion)
+    correctas, alumno = {}, {}
+    for numero, n in enumerate(ejercicios_de_la_ficha(carpeta_curso, sesion), start=1):
+        correctas[numero] = almacen.valor(ficha, f"ejercicio.{n}.respuesta").replace("(propuesto)", "").strip()
+        if n in del_alumno:
+            alumno[numero] = del_alumno[n]
+    return correctas, alumno
 
 
 def fecha_de_referencia(carpeta_curso: Path) -> str:
@@ -190,8 +208,10 @@ CÓMO ENTREGAR EL LABORATORIO (PLAN.md §0, decisión 33)
     - «prompt»: una línea por parte: rol, contexto, tarea, formato de salida y restricciones.
     - «formula»: «titulo» como «Fórmula 1 · Revisa si el riesgo se puede aceptar», «explicacion» con una línea que
       dice qué avisa o calcula, y en «lineas» la fórmula con los nombres de las funciones en español y los datos
-      separados por comas («=SI(Y(H2="Aceptar",E2>4),"NO SE PUEDE ACEPTAR","OK")»). Los pasos dicen en qué celda se
-      copia cada fórmula: «Copia la fórmula 1 en la celda L2».
+      separados por comas («=SI(Y(H2="Aceptar",E2>4),"NO SE PUEDE ACEPTAR","OK")»). Un programa ejecuta los pasos
+      tal cual y Excel calcula el archivo (decisión 35), así que se escriben con estas formas exactas:
+      «Copia la fórmula 1 en la celda L2», «Copia la celda L2 hacia abajo, hasta la fila 9» y
+      «Escribe **Total** en la celda A10». Un paso que cambia de hoja la nombra: «Entra a la hoja **Riesgos**».
     - «plantilla»: un texto que el alumno completa; solo si completarlo es el tema del ejercicio.
     Lo que se copia funciona tal cual: sin corchetes, guiones bajos ni espacios por llenar, salvo en una plantilla.
   - Comillas («» o “”) solo para copiar texto tal cual de una fuente: el verificador las busca en las fuentes. El
@@ -207,6 +227,9 @@ CÓMO ENTREGAR EL LABORATORIO (PLAN.md §0, decisión 33)
   - Word: «parrafos» (estilo «titulo», «texto» o «lista») y, si hace falta, «tabla».
   - Si el ejercicio depende de fechas o plazos, escribe la fecha de referencia de la ficha dentro del archivo.
   - problema: el problema que el archivo trae a propósito, según la ficha. No va en la guía del alumno.
+- Un programa ejecuta cada ejercicio como un alumno: cada prompt en una conversación nueva con Claude, con el
+  texto de los archivos adjuntos, y cada fórmula con Excel. Lo que sale se compara con la respuesta correcta de la
+  ficha.
 - pasajes: los pasajes de las fuentes que usaste: «oracion» del laboratorio que sostiene, la fuente, la ubicación y
   en «texto» el pasaje copiado, de 40 palabras como máximo.
 - decisiones: una entrada por punto, con «texto» y «tipo» («sin fuente», «decisión» o «nota»).
@@ -313,11 +336,12 @@ INDICACIONES_DE_REVISION = (
 # ---------- Generación ----------
 
 class _Trabajo:
-    def __init__(self, carpeta_curso, curso, sesion, rutas, consulta, recalcular, contar_paginas):
+    def __init__(self, carpeta_curso, curso, sesion, rutas, consulta, recalcular, contar_paginas, ejecutar=None):
         self.carpeta_curso, self.curso, self.sesion, self.rutas = carpeta_curso, curso, sesion, rutas
         self.consulta = consulta
         self._recalcular = recalcular or office.recalcular_excel
         self._contar_paginas = contar_paginas or verificador.verificar._contar_paginas_con_word
+        self._ejecutar = ejecutar or ejecucion.ejecutar
         self.carpeta_sesion = almacen.carpeta_sesion(carpeta_curso, sesion)
         self.identidad = estilo.desde_ficha(carpeta_curso)
         self.portada = lectura._portada(carpeta_curso, sesion)
@@ -340,6 +364,31 @@ class _Trabajo:
 
     def avance(self, texto: str) -> None:
         _avance(self.carpeta_curso, self.sesion, texto)
+
+    async def ejecutar(self, solo: set[int] | None = None) -> list[ejecucion.Ejecucion]:
+        correctas, del_alumno = respuestas_para_ejecutar(self.carpeta_curso, self.sesion)
+        return await self._ejecutar(
+            self.contenido, carpeta_practica=self.rutas["practica"], carpeta=self.rutas["ejecucion"],
+            respuestas_ficha=correctas, respuestas_alumno=del_alumno, recalcular=self._recalcular,
+            llamada={"curso": self.curso, "sesion": f"S{self.sesion}", "material": CLAVE, "consulta": self.consulta},
+            solo=solo, avance=self.avance)
+
+    async def ejecutar_y_corregir(self) -> list[ejecucion.Ejecucion]:
+        """Ejecuta cada ejercicio. Una fórmula que da error lleva a una corrección completa y a una nueva ejecución de
+        esos ejercicios; si sigue, queda como falla. Las diferencias con la ficha quedan como pendientes."""
+        self.avance("Ejecutando cada ejercicio como un alumno: las fórmulas con Excel y los prompts con Claude.")
+        ejecuciones = await self.ejecutar()
+        fallas = [f for x in ejecuciones for f in x.fallas]
+        if fallas:
+            self.correcciones["ejecución"] = len(fallas)
+            await self.corregir(fallas, completa=True)
+            if not await self.verificar():
+                return ejecuciones
+            con_fallas = {x.numero for x in ejecuciones if x.fallas}
+            nuevas = {x.numero: x for x in await self.ejecutar(solo=con_fallas)}
+            ejecuciones = [nuevas.get(x.numero, x) for x in ejecuciones]
+            self.fallas = [f for x in ejecuciones for f in x.fallas]
+        return ejecuciones
 
     def contar_paginas(self, ruta: Path) -> int:
         self.paginas = self._contar_paginas(ruta)
@@ -453,7 +502,7 @@ class _Trabajo:
 
 
 def _limpiar(rutas: dict[str, Path]) -> None:
-    for clave in ("word", "zip", "excel", "entrega", "contenido", "explicaciones"):
+    for clave in ("word", "zip", "excel", "entrega", "contenido", "explicaciones", "registro", "ejecucion_json"):
         try:
             rutas[clave].unlink(missing_ok=True)
         except OSError:
@@ -462,13 +511,14 @@ def _limpiar(rutas: dict[str, Path]) -> None:
         rutas["excel"].with_suffix(".json").unlink(missing_ok=True)
     except OSError:
         pass
-    for clave in ("practica", "figuras", "revision"):
+    for clave in ("practica", "figuras", "revision", "ejecucion"):
         shutil.rmtree(rutas[clave], ignore_errors=True)
 
 
 async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.query, recalcular=None,
-                  contar_paginas=None) -> dict:
-    """`recalcular` reemplaza a Excel en las pruebas (calcula las fórmulas antes de sacar las figuras)."""
+                  contar_paginas=None, ejecutar=None) -> dict:
+    """`recalcular` reemplaza a Excel en las pruebas (calcula las fórmulas antes de sacar las figuras); `ejecutar`
+    reemplaza la ejecución de los ejercicios."""
     if not almacen.puede_empezar_material(carpeta_curso, sesion):
         raise NoSePuedeEmpezar("Guarda completas la ficha del curso y la ficha de la sesión antes de generar el laboratorio.")
     faltan_ = almacen.faltantes_para(carpeta_curso, sesion, CLAVE)
@@ -479,7 +529,7 @@ async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.
     _actualizar(carpeta_curso, sesion, estado="trabajando", previo="", avance=[], error="", desactualizado=False,
                 entrega={}, aprobada="", revisor={}, corrida_desde=tokens.lineas(curso))
     try:
-        return await _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, contar_paginas)
+        return await _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, contar_paginas, ejecutar)
     except asyncio.CancelledError:
         marcar_detenida(carpeta_curso, sesion)
         raise
@@ -488,11 +538,11 @@ async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.
         raise
 
 
-async def _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, contar_paginas) -> dict:
+async def _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, contar_paginas, ejecutar) -> dict:
     inicio = tokens.lineas(curso)
     skill.comprobar(secciones=SECCIONES_DE_LA_SKILL + pasada2.SECCIONES_DE_LA_SKILL + revisor.SECCIONES_DE_LA_SKILL,
                     subsecciones=revisor.SUBSECCIONES_DE_LA_SKILL)
-    trabajo = _Trabajo(carpeta_curso, curso, sesion, rutas, consulta, recalcular, contar_paginas)
+    trabajo = _Trabajo(carpeta_curso, curso, sesion, rutas, consulta, recalcular, contar_paginas, ejecutar)
     verificador.verificar.leer_configuracion(
         verificador.configuracion_del_material(trabajo.carpeta_sesion, MATERIAL, carpeta_practica=CARPETA_PRACTICA))
     _limpiar(rutas)
@@ -502,14 +552,23 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, co
                                            esquema=ESQUEMA_LABORATORIO, etapa="redacción", **trabajo.comun)
     errores: list[revision.Error] = []
     revisados = 0
+    ejecuciones: list[ejecucion.Ejecucion] = []
     if await trabajo.verificar():
         errores, revisados = await comun.revisar_y_corregir(trabajo, bloques_de)
+        if not trabajo.fallas:
+            ejecuciones = await trabajo.ejecutar_y_corregir()
+    if ejecuciones:
+        comun.guardar_json(rutas["ejecucion_json"], [x.a_dict() for x in ejecuciones])
+        rutas["registro"].write_text(ejecucion.a_markdown(ejecuciones, f"Ejecución · {MATERIAL} · Sesión {sesion}",
+                                                          agente.leer_tarea("ejecucion")["modelo"]), encoding="utf-8")
+    diferencias = [p for x in ejecuciones for p in x.pendientes()]
 
     pendientes = [e for e in errores if e.estado == "pendiente"]
     final = trabajo.contenido
     decisiones = final.decisiones if final else []
     sin_fuente = [f"Afirmación sin fuente: {d.texto}" for d in decisiones if d.tipo == "sin fuente"]
-    estado_final = "con fallas" if trabajo.fallas else ("con pendientes" if pendientes or sin_fuente else "verificada")
+    estado_final = "con fallas" if trabajo.fallas else (
+        "con pendientes" if pendientes or sin_fuente or diferencias else "verificada")
     if trabajo.resultado is not None:
         excel.solo_hallazgos(rutas["excel"], "Sección")
         excel.agregar_historial(rutas["excel"], [
@@ -521,7 +580,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, co
         carpeta_curso, sesion,
         estado=estado_final,
         resumen=trabajo.resultado.resumen() if trabajo.resultado else "",
-        problemas=trabajo.fallas + [e.describir() for e in pendientes] + sin_fuente,
+        problemas=trabajo.fallas + [e.describir() for e in pendientes] + sin_fuente + diferencias,
         correcciones=trabajo.correcciones,
         revision={"bloques": revisados, "errores": len(errores), "corregidos": sum(e.estado == "corregido" for e in errores),
                   "pendientes": len(pendientes), "descartados": len(trabajo.descartados)},
@@ -534,18 +593,30 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, co
         archivos_practica=[{"nombre": a.nombre, "ejercicio": practica.numero_de_ejercicio(a.nombre),
                             "problema": a.problema} for a in (final.archivos if final else [])],
         figuras=len(trabajo.imagenes),
+        ejecucion=_resumen_de_ejecucion(ejecuciones),
         decisiones=[d.model_dump() for d in decisiones],
         archivos={"word": rutas["word"].name, "zip": rutas["zip"].name, "excel": rutas["excel"].name,
-                  "entrega": rutas["entrega"].name},
+                  "entrega": rutas["entrega"].name, **({"registro": rutas["registro"].name} if ejecuciones else {})},
         costo=tokens.total(curso, sesion=f"S{sesion}", material=CLAVE, desde_linea=inicio),
         fecha=datetime.now().isoformat(timespec="seconds"),
     )
     _escribir_entrega(carpeta_curso, sesion, material)
     trabajo.avance({"verificada": "Laboratorio listo para tu aprobación.",
-                    "con pendientes": f"Laboratorio listo, con {comun.cuantos(len(pendientes) + len(sin_fuente), 'pendiente')} "
+                    "con pendientes": f"Laboratorio listo, con "
+                                      f"{comun.cuantos(len(pendientes) + len(sin_fuente) + len(diferencias), 'pendiente')} "
                                       "para que decidas.",
                     "con fallas": "El laboratorio quedó con fallas del verificador."}[estado_final])
     return _estado(carpeta_curso, sesion)
+
+
+def _resumen_de_ejecucion(ejecuciones: list[ejecucion.Ejecucion]) -> dict:
+    return {"ejercicios": len(ejecuciones), "formulas": sum(len(x.celdas) for x in ejecuciones),
+            "conversaciones": sum(x.conversaciones for x in ejecuciones),
+            "coinciden": [x.numero for x in ejecuciones if x.coincide],
+            "diferencias": sum(len(x.diferencias) for x in ejecuciones),
+            "descartadas": sum(x.descartadas for x in ejecuciones),
+            "no_pude": [n for x in ejecuciones for n in x.no_pude],
+            "modelo": agente.leer_tarea("ejecucion")["modelo"] if ejecuciones else ""}
 
 
 def _escribir_entrega(carpeta_curso: Path, sesion: int, material: dict) -> dict:
@@ -566,12 +637,25 @@ def _entrega(material: dict) -> dict:
         + ", ".join(a["nombre"] for a in practica_) + ".",
         f"{archivos_['excel']}: el archivo de verificación, con la hoja Hallazgos.",
         f"{archivos_['entrega']}: esta entrega, en texto.",
+        *([f"{archivos_['registro']}: el registro de la ejecución de cada ejercicio: lo que se copió, lo que respondió "
+           "la herramienta y lo que calculó Excel."] if archivos_.get("registro") else []),
     ]
     probe = [
         "Creé cada archivo de práctica con un programa y saqué cada figura del archivo real, con las marcas en ámbar.",
         "Comprobé que los nombres de archivo coinciden en la guía, en la tabla de archivos y en el .zip.",
         "Comprobé que cada ejercicio usa solo sus archivos y que lo que el alumno copia no tiene espacios por llenar.",
     ]
+    ej = material.get("ejecucion") or {}
+    if ej.get("ejercicios"):
+        probe.append(f"Ejecuté {comun.cuantos(ej['ejercicios'], 'ejercicio')} como un alumno: "
+                     f"{comun.cuantos(ej['formulas'], 'celda')} con fórmula calculadas con Excel y "
+                     f"{comun.cuantos(ej['conversaciones'], 'conversación')} nuevas con Claude.")
+        if ej["coinciden"]:
+            probe.append("Coinciden con la respuesta correcta de la ficha: "
+                         + ", ".join(f"ejercicio {n}" for n in ej["coinciden"]) + ".")
+        if ej.get("descartadas"):
+            probe.append(f"Diferencias descartadas porque su prueba no está en la ficha ni en lo que salió: "
+                         f"{ej['descartadas']}.")
     c = material["correcciones"]
     r = material.get("revision") or {}
     valide = [f"Verificador, sobre la guía y los archivos de práctica: {material['resumen']}." if material["resumen"]
@@ -580,7 +664,9 @@ def _entrega(material: dict) -> dict:
                 if material.get("avisos_explicados") else []),
               *([f"Avisos informativos: {material['avisos_informativos']}. Están en la hoja Hallazgos; no obligan a "
                  "corregir."] if material.get("avisos_informativos") else []),
-              f"Fallas del verificador corregidas: {c['verificador']}."]
+              f"Fallas del verificador corregidas: {c['verificador']}.",
+              *([f"Fórmulas con error al ejecutarlas, enviadas a corrección: {c['ejecución']}."]
+                if c.get("ejecución") else [])]
     if r.get("bloques"):
         texto = f"Revisión del contenido: {comun.cuantos(r['bloques'], 'ejercicio')}, {comun.cuantos(r['errores'], 'error')} con prueba"
         if r["errores"]:
@@ -592,8 +678,13 @@ def _entrega(material: dict) -> dict:
                       f"Costo: {rev['costo']['costo_usd']:.2f} USD estimados.")
     costo = material["costo"]
     valide.append(f"Costo de este laboratorio: {costo['llamadas']} llamadas, {costo['costo_usd']:.2f} USD estimados.")
-    no_pude = ["No ejecuté los ejercicios con la herramienta de los alumnos: la ejecución llega con la guía del profesor "
-               "(etapa 7b)."]
+    if ej.get("ejercicios"):
+        no_pude = [f"Ejecuté los prompts con Claude ({ej['modelo']}), con el texto de cada archivo dentro del mensaje. "
+                   "La herramienta de los alumnos puede responder distinto.",
+                   "Las indicaciones que dependen de lo que responda la herramienta («Si falta…») no se ejecutaron.",
+                   *ej["no_pude"]]
+    else:
+        no_pude = ["No ejecuté los ejercicios porque quedaron fallas antes de llegar a la ejecución."]
     if not r.get("bloques"):
         no_pude.append("La revisión del contenido no corrió porque quedaron fallas del verificador.")
     decidi = [d["texto"] for d in material["decisiones"] if d["tipo"] == "decisión"]

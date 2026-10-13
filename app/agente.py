@@ -189,6 +189,26 @@ async def consultar(
     return resultado.structured_output
 
 
+async def conversar(
+    pedido: str,
+    *,
+    tarea: str,
+    curso: str,
+    etapa: str,
+    sesion: str = "-",
+    material: str = "-",
+    consulta: Consulta = query,
+) -> str:
+    """Pedido sin esquema y sin herramientas: devuelve el texto tal como lo leería una persona en un chat.
+    Sirve para ejecutar el prompt de un ejercicio como lo haría un alumno (PLAN.md §0, decisión 35)."""
+    opciones = opciones_base(tarea, leer_clave())
+    texto, resultado = await ejecutar(pedido, opciones, consulta)
+    tokens.registrar(resultado, curso=curso, sesion=sesion, material=material, etapa=etapa)
+    if resultado.is_error:
+        raise ErrorDeAgente(_describir_error(resultado))
+    return texto or (resultado.result or "").strip()
+
+
 async def consultar_con_imagenes(
     pedido: str,
     imagenes: list[tuple[str, bytes]],

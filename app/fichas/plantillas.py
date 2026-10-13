@@ -103,7 +103,7 @@ FICHA_DEL_CURSO = (
             _c("herramientas.adjuntos", "¿La herramienta de los alumnos acepta archivos adjuntos? (sí, no o no sé)"),
         )),
         Seccion("8. Materiales", (
-            _c("materiales.por_sesion", "Materiales por sesión (por defecto, los cinco)"),
+            _c("materiales.por_sesion", "Materiales por sesión (por defecto, los cuatro)"),
             _c("materiales.nunca", "Lo que nunca se incluye (por defecto: tiempos, puntajes, objetivos de "
                "aprendizaje, requisitos previos, glosarios, relleno, emojis y lenguaje publicitario)"),
         )),
@@ -160,7 +160,7 @@ FICHA_DE_LA_SESION = (
             ), encabezado="- Preguntas (por defecto, 3; repite este bloque por cada una)", sangria="  "),
         )),
         Seccion("6. Materiales de esta sesión", (
-            _c("materiales.cuales", "Cuáles se producen (por defecto, los cinco)"),
+            _c("materiales.cuales", "Cuáles se producen (por defecto, los cuatro)"),
         )),
     ),
 )

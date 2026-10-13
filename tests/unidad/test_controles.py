@@ -107,8 +107,9 @@ def test_todas_las_casillas_por_defecto_dejan_el_valor_vacio(curso):
 def test_las_casillas_leen_lo_que_ya_estaba_escrito():
     marcadas, otros = controles.marcadas("materiales.cuales", "Lectura y diapositivas")
     assert marcadas == ["lectura", "diapositivas"] and otros == ""
-    assert controles.marcadas("materiales.cuales", "los cinco")[0] == list(controles.MATERIALES)
+    assert controles.marcadas("materiales.cuales", "los cuatro")[0] == list(controles.MATERIALES)
     assert controles.marcadas("materiales.cuales", "los seis")[0] == list(controles.MATERIALES)  # fichas anteriores
+    assert controles.marcadas("materiales.cuales", "los cinco")[0] == list(controles.MATERIALES)
     assert controles.marcadas("materiales.cuales", "")[0] == list(controles.MATERIALES)
     ficha = {"tipo": "sesion", "campos": {"materiales.cuales": {"valor": "lectura y diapositivas"}}}
     assert almacen.materiales_de_la_sesion(ficha) == {"lectura", "diapositivas"}

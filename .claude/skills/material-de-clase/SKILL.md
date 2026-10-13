@@ -388,7 +388,7 @@ FICHA DEL CURSO
 - ¿La herramienta de los alumnos acepta archivos adjuntos? (sí, no o no sé):
 
 8. Materiales
-- Materiales por sesión (por defecto, los cinco):
+- Materiales por sesión (por defecto, los cuatro):
 - Lo que nunca se incluye (por defecto: tiempos, puntajes, objetivos de aprendizaje, requisitos previos, glosarios, relleno, emojis y lenguaje publicitario):
 
 9. Modelos
@@ -443,5 +443,5 @@ FICHA DE LA SESIÓN
   Respuesta correcta:
 
 6. Materiales de esta sesión
-- Cuáles se producen (por defecto, los cinco):
+- Cuáles se producen (por defecto, los cuatro):
 ```

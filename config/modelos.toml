@@ -76,6 +76,20 @@ tope_usd = 0.80
 max_turns = 10
 esfuerzo = "medium"
 
+# Ejecución de cada prompt del laboratorio como lo haría un alumno: conversación nueva, sin herramientas
+# (PLAN.md §0, decisión 35).
+[ejecucion]
+modelo = "claude-sonnet-5-5"
+tope_usd = 0.40
+max_turns = 1
+
+# Comparación de lo que salió al ejecutar un ejercicio con la respuesta correcta de la ficha (decisión 35).
+[comparacion_ejecucion]
+modelo = "claude-sonnet-5-5"
+tope_usd = 0.30
+max_turns = 1
+esfuerzo = "medium"
+
 # Agente diseñador: escribe el programa pptxgenjs de las diapositivas y lo corrige (decisión 32).
 [diseno]
 modelo = "claude-opus-5-5"

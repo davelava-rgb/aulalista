@@ -31,6 +31,22 @@ UBICA_ALGO = re.compile(r"(?i:\b(?:columnas?|celdas?|rangos?|apartados?|párrafo
                         r"|\b[A-Z]{1,2}\d{1,4}:[A-Z]{1,2}\d{1,4}\b")
 
 
+# Los pasos que un programa sigue tal cual al ejecutar el ejercicio (app/materiales/ejecucion.py).
+COPIA_FORMULA = re.compile(r"[Cc]opia la fórmula (\d+) en la celda ([A-Z]{1,3}\d+)")
+HACIA_ABAJO = re.compile(r"[Cc]opia la celda ([A-Z]{1,3})(\d+) hacia abajo,? hasta la fila (\d+)")
+_NUMERO_DE_FORMULA = re.compile(r"Fórmula (\d+)")
+
+
+def formulas_por_numero(e) -> dict:
+    """Los recuadros de fórmula del ejercicio, también los de la mejora, por su número («Fórmula 2 · …»)."""
+    recuadros = [r for r in [*e.copiar, *e.mejora.copiar] if r.tipo == "formula"]
+    numeros = {}
+    for i, r in enumerate(recuadros, start=1):
+        m = _NUMERO_DE_FORMULA.search(r.titulo)
+        numeros[int(m.group(1)) if m else i] = r
+    return numeros
+
+
 def textos_del_ejercicio(e) -> list[str]:
     """Todo lo que el alumno lee en un ejercicio, también en «Mejora el resultado»."""
     recuadros = [*e.copiar, *e.mejora.copiar]
@@ -95,6 +111,9 @@ def _valor(texto):
     if re.fullmatch(r"-?\d+\.\d+", limpio):
         return float(limpio)
     return texto
+
+
+valor_de_celda = _valor
 
 
 def crear_excel(archivo: ArchivoPractica, identidad: Identidad, destino: Path) -> Path:
@@ -234,6 +253,14 @@ def revisar(contenido: Laboratorio, sesion: int, ejercicios_de_la_ficha: int, fe
                 if m:
                     problemas.append(f"FALLA · por llenar · ejercicio {e.numero}: «{m.group(0)}» en lo que el alumno "
                                      f"copia («{linea[:80]}»). Lo que copia funciona tal cual.")
+        pasos = " ".join([p.texto for p in e.pasos] + list(e.mejora.pasos)).replace("**", "")
+        copiadas = {int(m.group(1)) for m in COPIA_FORMULA.finditer(pasos)}
+        for numero in sorted(set(formulas_por_numero(e)) - copiadas):
+            problemas.append(f"FALLA · ejecución · ejercicio {e.numero}: ningún paso dice dónde se copia la fórmula "
+                             f"{numero}. Escribe «Copia la fórmula {numero} en la celda L2» con la celda real.")
+        for numero in sorted(copiadas - set(formulas_por_numero(e))):
+            problemas.append(f"FALLA · ejecución · ejercicio {e.numero}: un paso copia la fórmula {numero} y no hay un "
+                             f"recuadro «Fórmula {numero} · …».")
         con_figura = [paso for paso in e.pasos if paso.figura is not None]
         if len(con_figura) > FIGURAS_POR_EJERCICIO:
             problemas.append(f"FALLA · figura · ejercicio {e.numero}: tiene {len(con_figura)} figuras; va una como "

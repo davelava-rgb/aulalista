@@ -5,15 +5,16 @@ import zipfile
 from urllib.parse import unquote
 
 import openpyxl
+from claude_agent_sdk import AssistantMessage, TextBlock
 import pytest
 from docx import Document
 from fastapi.testclient import TestClient
 from PIL import Image
 
 from app import servidor
-from app.materiales import figuras, laboratorio, practica
+from app.materiales import ejecucion, figuras, laboratorio, practica
 from app.materiales.contenido import Laboratorio
-from tests.conftest import consulta_en_secuencia
+from tests.conftest import consulta_en_secuencia, resultado_simulado
 from tests.sembrados import laboratorio as sembrados
 from tests.unidad.test_lectura import SIN_ERRORES, sesion, una_pagina  # noqa: F401
 
@@ -34,10 +35,17 @@ def recalcular_sin_excel(ruta):
     return ruta
 
 
-def generar(carpeta, *salidas):
+async def sin_ejecucion(contenido, **_):
+    """La ejecución tiene sus propias pruebas (abajo): aquí cada ejercicio coincide sin llamar a Claude."""
+    return [ejecucion.Ejecucion(e.numero, e.titulo, respuesta_ficha="La situación 4 contradice",
+                                conversacion=[ejecucion.Turno("alumno", "prompt"), ejecucion.Turno("herramienta", "ok")])
+            for e in contenido.ejercicios]
+
+
+def generar(carpeta, *salidas, ejecutar=sin_ejecucion):
     consulta = consulta_en_secuencia(*salidas, SIN_ERRORES)
     material = asyncio.run(laboratorio.generar(carpeta, "scrum", 1, consulta=consulta, recalcular=recalcular_sin_excel,
-                                               contar_paginas=una_pagina))
+                                               contar_paginas=una_pagina, ejecutar=ejecutar))
     return material, consulta
 
 
@@ -80,7 +88,10 @@ def test_genera_la_guia_los_archivos_las_figuras_y_el_zip(sesion):  # noqa: F811
     assert "Mira la figura N" in redaccion and laboratorio.AVISO_ADJUNTOS in redaccion
     entrega = {s["clave"]: s["lineas"] for s in material["entrega"]["secciones"]}
     assert entrega["archivos"][1].startswith("S1_Laboratorio_Archivos.zip: los 3 archivos de práctica")
-    assert any("etapa 7b" in l for l in entrega["no_pude"])
+    assert entrega["no_pude"][0].startswith("Ejecuté los prompts con Claude")
+    assert any(l.startswith("Ejecuté 3 ejercicios como un alumno") for l in entrega["probe"])
+    assert entrega["archivos"][-1].startswith("S1_Laboratorio_Ejecucion.md")
+    assert rutas["registro"].exists()
     assert any("Problema sembrado en S1_E1_pedidos-semana.xlsx" in l for l in entrega["decidi"])
 
 
@@ -186,3 +197,115 @@ def test_el_pedido_pide_la_figura_donde_se_ubica_algo_y_sin_comillas():
     assert "Ponla en el paso que pide ubicar algo en el archivo" in texto
     assert "la figura es obligatoria" in texto
     assert "va en **negrita**, sin comillas" in texto
+
+
+# ---------- Ejecución de cada ejercicio como un alumno (PLAN.md §0, decisión 35) ----------
+
+VALORES_DE_EXCEL = {"C2": "REVISAR", "C3": "OK", "B5": 5}
+
+
+def excel_simulado(valores=VALORES_DE_EXCEL):
+    """Escribe el valor que daría Excel en cada celda con fórmula que copió el programa."""
+    def recalcular(ruta):
+        libro = openpyxl.load_workbook(ruta)
+        for hoja in libro.worksheets:
+            for fila in hoja.iter_rows():
+                for celda in fila:
+                    if isinstance(celda.value, str) and celda.value.startswith("="):
+                        celda.value = valores.get(celda.coordinate, 10)
+        libro.save(ruta)
+        return ruta
+    return recalcular
+
+
+def herramienta_y_comparacion(diferencias=()):
+    """La herramienta responde con texto; la comparación devuelve las diferencias que se le pasan."""
+    llamadas = []
+    pendientes = list(diferencias)
+
+    async def consulta(*, prompt, options):
+        llamadas.append({"prompt": prompt, "options": options})
+        if options.output_format is None:
+            yield AssistantMessage(content=[TextBlock(text="Pedido P-103: Envío. La situación 4 contradice.")],
+                                   model="claude-sonnet-5-5")
+            yield resultado_simulado()
+        else:
+            yield resultado_simulado(structured_output={"diferencias": pendientes.pop(0) if pendientes else []})
+
+    consulta.llamadas = llamadas
+    return consulta
+
+
+def ejecutar_limpio(sesion, consulta, valores=VALORES_DE_EXCEL):
+    generar(sesion, sembrados.limpio())                       # crea los archivos de práctica reales
+    rutas = laboratorio.archivos(sesion, 1)
+    contenido = Laboratorio.model_validate(sembrados.limpio())
+    return asyncio.run(ejecucion.ejecutar(
+        contenido, carpeta_practica=rutas["practica"], carpeta=rutas["ejecucion"],
+        respuestas_ficha={1: "La situación 4 contradice", 2: "La situación 4 contradice", 3: "C2 dice REVISAR"},
+        respuestas_alumno={}, recalcular=excel_simulado(valores),
+        llamada={"curso": "scrum", "sesion": "S1", "material": "laboratorio", "consulta": consulta}))
+
+
+def test_las_formulas_se_copian_donde_dice_el_paso_y_las_calcula_excel(sesion):  # noqa: F811
+    resultados = ejecutar_limpio(sesion, herramienta_y_comparacion())
+    tercero = resultados[2]
+    celdas = {c["celda"]: c for c in tercero.celdas}
+    assert celdas["C2"]["formula"] == '=IF(B2<5,"REVISAR","OK")'       # en inglés dentro del archivo
+    assert celdas["C3"]["formula"] == '=IF(B3<5,"REVISAR","OK")'       # «hacia abajo, hasta la fila 3»
+    assert celdas["B5"]["formula"] == "=AVERAGE(B2:B3)" and celdas["B5"]["valor"] == 5   # la fórmula de la mejora
+    copia = openpyxl.load_workbook(laboratorio.archivos(sesion, 1)["ejecucion"] / "E3" / "S1_E3_capacitacion.xlsx")
+    assert copia["Horas"]["A5"].value == "Promedio"                      # «Escribe **Promedio** en la celda A5»
+    assert tercero.conversacion == [] and tercero.coincide
+
+
+def test_cada_prompt_va_en_una_conversacion_nueva_con_el_texto_del_archivo(sesion):  # noqa: F811
+    consulta = herramienta_y_comparacion()
+    resultados = ejecutar_limpio(sesion, consulta)
+    conversaciones = [l for l in consulta.llamadas if l["options"].output_format is None]
+    assert len(conversaciones) == 2                                       # ejercicios 1 y 2; el 3 solo tiene fórmulas
+    primero = conversaciones[0]["prompt"]
+    assert "[Archivo adjunto: S1_E1_pedidos-semana.xlsx]" in primero and "P-103 | Cliente C | Envío" in primero
+    assert primero.endswith("Restricciones: " + sembrados.NOTA)
+    assert conversaciones[0]["options"].model == "claude-sonnet-5-5" and conversaciones[0]["options"].tools == []
+    assert all(r.coincide for r in resultados)
+
+
+def test_una_formula_con_error_es_una_falla_de_ejecucion(sesion):  # noqa: F811
+    resultados = ejecutar_limpio(sesion, herramienta_y_comparacion(), valores={**VALORES_DE_EXCEL, "C2": "#NAME?"})
+    assert any("la fórmula de la celda C2 (hoja Horas) da #NAME?" in f for f in resultados[2].fallas)
+    assert not resultados[2].coincide
+
+
+def test_una_diferencia_sin_prueba_se_descarta(sesion):  # noqa: F811
+    consulta = herramienta_y_comparacion([
+        [{"esperado": "La situación 4 contradice", "salio": "", "explicacion": "No marcó la situación 4."},
+         {"esperado": "algo que la ficha no dice", "salio": "", "explicacion": "Inventada."}],
+    ])
+    resultados = ejecutar_limpio(sesion, consulta)
+    assert [d.esperado for d in resultados[0].diferencias] == ["La situación 4 contradice"]
+    assert resultados[0].descartadas == 1
+    assert resultados[0].pendientes() == [
+        "Ejecución · ejercicio 1: la ficha dice «La situación 4 contradice» y eso no salió. No marcó la situación 4."]
+
+
+def test_una_diferencia_con_la_ficha_queda_como_pendiente_en_la_entrega(sesion):  # noqa: F811
+    async def con_diferencia(contenido, **_):
+        resultados = await sin_ejecucion(contenido)
+        resultados[1].diferencias = [ejecucion.Diferencia("La situación 4 contradice", "", "No salió.")]
+        return resultados
+
+    material, _ = generar(sesion, sembrados.limpio(), ejecutar=con_diferencia)
+    assert material["estado"] == "con pendientes"
+    assert any(p.startswith("Ejecución · ejercicio 2") for p in material["problemas"])
+    assert material["ejecucion"]["coinciden"] == [1, 3]
+    registro = laboratorio.archivos(sesion, 1)["registro"].read_text(encoding="utf-8")
+    assert "Resultado: no coincide." in registro and "## Ejercicio 2" in registro
+
+
+def test_un_paso_que_no_dice_donde_va_la_formula_se_detecta_antes():
+    datos = sembrados.limpio()
+    datos["ejercicios"][2]["pasos"][1]["texto"] = "Copia la fórmula 1."
+    datos["ejercicios"][2]["pasos"][2]["texto"] = "Revisa el resultado."
+    problemas = practica.revisar(Laboratorio.model_validate(datos), 1, 3)
+    assert any("ningún paso dice dónde se copia la fórmula 1" in p for p in problemas)

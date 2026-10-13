@@ -22,9 +22,9 @@ SEPARADOR_ARCHIVOS = "; "
 CARPETA_MODELOS = "modelos"
 EXTENSIONES_LOGO = (".png", ".jpg", ".jpeg")
 
-# Sin práctica interactiva: se quitó la etapa 8 (PLAN.md §0, decisión 34).
-MATERIALES = ("lectura", "diapositivas", "laboratorio", "guía del profesor", "evaluación")
-TODOS_LOS_MATERIALES = "los cinco"
+# Sin práctica interactiva ni guía del profesor (PLAN.md §0, decisiones 34 y 35).
+MATERIALES = ("lectura", "diapositivas", "laboratorio", "evaluación")
+TODOS_LOS_MATERIALES = "los cuatro"
 NUNCA_POR_OMISION = ("tiempos", "puntajes", "objetivos de aprendizaje", "requisitos previos", "glosarios",
                      "relleno", "emojis", "lenguaje publicitario")
 
@@ -77,7 +77,7 @@ CONTROLES = {
     "materiales.nunca": {"tipo": "casillas", "titulo": "Lo que nunca se incluye", "opciones": NUNCA_POR_OMISION, "otros": True, "omision": True,
                          "ayuda": "Marcadas por defecto. Agrega otras en «Otros», separadas por comas."},
     "materiales.cuales": {"tipo": "casillas", "titulo": "Materiales que se producen en esta sesión", "opciones": MATERIALES, "todos": TODOS_LOS_MATERIALES,
-                          "ayuda": "Sin ninguna marcada se producen los cinco."},
+                          "ayuda": "Sin ninguna marcada se producen los cuatro."},
     "modelos.aprobados": {"tipo": "archivos", "titulo": "Modelos de diseño y tono (PDF)", "extension": ".pdf",
                           "ayuda": "Sube uno o varios PDF. Dan los colores y la tipografía que la ficha deja vacíos, "
                                    "y guían el tono. Las secciones de cada material siguen siendo las de la skill."},
@@ -94,7 +94,7 @@ def marcadas(campo_id: str, valor: str) -> tuple[list[str], str]:
     """Casillas marcadas y el resto escrito a mano. Vacío marca todas (es el valor por defecto)."""
     control = CONTROLES[campo_id]
     opciones = list(control["opciones"])
-    if not (valor or "").strip() or (control.get("todos") and (control["todos"] in valor.lower() or "los seis" in valor.lower())):
+    if not (valor or "").strip() or (control.get("todos") and (control["todos"] in valor.lower() or re.search(r"\blos (cinco|seis)\b", valor.lower()))):
         return opciones, ""
     partes = _partes(valor)
     elegidas = [o for o in opciones if any(_coincide(o, p) for p in partes)]
@@ -218,7 +218,7 @@ def _texto_de_casillas(control: dict, elegidas: list, otros: str) -> str:
     elegidas = [o for o in opciones if o in elegidas]
     extra = [p.strip() for p in re.split(r",|;", otros or "") if p.strip()]
     if control.get("todos") and (elegidas == opciones or not elegidas) and not extra:
-        return ""  # vacío vale «los cinco» (SKILL.md, plantilla de la ficha; PLAN.md §0, decisión 34)
+        return ""  # vacío vale «los cuatro» (SKILL.md, plantilla de la ficha; PLAN.md §0, decisiones 34 y 35)
     if control.get("omision") and elegidas == opciones and not extra:
         return ""  # vacío vale la lista por defecto de la plantilla
     partes = elegidas + extra

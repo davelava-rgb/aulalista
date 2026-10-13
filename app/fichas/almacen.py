@@ -21,8 +21,8 @@ CONFLICTO = "conflicto"
 PROFESOR = "profesor"
 MAX_PREGUNTAS_POR_VEZ = 4  # SPEC §3: cuatro preguntas como máximo por vez
 
-# Sin práctica interactiva: se quitó la etapa 8 (PLAN.md §0, decisión 34).
-MATERIALES = ("lectura", "diapositivas", "laboratorio", "guía del profesor", "evaluación")
+# Sin práctica interactiva ni guía del profesor (PLAN.md §0, decisiones 34 y 35).
+MATERIALES = ("lectura", "diapositivas", "laboratorio", "evaluación")
 
 
 class FichaIncompleta(ValueError):
@@ -226,13 +226,13 @@ def marcar_faltantes(ficha: dict) -> None:
 # ---------- Revisión ----------
 
 def materiales_de_la_sesion(ficha_sesion: dict) -> set[str]:
-    """Materiales que se producen. Vacío, «los cinco» o «los seis» (fichas anteriores) significa todos."""
+    """Materiales que se producen. Vacío, «los cuatro», o «los cinco» y «los seis» de fichas anteriores, significa todos."""
     texto = valor(ficha_sesion, "materiales.cuales").lower()
-    if not texto.strip() or "cinco" in texto or "seis" in texto or "todos" in texto:
+    if not texto.strip() or re.search(r"\b(cuatro|cinco|seis|todos)\b", texto):
         return set(MATERIALES)
     sin_tildes = texto.replace("í", "i").replace("á", "a").replace("ó", "o")
     claves = {"lectura": "lectura", "diapositiva": "diapositivas", "laboratorio": "laboratorio",
-              "guia": "guía del profesor", "evaluacion": "evaluación"}
+              "evaluacion": "evaluación"}
     return {material for clave, material in claves.items() if clave in sin_tildes}
 
 

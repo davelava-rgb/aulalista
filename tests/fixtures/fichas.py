@@ -21,7 +21,7 @@ SESION = {
     "lectura.bloque.2": "Pilares de Scrum",
     "lectura.cuidado": "Confundir pilares con valores",
     "vocabulario.conceptos": "1. Manifiesto Ágil (no usar: Agile, manifiesto agile)\n2. Pilares de Scrum\n3. Valores de Scrum",
-    "materiales.cuales": "los cinco",
+    "materiales.cuales": "los cuatro",
 }
 for _n in (1, 2, 3):
     SESION.update({
