@@ -15,7 +15,7 @@ from app.config import RAIZ, FaltaClave
 from app.fichas import almacen, controles, flujo
 from app.fichas import plantillas as plantillas_fichas
 from app.fuentes import convertir
-from app.materiales import diapositivas, lectura
+from app.materiales import diapositivas, laboratorio, lectura
 
 app = FastAPI(title="AulaLista")
 app.mount("/estaticos", StaticFiles(directory=RAIZ / "web" / "estaticos"), name="estaticos")
@@ -346,6 +346,9 @@ MATERIALES = {
                     "aprobado": "Lectura aprobada.", "generar": "Generar lectura"},
     diapositivas.CLAVE: {"modulo": diapositivas, "numero": 2, "titulo": "Diapositivas", "el": "las diapositivas",
                          "plural": True, "aprobado": "Diapositivas aprobadas.", "generar": "Generar diapositivas"},
+    laboratorio.CLAVE: {"modulo": laboratorio, "numero": 3, "titulo": "Laboratorio y archivos de práctica",
+                        "el": "el laboratorio", "plural": False, "aprobado": "Laboratorio aprobado.",
+                        "generar": "Generar laboratorio"},
 }
 
 

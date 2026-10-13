@@ -761,7 +761,9 @@ def revisar_limites(cfg: Configuracion, ruta: Path, titulos: list[str], datos_pp
             for numero in datos_pptx["sin_notas"]:
                 agregar(FALLA, "notas del profesor", f"la diapositiva {numero} no tiene notas")
 
-    for conteo in limites.get("conteos", []):
+    # Los conteos son de la guía: un archivo de práctica no tiene ejercicios.
+    de_practica = cfg.carpeta_practica is not None and ruta.resolve().parent == cfg.carpeta_practica.resolve()
+    for conteo in [] if de_practica else limites.get("conteos", []):
         patron = re.compile(conteo["patron"], re.I)
         total = sum(1 for t in titulos if patron.search(t))
         if total < conteo.get("min", 0) or total > conteo.get("max", 10**6):

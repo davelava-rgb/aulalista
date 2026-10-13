@@ -282,3 +282,67 @@ def generar_lectura(contenido: Lectura, identidad: Identidad, portada: Portada, 
     destino.parent.mkdir(parents=True, exist_ok=True)
     documento.save(destino)
     return destino
+
+
+# ---------- Laboratorio (SKILL.md, «Material 3») ----------
+
+MEJORA = "Mejora el resultado (opcional)"
+_MENCION_DE_FIGURA = re.compile(r"\s*\(?\s*mira la figura\s*\d*\s*\.?\)?\s*", re.I)
+
+
+def _figura(documento: Document, imagen, numero: int, descripcion: str) -> None:
+    """La imagen justo después de su paso, con «Figura N» y una línea debajo. Imagen y pie no se separan."""
+    parrafo = documento.add_paragraph()
+    parrafo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    parrafo.paragraph_format.keep_with_next = True
+    parrafo.add_run().add_picture(str(imagen.ruta), width=Cm(imagen.ancho_cm))
+    pie = documento.add_paragraph()
+    pie.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    etiqueta = pie.add_run(f"Figura {numero}. ")
+    etiqueta.bold = True
+    pie.add_run(descripcion)
+    for corrida in pie.runs:
+        corrida.font.size = Pt(10)
+
+
+def generar_laboratorio(contenido, identidad: Identidad, portada: Portada, destino: Path, imagenes: dict,
+                        aviso_adjuntos: str = "") -> Path:
+    """Guía del alumno: portada «Laboratorio», tabla de archivos de práctica y cada ejercicio con su situación,
+    sus archivos, sus pasos (con sus figuras), lo que copia y «Mejora el resultado (opcional)».
+    `imagenes`: {(ejercicio, paso): Imagen} de app/materiales/figuras.py."""
+    documento = documento_base(identidad, portada)
+    documento.add_heading("Archivos de práctica", level=1)
+    if aviso_adjuntos:
+        documento.add_paragraph(aviso_adjuntos)
+    ejercicio_de = {n: e.numero for e in contenido.ejercicios for n in e.archivos}
+    tabla_de_datos(documento, identidad, Tabla(
+        titulo="", encabezados=["Archivo", "Ejercicio", "Contenido"],
+        filas=[[a.nombre, f"Ejercicio {ejercicio_de.get(a.nombre, '')}", a.descripcion] for a in contenido.archivos]))
+    numero_figura = 0
+    for e in contenido.ejercicios:
+        documento.add_heading(f"Ejercicio {e.numero} · {e.titulo}", level=1)
+        documento.add_paragraph(e.situacion)
+        if e.archivos:
+            archivos_ = documento.add_paragraph()
+            archivos_.add_run("Archivos de práctica: ").bold = True
+            archivos_.add_run(", ".join(e.archivos) + ".")
+        documento.add_heading("Pasos", level=2)
+        for i, paso in enumerate(e.pasos, start=1):
+            texto = _MENCION_DE_FIGURA.sub(" ", paso.texto).strip()
+            imagen = imagenes.get((e.numero, i))
+            if imagen is not None:
+                numero_figura += 1
+                texto = f"{texto} Mira la figura {numero_figura}."
+            parrafo = documento.add_paragraph(f"{i}. {texto}")
+            parrafo.paragraph_format.left_indent = Cm(0.6)
+            parrafo.paragraph_format.first_line_indent = Cm(-0.6)
+            if imagen is not None:
+                parrafo.paragraph_format.keep_with_next = True
+                _figura(documento, imagen, numero_figura, paso.figura.descripcion)
+        for recuadro_ in e.copiar:
+            recuadro(documento, identidad, recuadro_.titulo, [], lineas_para_copiar=recuadro_.lineas)
+        documento.add_heading(MEJORA, level=2)
+        recuadro(documento, identidad, "Pedido de seguimiento", [], lineas_para_copiar=[e.mejora])
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    documento.save(destino)
+    return destino
