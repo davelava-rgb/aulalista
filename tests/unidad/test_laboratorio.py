@@ -169,3 +169,19 @@ def test_la_pagina_de_la_sesion_genera_y_aprueba_el_laboratorio(sesion, monkeypa
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/laboratorio/aprobar", follow_redirects=False)
     assert "Laboratorio aprobado." in unquote(r.headers["location"])
     assert laboratorio.estado(sesion, 1)["estado"] == "aprobada"
+
+
+def test_no_aplica_en_la_ficha_no_exige_una_respuesta(sesion):  # noqa: F811
+    from app.fichas import almacen
+    ficha = almacen.cargar(sesion, "sesion", 1)
+    ficha["campos"]["ejercicio.1.pregunta_herramienta"] = {
+        "valor": "No aplica: la herramienta no debe preguntar nada. (propuesto)", "origen": "x", "estado": ""}
+    ficha["campos"]["ejercicio.2.pregunta_herramienta"] = {"valor": "Sí, usa el aviso de ayer", "origen": "x", "estado": ""}
+    almacen.guardar(sesion, "sesion", 1, ficha)
+    assert laboratorio.respuestas_a_la_herramienta(sesion, 1) == {2: "Sí, usa el aviso de ayer"}
+
+
+def test_el_pedido_pide_la_figura_donde_se_ubica_algo_y_sin_comillas():
+    texto = laboratorio.instrucciones_de_formato(1, "")
+    assert "Ponla en el paso que pide ubicar algo en el archivo" in texto
+    assert "va en **negrita**, sin comillas" in texto

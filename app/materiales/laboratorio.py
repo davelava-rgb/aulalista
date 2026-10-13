@@ -14,6 +14,7 @@ La ejecución de cada ejercicio y la guía del profesor son de la etapa 7b.
 
 import asyncio
 import json
+import re
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -111,8 +112,13 @@ def ejercicios_de_la_ficha(carpeta_curso: Path, sesion: int) -> list[int]:
 
 def respuestas_a_la_herramienta(carpeta_curso: Path, sesion: int) -> dict[int, str]:
     ficha = _ficha_sesion(carpeta_curso, sesion)
-    return {n: almacen.valor(ficha, f"ejercicio.{n}.pregunta_herramienta").strip()
-            for n in ejercicios_de_la_ficha(carpeta_curso, sesion)}
+    respuestas = {}
+    for n in ejercicios_de_la_ficha(carpeta_curso, sesion):
+        texto = almacen.valor(ficha, f"ejercicio.{n}.pregunta_herramienta").replace("(propuesto)", "").strip()
+        # «No aplica», «ninguna» o «no» dicen que la herramienta no pregunta nada: no hay respuesta que exigir.
+        if texto and not re.match(r"^(no aplica|no|ninguna|n/?a|-)", texto, re.I):
+            respuestas[n] = texto
+    return respuestas
 
 
 def fecha_de_referencia(carpeta_curso: Path) -> str:
@@ -172,9 +178,9 @@ CÓMO ENTREGAR EL LABORATORIO (PLAN.md §0, decisión 33)
   - pasos: en el orden real. Cada paso es una sola acción y nombra la hoja y la celda o la columna exactas. Puedes
     poner en negrita el nombre de una hoja o de un apartado con **dos asteriscos**. Si un archivo hace falta, el paso
     dice «adjunta el archivo». Si la herramienta debe detenerse a preguntar, ordénalo y escribe la respuesta exacta.
-  - figura: una por ejercicio como máximo, y solo si aclara dónde está algo en el archivo. En casi todos los
-    ejercicios va en null. No menciones la figura en el texto: el programa agrega «Mira la figura N». La figura no
-    muestra la respuesta.
+  - figura: una por ejercicio como máximo. Ponla en el paso que pide ubicar algo en el archivo: una columna, una
+    celda, un rango o un párrafo. Si ningún paso pide ubicar algo, deja todas en null. No menciones la figura en el
+    texto: el programa agrega «Mira la figura N». La figura no muestra la respuesta.
     - Excel: «hoja», «rango» (hasta 8 columnas y 16 filas, por ejemplo «A1:E9») y «marcas» con la celda o el rango
       que señala («C5», «B2:B9»). La fila 1 es la de los encabezados.
     - Word: «marcas» con un trozo del texto del archivo, copiado tal cual. «hoja» y «rango» vacíos.
@@ -187,6 +193,8 @@ CÓMO ENTREGAR EL LABORATORIO (PLAN.md §0, decisión 33)
       copia cada fórmula: «Copia la fórmula 1 en la celda L2».
     - «plantilla»: un texto que el alumno completa; solo si completarlo es el tema del ejercicio.
     Lo que se copia funciona tal cual: sin corchetes, guiones bajos ni espacios por llenar, salvo en una plantilla.
+  - Comillas («» o “”) solo para copiar texto tal cual de una fuente: el verificador las busca en las fuentes. El
+    texto que el alumno escribe o que la herramienta debe usar va en **negrita**, sin comillas.
   - mejora: «texto» con lo que se agrega y para qué; «pasos» y «copiar» si hacen falta, con las mismas reglas.
   - No escribas «Cómo se ve un buen resultado» ni «Criterio de calidad»: la skill no los permite.
 - archivos: cada archivo de práctica, con nombre S{sesion}_E[ejercicio]_[descripcion-corta] en minúsculas y con
