@@ -74,7 +74,7 @@ def test_genera_la_guia_los_archivos_las_figuras_y_el_zip(sesion):  # noqa: F811
     assert '=SI(B2<5,"REVISAR","OK")' in celdas and "Fórmula 2 · Promedio de horas" in celdas
     pie = guia.sections[0].footer.paragraphs[0].text
     assert pie.startswith("Sesión 1 · Laboratorio · Página")
-    assert len(guia.inline_shapes) == 2
+    assert len(guia.inline_shapes) == 3
     redaccion = consulta.llamadas[0]["prompt"]
     assert "## Material 3 · Laboratorio y archivos de práctica" in redaccion
     assert "Mira la figura N" in redaccion and laboratorio.AVISO_ADJUNTOS in redaccion
@@ -184,4 +184,5 @@ def test_no_aplica_en_la_ficha_no_exige_una_respuesta(sesion):  # noqa: F811
 def test_el_pedido_pide_la_figura_donde_se_ubica_algo_y_sin_comillas():
     texto = laboratorio.instrucciones_de_formato(1, "")
     assert "Ponla en el paso que pide ubicar algo en el archivo" in texto
+    assert "la figura es obligatoria" in texto
     assert "va en **negrita**, sin comillas" in texto

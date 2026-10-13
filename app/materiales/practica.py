@@ -25,6 +25,10 @@ POR_LLENAR = re.compile(r"\[[^\]\n]{0,40}\]|_{3,}|<[^<>\n]{1,40}>|\bX{3,}\b|\{\{
 # En una fórmula, «<» y «>» son operadores: solo se buscan corchetes vacíos, guiones bajos y «XXX».
 POR_LLENAR_EN_FORMULA = re.compile(r"\[\s*\]|_{3,}|\bX{3,}\b")
 FIGURAS_POR_EJERCICIO = 1     # PLAN.md §0, decisión 33: una como máximo, y solo si hace falta
+# Hace falta cuando un paso pide ubicar algo en el archivo: una columna, una celda, un rango, una fila o un apartado.
+# «filas» sola no cuenta: «Revisa que la tabla tenga 10 filas» habla de la respuesta, no del archivo.
+UBICA_ALGO = re.compile(r"(?i:\b(?:columnas?|celdas?|rangos?|apartados?|párrafos?|secci(?:ón|ones))\b|\bfilas? \d)"
+                        r"|\b[A-Z]{1,2}\d{1,4}:[A-Z]{1,2}\d{1,4}\b")
 
 
 def textos_del_ejercicio(e) -> list[str]:
@@ -234,6 +238,10 @@ def revisar(contenido: Laboratorio, sesion: int, ejercicios_de_la_ficha: int, fe
         if len(con_figura) > FIGURAS_POR_EJERCICIO:
             problemas.append(f"FALLA · figura · ejercicio {e.numero}: tiene {len(con_figura)} figuras; va una como "
                              "máximo, y solo si aclara dónde está algo en el archivo. Deja la más necesaria.")
+        ubica = next((paso.texto for paso in e.pasos if UBICA_ALGO.search(paso.texto)), None)
+        if not con_figura and ubica and e.archivos:
+            problemas.append(f"FALLA · figura · ejercicio {e.numero}: el paso «{ubica[:80]}» pide ubicar algo en el "
+                             "archivo y el ejercicio no tiene figura. Pon la figura en ese paso.")
         for paso in con_figura:
             problemas += _revisar_figura(e.numero, paso.figura, por_nombre, e.archivos)
         if fecha_de_referencia and re.search(r"\bplazos?\b|\bvenc\w*|\bfechas?\b", texto, re.I):

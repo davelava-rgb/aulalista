@@ -179,7 +179,8 @@ CÓMO ENTREGAR EL LABORATORIO (PLAN.md §0, decisión 33)
     poner en negrita el nombre de una hoja o de un apartado con **dos asteriscos**. Si un archivo hace falta, el paso
     dice «adjunta el archivo». Si la herramienta debe detenerse a preguntar, ordénalo y escribe la respuesta exacta.
   - figura: una por ejercicio como máximo. Ponla en el paso que pide ubicar algo en el archivo: una columna, una
-    celda, un rango o un párrafo. Si ningún paso pide ubicar algo, deja todas en null. No menciones la figura en el
+    celda, un rango o un párrafo. Si un paso pide ubicar algo, la figura es obligatoria: un programa lo revisa.
+    Si ningún paso pide ubicar algo, deja todas en null. No menciones la figura en el
     texto: el programa agrega «Mira la figura N». La figura no muestra la respuesta.
     - Excel: «hoja», «rango» (hasta 8 columnas y 16 filas, por ejemplo «A1:E9») y «marcas» con la celda o el rango
       que señala («C5», «B2:B9»). La fila 1 es la de los encabezados.

@@ -68,7 +68,10 @@ LIMPIO = {
                          "Necesita el total del mes.",
             "archivos": ["S1_E3_capacitacion.xlsx"],
             "pasos": [
-                _paso("Abre el archivo y entra a la hoja **Horas**."),
+                _paso("Abre el archivo y entra a la hoja **Horas**.",
+                      {"archivo": "S1_E3_capacitacion.xlsx", "hoja": "Horas", "rango": "A1:B4",
+                       "marcas": [{"lugar": "B2:B3", "numero": None}],
+                       "descripcion": "Las horas de cada persona en la hoja Horas."}),
                 _paso("Copia la fórmula 1 en la celda C2."),
                 _paso("Copia la celda C2 hacia abajo, hasta la fila 3."),
             ],
@@ -141,6 +144,8 @@ SEMBRADOS = {
                                         "archivo": "S1_E1_pedidos-semana.xlsx", "hoja": "Pedidos", "rango": "A1:C5",
                                         "marcas": [{"lugar": "A1", "numero": None}], "descripcion": "La hoja."}),
                                     "tiene 2 figuras; va una como máximo"),
-    "espacio por llenar en una fórmula": (lambda d: d["ejercicios"][2]["copiar"][0].update(lineas=['=SI(B2<___,"X","OK")']),
+    "falta la figura": (lambda d: d["ejercicios"][0]["pasos"][1].update(figura=None),
+                        "pide ubicar algo en el archivo y el ejercicio no tiene figura"),
+    "espacio por llenar en una fórmula":(lambda d: d["ejercicios"][2]["copiar"][0].update(lineas=['=SI(B2<___,"X","OK")']),
                                           "«___» en lo que el alumno copia"),
 }
