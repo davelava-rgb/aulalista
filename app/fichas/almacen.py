@@ -7,6 +7,7 @@ Cada ficha se guarda en dos archivos:
 Cada vez que se guarda, queda una copia en fichas/versiones/ con la fecha.
 """
 
+import hashlib
 import json
 import re
 from datetime import datetime
@@ -63,9 +64,31 @@ def cargar(carpeta_curso: Path, tipo: str, sesion: int | None = None) -> dict:
     ruta = ruta_ficha(carpeta_curso, tipo, sesion)
     ficha = json.loads(ruta.read_text(encoding="utf-8")) if ruta.exists() else nueva(tipo)
     quitar_faltas_viejas(ficha)
+    revision = ficha.get("revision_ejercicios") or {}
+    vigente = ficha["tipo"] == "sesion" and revision.get("huella") == huella_de_ejercicios(ficha)
     quitar_marcas_del_valor(ficha)
+    if vigente:
+        # Quitar la marca no cambia los ejercicios: la revisión guardada sigue valiendo.
+        revision["huella"] = huella_de_ejercicios(ficha)
     poner_por_omision(ficha)
     return ficha
+
+
+def texto_de_ejercicios(ficha: dict) -> tuple[str, list[int]]:
+    """Los ejercicios llenos, con sus etiquetas: lo que revisa la IA antes de confirmar la ficha de la sesión."""
+    ids = ("area", "accion", "entregable", "archivo", "problema", "respuesta", "pregunta_herramienta")
+    numeros = bloques_llenos(ficha, "ejercicio", plantillas.MAX_EJERCICIOS, ids)
+    etiquetas = {c.id: c.etiqueta for c in plantillas.FICHA_DE_LA_SESION[1][3].elementos[0].campos}
+    bloques = []
+    for n in numeros:
+        bloques.append("\n".join(
+            f"- {etiquetas[i].replace('[número]', str(n))}: {valor(ficha, f'ejercicio.{n}.{i}')}" for i in ids
+        ))
+    return "\n\n".join(bloques), numeros
+
+
+def huella_de_ejercicios(ficha: dict) -> str:
+    return hashlib.sha256(texto_de_ejercicios(ficha)[0].encode("utf-8")).hexdigest()
 
 
 MARCA_PROPUESTO = re.compile(r"[ \t]*\(\s*propuest[oa]s?\s*\)", re.I)

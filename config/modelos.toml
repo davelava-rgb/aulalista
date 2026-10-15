@@ -23,6 +23,12 @@ modelo = "claude-sonnet-5-5"
 tope_usd = 0.30
 max_turns = 3
 
+# Botón «Corregir los ejercicios»: corrige los ejercicios que marcó la revisión anterior.
+[correccion_ejercicios]
+modelo = "claude-sonnet-5-5"
+tope_usd = 0.40
+max_turns = 3
+
 # Redacción de un material a partir de las fichas y de los pasajes de las fuentes.
 [redaccion]
 modelo = "claude-opus-5-5"

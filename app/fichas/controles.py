@@ -187,7 +187,9 @@ async def leer(formulario, carpeta_curso: Path) -> dict:
     """
     resultado = {}
     for clave in formulario.keys():
-        if clave.split(".", 2)[-1] in ("otro", "otros", "casillas", "archivo", "archivos", "quitar") and clave.count(".") >= 2:
+        # Las partes de un control («visual.logo.archivo») no son campos. «ejercicio.1.archivo» sí es un campo.
+        base, _, parte = clave.rpartition(".")
+        if base in CONTROLES and parte in ("otro", "otros", "casillas", "archivo", "archivos", "quitar"):
             continue
         valores = formulario.getlist(clave)
         if len(valores) == 1 and isinstance(valores[0], str):

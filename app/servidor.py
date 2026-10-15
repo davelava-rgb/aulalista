@@ -186,13 +186,15 @@ def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, m
         if errores is None:
             # Al volver a abrir la ficha, el motivo de que siga sin confirmar no se pierde.
             errores = flujo.problemas_de_ejercicios_guardados(ficha)
+    # Los problemas de la revisión de los ejercicios los corrige la IA con un botón.
+    corregibles = sesion is not None and bool(set(errores or []) & set(flujo.problemas_de_ejercicios_guardados(ficha)))
     return plantillas.TemplateResponse(request, "ficha.html", {
         "curso": curso, "nombre": cursos.nombre(curso), "titulo": titulo, "ficha": ficha,
         "propuesta": flujo.estado_propuesta(carpeta, tipo, sesion),
         "hay_propuestos": any((d or {}).get("estado") == almacen.PROPUESTO for d in ficha["campos"].values()),
         "secciones": plantillas_fichas.vista(tipo, ficha["campos"]),
         "preguntas": almacen.preguntas_pendientes(ficha),
-        "errores": errores or [], "mensaje": mensaje,
+        "errores": errores or [], "mensaje": mensaje, "corregibles": corregibles,
         "versiones": almacen.listar_versiones(carpeta, tipo, sesion),
         "url_restaurar": _url_ficha(curso, sesion) + "/restaurar",
         "desactualizados": desactualizados,
@@ -235,6 +237,15 @@ async def _accion_ficha(request: Request, curso: str, tipo: str, sesion: int | N
             mensaje = await asyncio.to_thread(
                 lambda: asyncio.run(flujo.completar(carpeta, curso, accion.removeprefix("completar.")))
             )
+        elif accion == "corregir_ejercicios" and tipo == "sesion":
+            # Una corrección y, enseguida, la revisión de nuevo: lo que quede, lo decide el profesor.
+            corregido = await asyncio.to_thread(
+                lambda: asyncio.run(flujo.corregir_ejercicios(carpeta, curso, sesion))
+            )
+            try:
+                mensaje = corregido + " " + await _guardar_y_confirmar(carpeta, curso, tipo, sesion)
+            except almacen.FichaIncompleta as error:
+                mensaje, errores = corregido + " La revisión todavía encuentra problemas.", error.errores
         elif accion == "guardar":
             # Guardar también confirma: una ficha completa queda confirmada (decisión 28).
             mensaje = await _guardar_y_confirmar(carpeta, curso, tipo, sesion)

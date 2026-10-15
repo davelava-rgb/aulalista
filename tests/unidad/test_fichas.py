@@ -113,6 +113,15 @@ def test_la_marca_propuesto_nunca_queda_en_el_valor_ni_llega_al_redactor(curso):
     assert almacen.valor(nueva, "sesion.numero_titulo") == "1. Scrum"
 
 
+def test_quitar_la_marca_no_invalida_la_revision_de_los_ejercicios(curso):
+    ficha = datos.ficha("sesion", datos.SESION)
+    ficha["campos"]["ejercicio.1.archivo"]["valor"] += " (propuesto)"
+    ficha["revision_ejercicios"] = {"huella": almacen.huella_de_ejercicios(ficha), "problemas": ["Ejercicio 1: falla."]}
+    almacen.ruta_ficha(curso, "sesion", 1).parent.mkdir(parents=True)
+    almacen.ruta_ficha(curso, "sesion", 1).write_text(json.dumps(ficha, ensure_ascii=False), encoding="utf-8")
+    assert flujo.problemas_de_ejercicios_guardados(almacen.cargar(curso, "sesion", 1)) == ["Ejercicio 1: falla."]
+
+
 # ---------- Edición y versiones ----------
 
 def test_lo_que_escribe_el_profesor_queda_con_su_origen():

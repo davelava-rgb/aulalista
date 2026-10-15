@@ -77,6 +77,47 @@ def test_al_abrir_de_nuevo_la_ficha_muestra_por_que_sigue_sin_confirmar(curso, e
     assert "Para confirmarla falta" not in cliente.get("/cursos/scrum/sesiones/1/ficha").text
 
 
+def test_el_formulario_guarda_el_archivo_de_practica_de_cada_ejercicio(curso):
+    cliente.post("/cursos/scrum/ficha", data={"accion": "guardar", **datos.CURSO})
+    cliente.post("/cursos/scrum/sesiones/1/ficha", data={"accion": "guardar", "ejercicio.1.archivo": "Excel con usuarios",
+                                                          "pregunta.1.archivo": "Word con un memorando"})
+    ficha = almacen.cargar(curso, "sesion", 1)
+    assert almacen.valor(ficha, "ejercicio.1.archivo") == "Excel con usuarios"
+    assert almacen.valor(ficha, "pregunta.1.archivo") == "Word con un memorando"
+
+
+def test_el_boton_corrige_los_ejercicios_marcados_y_confirma(curso, entorno, monkeypatch):
+    entorno["env"].write_text("ANTHROPIC_API_KEY=sk-ant-de-prueba\n", encoding="utf-8")
+    cliente.post("/cursos/scrum/ficha", data={"accion": "guardar", **datos.CURSO})
+    con_problema = consulta_simulada(structured_output={"ejercicios": [
+        {"numero": 2, "funciona_solo": True, "sin_llenar_a_mano": False, "motivo": "Falta el cargo."}]})
+    sin_problemas = consulta_simulada(structured_output={"ejercicios": [
+        {"numero": n, "funciona_solo": True, "sin_llenar_a_mano": True, "motivo": "Cumple"} for n in (1, 2, 3)]})
+    revisores = [con_problema, sin_problemas]
+    original = flujo.confirmar_sesion
+    monkeypatch.setattr(flujo, "confirmar_sesion", lambda c, cu, s: original(c, cu, s, consulta=revisores.pop(0)))
+    cliente.post("/cursos/scrum/sesiones/1/ficha", data={"accion": "guardar", **datos.SESION})
+    pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
+    assert 'value="corregir_ejercicios"' in pagina
+
+    corrector = consulta_simulada(structured_output={"campos": [
+        {"id": "ejercicio.2.archivo", "valor": "Word con seis situaciones y el cargo de cada persona (propuesto)"},
+        {"id": "ejercicio.1.archivo", "valor": "No se toca: el ejercicio 1 no tiene problemas"},
+        {"id": "sesion.alcance", "valor": "Tampoco se toca"}]})
+    corregir = flujo.corregir_ejercicios
+    monkeypatch.setattr(flujo, "corregir_ejercicios", lambda c, cu, s: corregir(c, cu, s, consulta=corrector))
+    r = cliente.post("/cursos/scrum/sesiones/1/ficha", data={"accion": "corregir_ejercicios", **datos.SESION})
+    assert "Corregí el ejercicio 2." in r.text
+    assert "Ficha de la sesión guardada y confirmada." in r.text
+    ficha = almacen.cargar(curso, "sesion", 1)
+    assert ficha["confirmada"] is True
+    assert ficha["campos"]["ejercicio.2.archivo"] == {
+        "valor": "Word con seis situaciones y el cargo de cada persona", "origen": "deducido", "estado": "propuesto"}
+    assert almacen.valor(ficha, "ejercicio.1.archivo") == datos.SESION["ejercicio.1.archivo"]
+    assert almacen.valor(ficha, "sesion.alcance") == datos.SESION["sesion.alcance"]
+    assert 'value="corregir_ejercicios"' not in r.text
+
+
 def test_recuperar_una_version_desde_la_pagina(curso):
     cliente.post("/cursos/scrum/ficha", data={"accion": "guardar", "curso.nombre": "Primero"})
     cliente.post("/cursos/scrum/ficha", data={"accion": "guardar", "curso.nombre": "Segundo"})

@@ -7,7 +7,6 @@ Reglas de la skill (Paso 1 y Paso 2):
 - Cada ejercicio se revisa con tres preguntas antes de confirmar la ficha de la sesión.
 """
 
-import hashlib
 import json
 import re
 import time
@@ -463,37 +462,23 @@ def aceptar_propuestos(ficha: dict) -> int:
 
 # ---------- Revisión de los ejercicios ----------
 
-def _texto_de_ejercicios(ficha: dict) -> tuple[str, list[int]]:
-    ids = ("area", "accion", "entregable", "archivo", "problema", "respuesta", "pregunta_herramienta")
-    numeros = almacen.bloques_llenos(ficha, "ejercicio", plantillas.MAX_EJERCICIOS, ids)
-    etiquetas = {c.id: c.etiqueta for c in plantillas.FICHA_DE_LA_SESION[1][3].elementos[0].campos}
-    bloques = []
-    for n in numeros:
-        bloques.append("\n".join(
-            f"- {etiquetas[i].replace('[número]', str(n))}: {almacen.valor(ficha, f'ejercicio.{n}.{i}')}" for i in ids
-        ))
-    return "\n\n".join(bloques), numeros
-
-
-def _huella_de_ejercicios(ficha: dict) -> str:
-    return hashlib.sha256(_texto_de_ejercicios(ficha)[0].encode("utf-8")).hexdigest()
 
 
 def problemas_de_ejercicios_guardados(ficha: dict) -> list[str]:
     """Los problemas de la última revisión, si los ejercicios no cambiaron desde entonces. Sin IA:
     la página los muestra al abrirse, para que el profesor sepa por qué la ficha sigue sin confirmar."""
     guardada = ficha.get("revision_ejercicios") or {}
-    if ficha.get("confirmada") or guardada.get("huella") != _huella_de_ejercicios(ficha):
+    if ficha.get("confirmada") or guardada.get("huella") != almacen.huella_de_ejercicios(ficha):
         return []
     return guardada.get("problemas", [])
 
 
 async def revisar_ejercicios(ficha: dict, curso: str, sesion: int, consulta=agente.query) -> list[str]:
     """Las tres preguntas de la skill (Paso 2.4). La segunda la revisa errores() sin IA."""
-    texto, numeros = _texto_de_ejercicios(ficha)
+    texto, numeros = almacen.texto_de_ejercicios(ficha)
     if not numeros:
         return []
-    huella = _huella_de_ejercicios(ficha)
+    huella = almacen.huella_de_ejercicios(ficha)
     guardada = ficha.get("revision_ejercicios") or {}
     if guardada.get("huella") == huella:
         return guardada["problemas"]
@@ -517,6 +502,78 @@ async def revisar_ejercicios(ficha: dict, curso: str, sesion: int, consulta=agen
             problemas.append(f"Ejercicio {e['numero']}: hay que llenar algo a mano. {e['motivo']}")
     ficha["revision_ejercicios"] = {"huella": huella, "problemas": problemas}
     return problemas
+
+
+CAMPOS_DEL_EJERCICIO = ("area", "accion", "entregable", "archivo", "problema", "respuesta", "pregunta_herramienta")
+
+
+def ejercicios_con_problemas(problemas: list[str]) -> list[int]:
+    return sorted({int(m.group(1)) for p in problemas if (m := re.match(r"Ejercicio (\d+):", p))})
+
+
+def pedido_de_correccion(ficha: dict, ficha_curso: str, problemas: list[str]) -> str:
+    numeros = ejercicios_con_problemas(problemas)
+    etiquetas = {c.id: c.etiqueta for c in plantillas.FICHA_DE_LA_SESION[1][3].elementos[0].campos}
+    bloques = []
+    for n in numeros:
+        bloques.append(f"Ejercicio {n}:\n" + "\n".join(
+            f"- ejercicio.{n}.{i} ({etiquetas[i].replace('[número]', str(n))}): {almacen.valor(ficha, f'ejercicio.{n}.{i}')}"
+            for i in CAMPOS_DEL_EJERCICIO))
+    return "\n".join([
+        "Vas a corregir ejercicios de la ficha de laboratorio de una sesión. Una revisión encontró estos problemas:",
+        *[f"- {p}" for p in problemas],
+        "",
+        f"Alcance de la sesión: {almacen.valor(ficha, 'sesion.alcance')}",
+        "",
+        "Ejercicios que debes corregir (id del campo, etiqueta y valor actual):",
+        "\n\n".join(bloques),
+        "",
+        "Reglas:",
+        "- Corrige solo lo necesario para resolver cada problema. Conserva el área, el tema y la intención del ejercicio.",
+        "- Cada ejercicio funciona solo, sin el resultado de otro ejercicio.",
+        "- Cada ejercicio se ejecuta de principio a fin sin llenar nada a mano: el archivo de práctica trae todos los "
+        "datos que el alumno necesita.",
+        "- Los campos del ejercicio quedan coherentes entre sí: acción, archivo, problema, respuesta y entregable.",
+        "- Los archivos de práctica son Excel para datos y Word para textos. PDF solo si el caso lo exige. Nunca .txt.",
+        "- Los datos del caso son ficticios y cuadran con los datos fijos de la ficha del curso.",
+        "- No inventes hechos del mundo real: ni cifras reales, ni estudios, ni personas reales, ni funciones de herramientas.",
+        "- No escribas tiempos ni puntajes.",
+        "- Devuelve solo los campos que cambias, con su id y su valor completo. No escribas marcas como «(propuesto)».",
+        "- Escribe en el idioma del curso, en oraciones cortas y claras.",
+        "",
+        "Ficha del curso confirmada:",
+        ficha_curso,
+    ])
+
+
+async def corregir_ejercicios(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.query) -> str:
+    """Botón «Corregir los ejercicios»: la IA corrige los ejercicios que marcó la revisión. Una sola corrección;
+    después, guardar vuelve a revisarlos. Lo corregido queda marcado «Propuesto» para que el profesor lo vea."""
+    ficha = almacen.cargar(carpeta_curso, "sesion", sesion)
+    problemas = problemas_de_ejercicios_guardados(ficha)
+    numeros = ejercicios_con_problemas(problemas)
+    if not numeros:
+        return "No hay ejercicios que corregir."
+    ficha_curso = almacen.texto_para_materiales(carpeta_curso, "curso")
+    respuesta = await agente.consultar(
+        pedido_de_correccion(ficha, ficha_curso, problemas), tarea="correccion_ejercicios", esquema=ESQUEMA_COMPLETAR,
+        curso=curso, etapa="corrección de ejercicios", sesion=f"S{sesion}", consulta=consulta,
+    )
+    permitidos = {f"ejercicio.{n}.{i}" for n in numeros for i in CAMPOS_DEL_EJERCICIO}
+    cambiados = []
+    for dato in respuesta.get("campos", []):
+        texto = almacen.sin_marcas(dato["valor"])
+        if dato["id"] in permitidos and texto and texto != almacen.valor(ficha, dato["id"]) and dato["id"] not in cambiados:
+            ficha["campos"][dato["id"]] = {"valor": texto, "origen": "deducido", "estado": almacen.PROPUESTO}
+            cambiados.append(dato["id"])
+    if not cambiados:
+        return "La corrección llegó vacía. No cambié nada."
+    ficha["confirmada"] = False
+    almacen.guardar(carpeta_curso, "sesion", sesion, ficha, "ejercicios corregidos")
+    numeros = sorted({int(c.split(".")[1]) for c in cambiados})
+    cuales = f"el ejercicio {numeros[0]}" if len(numeros) == 1 else \
+        "los ejercicios " + ", ".join(map(str, numeros[:-1])) + f" y {numeros[-1]}"
+    return f"Corregí {cuales}. Lo cambiado quedó marcado «Propuesto»."
 
 
 # ---------- Confirmación ----------

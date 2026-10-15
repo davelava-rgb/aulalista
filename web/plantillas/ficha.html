@@ -126,7 +126,16 @@
 <section class="mensaje" role="alert">
   <h2>Para confirmarla falta</h2>
   <ul>{% for e in errores %}<li>{{ e }}</li>{% endfor %}</ul>
+  {% if corregibles %}
+  <div class="completar">
+    <button type="submit" form="form-ficha" name="accion" value="corregir_ejercicios"
+            {% if propuesta.estado == "trabajando" %}disabled{% endif %}>Corregir los ejercicios</button>
+    <p class="ayuda">AulaLista corrige los ejercicios marcados, los revisa de nuevo y, si cumplen, confirma la ficha.
+      Lo cambiado queda marcado «Propuesto». Gasta tokens.</p>
+  </div>
+  {% else %}
   <p>Corrige esos campos y guarda de nuevo. Puedes salir de la ficha cuando quieras: lo guardado no se pierde.</p>
+  {% endif %}
 </section>
 {% endif %}
 
@@ -260,7 +269,8 @@
     const boton = evento.submitter;
     if (boton) {
       boton.textContent = boton.value === "proponer" ? "Leyendo las fuentes… puede tardar"
-        : boton.value.startsWith("completar.") ? "Completando… puede tardar" : "Guardando…";
+        : boton.value.startsWith("completar.") ? "Completando… puede tardar"
+        : boton.value === "corregir_ejercicios" ? "Corrigiendo… puede tardar" : "Guardando…";
       setTimeout(() => document.querySelectorAll("#form-ficha button").forEach((b) => (b.disabled = true)), 0);
     }
   });
