@@ -183,6 +183,9 @@ def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, m
     desactualizados = []
     if sesion is not None:
         desactualizados = [n for n, m in almacen.cargar_estado(carpeta, sesion)["materiales"].items() if m.get("desactualizado")]
+        if errores is None:
+            # Al volver a abrir la ficha, el motivo de que siga sin confirmar no se pierde.
+            errores = flujo.problemas_de_ejercicios_guardados(ficha)
     return plantillas.TemplateResponse(request, "ficha.html", {
         "curso": curso, "nombre": cursos.nombre(curso), "titulo": titulo, "ficha": ficha,
         "propuesta": flujo.estado_propuesta(carpeta, tipo, sesion),

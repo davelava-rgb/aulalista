@@ -59,6 +59,24 @@ def test_guardar_la_ficha_de_la_sesion_completa_la_confirma(curso, entorno, monk
     assert "Confirmada" in cliente.get("/cursos/scrum").text
 
 
+def test_al_abrir_de_nuevo_la_ficha_muestra_por_que_sigue_sin_confirmar(curso, entorno, monkeypatch):
+    entorno["env"].write_text("ANTHROPIC_API_KEY=sk-ant-de-prueba\n", encoding="utf-8")
+    cliente.post("/cursos/scrum/ficha", data={"accion": "guardar", **datos.CURSO})
+    revisor = consulta_simulada(structured_output={"ejercicios": [
+        {"numero": 1, "funciona_solo": True, "sin_llenar_a_mano": False, "motivo": "Falta el cargo."}]})
+    original = flujo.confirmar_sesion
+    monkeypatch.setattr(flujo, "confirmar_sesion", lambda c, cu, s: original(c, cu, s, consulta=revisor))
+    cliente.post("/cursos/scrum/sesiones/1/ficha", data={"accion": "guardar", **datos.SESION})
+    pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
+    assert "Para confirmarla falta" in pagina
+    assert "Ejercicio 1: hay que llenar algo a mano. Falta el cargo." in pagina
+    # Si el profesor cambia los ejercicios, el aviso viejo ya no se muestra.
+    ficha = almacen.cargar(curso, "sesion", 1)
+    almacen.aplicar_formulario(ficha, {"ejercicio.1.archivo": "Word con seis situaciones y el cargo de cada persona"})
+    almacen.guardar(curso, "sesion", 1, ficha, "editada por el profesor")
+    assert "Para confirmarla falta" not in cliente.get("/cursos/scrum/sesiones/1/ficha").text
+
+
 def test_recuperar_una_version_desde_la_pagina(curso):
     cliente.post("/cursos/scrum/ficha", data={"accion": "guardar", "curso.nombre": "Primero"})
     cliente.post("/cursos/scrum/ficha", data={"accion": "guardar", "curso.nombre": "Segundo"})

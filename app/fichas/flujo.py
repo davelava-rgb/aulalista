@@ -474,12 +474,25 @@ def _texto_de_ejercicios(ficha: dict) -> tuple[str, list[int]]:
     return "\n\n".join(bloques), numeros
 
 
+def _huella_de_ejercicios(ficha: dict) -> str:
+    return hashlib.sha256(_texto_de_ejercicios(ficha)[0].encode("utf-8")).hexdigest()
+
+
+def problemas_de_ejercicios_guardados(ficha: dict) -> list[str]:
+    """Los problemas de la última revisión, si los ejercicios no cambiaron desde entonces. Sin IA:
+    la página los muestra al abrirse, para que el profesor sepa por qué la ficha sigue sin confirmar."""
+    guardada = ficha.get("revision_ejercicios") or {}
+    if ficha.get("confirmada") or guardada.get("huella") != _huella_de_ejercicios(ficha):
+        return []
+    return guardada.get("problemas", [])
+
+
 async def revisar_ejercicios(ficha: dict, curso: str, sesion: int, consulta=agente.query) -> list[str]:
     """Las tres preguntas de la skill (Paso 2.4). La segunda la revisa errores() sin IA."""
     texto, numeros = _texto_de_ejercicios(ficha)
     if not numeros:
         return []
-    huella = hashlib.sha256(texto.encode("utf-8")).hexdigest()
+    huella = _huella_de_ejercicios(ficha)
     guardada = ficha.get("revision_ejercicios") or {}
     if guardada.get("huella") == huella:
         return guardada["problemas"]
