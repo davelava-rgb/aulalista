@@ -63,8 +63,32 @@ def cargar(carpeta_curso: Path, tipo: str, sesion: int | None = None) -> dict:
     ruta = ruta_ficha(carpeta_curso, tipo, sesion)
     ficha = json.loads(ruta.read_text(encoding="utf-8")) if ruta.exists() else nueva(tipo)
     quitar_faltas_viejas(ficha)
+    quitar_marcas_del_valor(ficha)
     poner_por_omision(ficha)
     return ficha
+
+
+MARCA_PROPUESTO = re.compile(r"[ \t]*\(\s*propuest[oa]s?\s*\)", re.I)
+
+
+def sin_marca(texto: str) -> str:
+    """Quita «(propuesto)» de una línea. La marca vive en el estado del dato, nunca en su valor:
+    si queda en el valor, llega a los materiales."""
+    return MARCA_PROPUESTO.sub("", texto).rstrip()
+
+
+def quitar_marcas_del_valor(ficha: dict) -> None:
+    """Una ficha propuesta antes de esta corrección puede traer «(propuesto)» escrito dentro del valor."""
+    for dato in ficha["campos"].values():
+        if dato and dato.get("valor"):
+            dato["valor"] = sin_marcas(dato["valor"])
+        for version in (dato or {}).get("versiones", []):
+            version["valor"] = sin_marcas(version["valor"])
+
+
+def sin_marcas(texto: str) -> str:
+    """sin_marca() en cada línea de un valor."""
+    return "\n".join(sin_marca(l) for l in texto.split("\n")).strip()
 
 
 def poner_por_omision(ficha: dict) -> None:
@@ -134,7 +158,9 @@ SOLO_PARA_LA_FICHA = ("- Horas del curso:",)
 def texto_para_materiales(carpeta_curso: Path, tipo: str, sesion: int | None = None) -> str:
     """El .md de la ficha que recibe el redactor, sin los datos que no van a ningún material."""
     texto = ruta_ficha(carpeta_curso, tipo, sesion, ".md").read_text(encoding="utf-8")
-    return "".join(l for l in texto.splitlines(keepends=True) if not l.startswith(SOLO_PARA_LA_FICHA))
+    # La marca «(propuesto)» del .md es para el profesor: el redactor no la recibe.
+    return "".join(MARCA_PROPUESTO.sub("", l) for l in texto.splitlines(keepends=True)
+                   if not l.startswith(SOLO_PARA_LA_FICHA))
 
 
 def _slug(texto: str) -> str:
@@ -212,7 +238,7 @@ def aplicar_formulario(ficha: dict, formulario: dict) -> bool:
 
 
 def _limpiar(texto: str) -> str:
-    return "\n".join(linea.rstrip() for linea in str(texto).replace("\r\n", "\n").strip().split("\n"))
+    return "\n".join(sin_marca(linea) for linea in str(texto).replace("\r\n", "\n").strip().split("\n"))
 
 
 def marcar_faltantes(ficha: dict) -> None:

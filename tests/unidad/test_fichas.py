@@ -89,6 +89,30 @@ def test_la_ficha_llena_conserva_las_etiquetas_y_anota_el_origen(curso):
     assert "- Ejercicio 4 · Área" not in md  # los bloques vacíos no se escriben
 
 
+def test_la_marca_propuesto_nunca_queda_en_el_valor_ni_llega_al_redactor(curso):
+    # Una ficha propuesta antes de la corrección trae la marca escrita dentro del valor.
+    ficha = datos.ficha("sesion", datos.SESION)
+    ficha["campos"]["sesion.alcance"] = {"valor": "Pilares (propuesto)", "origen": "silabo.pdf", "estado": "propuesto"}
+    ficha["campos"]["lectura.cuidado"] = {"valor": "Riesgo uno. (propuesto)\nRiesgo dos (Propuesto)",
+                                          "origen": "deducido", "estado": ""}
+    almacen.ruta_ficha(curso, "sesion", 1).parent.mkdir(parents=True)
+    almacen.ruta_ficha(curso, "sesion", 1).write_text(json.dumps(ficha, ensure_ascii=False), encoding="utf-8")
+    cargada = almacen.cargar(curso, "sesion", 1)
+    assert almacen.valor(cargada, "sesion.alcance") == "Pilares"
+    assert almacen.valor(cargada, "lectura.cuidado") == "Riesgo uno.\nRiesgo dos"
+    # El .md del profesor conserva la marca como nota; el texto del redactor no la trae.
+    almacen.guardar(curso, "sesion", 1, cargada)
+    assert "Pilares (propuesto) (fuente: silabo.pdf)" in almacen.ruta_ficha(curso, "sesion", 1, ".md").read_text(encoding="utf-8")
+    assert "propuesto" not in almacen.texto_para_materiales(curso, "sesion", 1).lower()
+    # La propuesta de la IA y lo que escribe el profesor también se limpian.
+    nueva = datos.ficha("sesion", {})
+    flujo.aplicar_propuesta(curso, nueva, {"campos": [
+        {"id": "sesion.alcance", "valor": "Roles. (propuesto)", "origen": "deducido", "literal": False}]})
+    assert almacen.valor(nueva, "sesion.alcance") == "Roles."
+    almacen.aplicar_formulario(nueva, {"sesion.numero_titulo": "1. Scrum (propuesto)"})
+    assert almacen.valor(nueva, "sesion.numero_titulo") == "1. Scrum"
+
+
 # ---------- Edición y versiones ----------
 
 def test_lo_que_escribe_el_profesor_queda_con_su_origen():

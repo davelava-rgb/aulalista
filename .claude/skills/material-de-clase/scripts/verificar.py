@@ -530,6 +530,7 @@ TIEMPOS_Y_PUNTAJES = [
 EMOJI = re.compile("[\U0001F000-\U0001FAFF☀-➿\U0001F1E6-\U0001F1FF⭐⭕⌚⌛⏩-⏺️]")
 CITA = re.compile(r"«([^»]+)»|“([^”]+)”|\"([^\"]+)\"")
 ARCHIVO = re.compile(r"\bS(\d+)_([EP])(\d+)_([A-Za-z0-9-]+)\.([A-Za-z0-9]{2,5})\b")
+MARCA_DE_FICHA = re.compile(r"\(\s*propuest[oa]s?\s*\)")   # se busca en el texto normalizado
 
 
 def _texto_sin_permitidos(normal: str, permitidos: list[str]) -> str:
@@ -653,6 +654,10 @@ def revisar_oracion(o: Oracion, cfg: Configuracion, hallazgos: list[Hallazgo]) -
             agregar(nivel, regla, f"dice «{m.group(0).strip()}»")
     if EMOJI.search(o.texto):
         agregar(FALLA, "emoji", f"tiene «{EMOJI.search(o.texto).group(0)}»")
+    # La marca «(propuesto)» de la ficha es para el profesor, nunca para el material.
+    m = MARCA_DE_FICHA.search(normal)
+    if m:
+        agregar(FALLA, "marca de la ficha", f"dice «{m.group(0)}»")
 
     for frase in cfg.nunca_se_incluye:
         if patron_frase(frase).search(normal):

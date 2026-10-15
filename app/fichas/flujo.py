@@ -129,7 +129,8 @@ def pedido_de_propuesta(carpeta_curso: Path, tipo: str, sesion: int | None, fich
         "- literal = true solo si la fuente dice el dato con esas mismas palabras. Si lo deduces, literal = false.",
         "- Si dos fuentes dicen cosas distintas sobre el mismo dato, no elijas: devuélvelo en «conflictos» con las dos versiones.",
         "- Propón todos los campos de la lista, aunque la fuente no los diga (PLAN.md §0, decisión 17). El profesor",
-        "  solo revisa y confirma. Lo que deduces o propones va con literal = false y queda marcado «(propuesto)».",
+        "  solo revisa y confirma. Lo que deduces o propones va con literal = false. AulaLista lo marca como",
+        "  propuesto: no escribas «(propuesto)» ni otra marca dentro del valor.",
         "- Deduce del contenido de la fuente lo que se pueda: las sesiones (una por capítulo o tema principal, en el",
         "  orden de la fuente), el público y lo que ya sabe, el idioma, los temas y el vocabulario.",
         "- Los datos del caso son ficticios: propón una empresa o institución ficticia que encaje con el tema, sus",
@@ -182,7 +183,7 @@ def aplicar_propuesta(carpeta_curso: Path, ficha: dict, propuesta: dict) -> dict
         return not dato.get("valor") and dato.get("estado") != almacen.CONFLICTO
 
     for dato in propuesta.get("campos", []):
-        campo_id, texto = dato["id"], dato["valor"].strip()
+        campo_id, texto = dato["id"], almacen.sin_marcas(dato["valor"])
         origen = dato["origen"].removesuffix(".jsonl").strip()
         if campo_id not in validos or campo_id.startswith(NO_SE_PROPONEN) or not texto or not vacio(campo_id):
             resumen["descartados"] += 1
@@ -200,9 +201,9 @@ def aplicar_propuesta(carpeta_curso: Path, ficha: dict, propuesta: dict) -> dict
 
     for conflicto in propuesta.get("conflictos", []):
         versiones = [
-            {"valor": v["valor"].strip(), "origen": v["origen"].removesuffix(".jsonl").strip()}
+            {"valor": almacen.sin_marcas(v["valor"]), "origen": v["origen"].removesuffix(".jsonl").strip()}
             for v in conflicto["versiones"]
-            if v["valor"].strip() and v["origen"].removesuffix(".jsonl").strip() in permitidas
+            if almacen.sin_marcas(v["valor"]) and v["origen"].removesuffix(".jsonl").strip() in permitidas
         ]
         distintas = {v["valor"] for v in versiones}
         if conflicto["id"] in validos and vacio(conflicto["id"]) and len(distintas) >= 2:
@@ -353,7 +354,7 @@ async def completar(carpeta_curso: Path, curso: str, clave: str, consulta=agente
     )
     llenados = []
     for dato in respuesta.get("campos", []):
-        texto = dato["valor"].strip()
+        texto = almacen.sin_marcas(dato["valor"])
         if dato["id"] in vacios and texto and dato["id"] not in llenados:
             ficha["campos"][dato["id"]] = {"valor": texto, "origen": "deducido", "estado": almacen.PROPUESTO}
             llenados.append(dato["id"])

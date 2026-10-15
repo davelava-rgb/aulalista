@@ -119,7 +119,7 @@ def respuestas_a_la_herramienta(carpeta_curso: Path, sesion: int) -> dict[int, s
     ficha = _ficha_sesion(carpeta_curso, sesion)
     respuestas = {}
     for n in ejercicios_de_la_ficha(carpeta_curso, sesion):
-        texto = almacen.valor(ficha, f"ejercicio.{n}.pregunta_herramienta").replace("(propuesto)", "").strip()
+        texto = almacen.valor(ficha, f"ejercicio.{n}.pregunta_herramienta").strip()
         # «No aplica», «ninguna» o «no» dicen que la herramienta no pregunta nada: no hay respuesta que exigir.
         if texto and not re.match(r"^(no aplica|no|ninguna|n/?a|-)", texto, re.I):
             respuestas[n] = texto
@@ -133,7 +133,7 @@ def respuestas_para_ejecutar(carpeta_curso: Path, sesion: int) -> tuple[dict[int
     del_alumno = respuestas_a_la_herramienta(carpeta_curso, sesion)
     correctas, alumno = {}, {}
     for numero, n in enumerate(ejercicios_de_la_ficha(carpeta_curso, sesion), start=1):
-        correctas[numero] = almacen.valor(ficha, f"ejercicio.{n}.respuesta").replace("(propuesto)", "").strip()
+        correctas[numero] = almacen.valor(ficha, f"ejercicio.{n}.respuesta").strip()
         if n in del_alumno:
             alumno[numero] = del_alumno[n]
     return correctas, alumno
