@@ -29,6 +29,7 @@ from pydantic import ValidationError
 
 from app import agente, entrega, office, skill, tokens
 from app.fichas import almacen, verificacion
+from app.fuentes import convertir
 from app.materiales import comun, disenador, estilo, lectura
 from app.materiales import pptx as generador
 from app.materiales import contenido as contenido_
@@ -166,7 +167,28 @@ def _texto_de_la_lectura(contenido: Lectura) -> str:
 
 # ---------- Pedidos al agente ----------
 
-def _contexto(carpeta_curso: Path, sesion: int, contenido_lectura: Lectura | None) -> str:
+# Hasta este largo, las páginas del material de referencia van dentro del pedido de redacción y el redactor no las
+# busca con herramientas: buscarlas costaba unas diez vueltas, y en cada vuelta se paga de nuevo todo lo anterior.
+CARACTERES_DE_REFERENCIA_EN_EL_PEDIDO = 160_000
+
+
+def paginas_de_referencia(carpeta_curso: Path, sesion: int) -> list[str] | None:
+    """Los pasajes de las páginas del material de referencia, copiados por un programa, sin IA. None si la sesión no
+    tiene referencia o si es demasiado larga: entonces el redactor los busca con Grep y Read."""
+    tramos, _ = lectura._referencia(carpeta_curso, sesion)
+    lineas = []
+    for tramo in tramos:
+        for pasaje in convertir.leer_pasajes(carpeta_curso, tramo.archivo):
+            pagina = pasaje.get("pagina") or 0
+            if not tramo.rangos or any(desde <= pagina <= hasta for desde, hasta in tramo.rangos):
+                lineas.append(f"[{tramo.archivo} · {pasaje['ubicacion']}] {pasaje['texto']}")
+    if not lineas or sum(len(l) for l in lineas) > CARACTERES_DE_REFERENCIA_EN_EL_PEDIDO:
+        return None
+    return lineas
+
+
+def _contexto(carpeta_curso: Path, sesion: int, contenido_lectura: Lectura | None,
+              paginas: list[str] | None = None) -> str:
     ficha_curso = almacen.texto_para_materiales(carpeta_curso, "curso")
     ficha_sesion = almacen.ruta_ficha(carpeta_curso, "sesion", sesion, ".md").read_text(encoding="utf-8")
     fuentes = verificacion.fuentes_utilizables(carpeta_curso)
@@ -194,6 +216,15 @@ def _contexto(carpeta_curso: Path, sesion: int, contenido_lectura: Lectura | Non
         "EXCLUSIONES (no las uses):",
         *([f"- {e}" for e in excluir] or ["- Ninguna: usa todo el material de referencia."]),
     ] if tramos else []
+    if paginas:
+        return "\n".join(partes + [
+            "ESTA SESIÓN NO TIENE LECTURA. Las diapositivas salen del material de referencia y de las fichas.",
+            *referencia_,
+            "",
+            "PÁGINAS DEL MATERIAL DE REFERENCIA, copiadas de la fuente por AulaLista. Una línea por pasaje, con la forma",
+            "«[fuente · ubicación] texto». Son las únicas páginas que usas:",
+            *paginas,
+        ])
     return "\n".join(partes + [
         "ESTA SESIÓN NO TIENE LECTURA. Las diapositivas salen del material de referencia y de las fichas.",
         "FUENTES DEL CURSO que puedes citar (archivos .jsonl de esta carpeta, un pasaje por línea con su ubicación):",
@@ -313,10 +344,17 @@ REGLAS_PROPIAS_SIN_LECTURA = """EN LAS DIAPOSITIVAS
 """
 
 
-def pedido_de_redaccion(carpeta_curso: Path, sesion: int, contenido_lectura: Lectura | None) -> str:
+def pedido_de_redaccion(carpeta_curso: Path, sesion: int, contenido_lectura: Lectura | None,
+                        paginas: list[str] | None = None) -> str:
     if contenido_lectura is not None:
         tarea = ["TAREA: prepara las diapositivas de la sesión a partir de la lectura aprobada. Actúa como diseñador",
                  "instruccional y diseñador de materiales. Resume cada parte de la lectura en frases cortas, en su orden."]
+    elif paginas:
+        tarea = ["TAREA: prepara las diapositivas de la sesión a partir del material de referencia y de las fichas.",
+                 "Actúa como diseñador instruccional y diseñador de materiales.",
+                 "Las páginas del material de referencia están arriba, ya copiadas. Toma de ahí los pasajes que uses,",
+                 "con su fuente y su ubicación tal cual. No uses las exclusiones.",
+                 "No afirmes sobre el contenido de una fuente nada que no esté en un pasaje copiado."]
     else:
         tarea = ["TAREA: prepara las diapositivas de la sesión a partir del material de referencia y de las fichas.",
                  "Actúa como diseñador instruccional y diseñador de materiales.",
@@ -324,7 +362,7 @@ def pedido_de_redaccion(carpeta_curso: Path, sesion: int, contenido_lectura: Lec
                  "Si la sesión tiene material de referencia, lee sus páginas y no uses las exclusiones.",
                  "No afirmes sobre el contenido de una fuente nada que no esté en un pasaje copiado."]
     return "\n".join([
-        _contexto(carpeta_curso, sesion, contenido_lectura),
+        _contexto(carpeta_curso, sesion, contenido_lectura, paginas),
         instrucciones_de_formato(contenido_lectura is not None),
         *tarea,
         "Antes de entregar, revisa cada diapositiva: qué puede hacer el alumno con ella y qué frase tiene dos lecturas.",
@@ -686,12 +724,15 @@ class _Trabajo:
         datos_ = disenador.datos(self.contenido, self.identidad, self.portada, carpeta)
         comun_ = {"curso": self.curso, "sesion": f"S{self.sesion}", "material": CLAVE, "consulta": self.consulta}
         self.avance("Diseño: el agente diseñador escribe la presentación con íconos y la identidad de la ficha.")
-        respuesta = await agente.consultar(disenador.pedido_de_diseno(datos_), tarea="diseno",
+        total = self.contenido.total
+        respuesta = await agente.consultar(disenador.pedido_de_diseno(datos_, total), tarea="diseno",
                                            esquema=disenador.ESQUEMA_DISENO, etapa="diseño", **comun_)
-        codigo, bueno, visual_hecha, problemas = respuesta["codigo"], None, False, []
+        partes, faltan = disenador.fusionar(None, respuesta, total)
+        bueno, visual_hecha, problemas = None, False, []
         self.diseno = {"arreglos": 0, "notas": respuesta.get("notas", "")}
         for intento in range(ARREGLOS_DE_DISENO + 1):
-            problemas = await self.probar_diseno(codigo, datos_, carpeta)
+            codigo = disenador.armar(partes)
+            problemas = faltan or await self.probar_diseno(codigo, datos_, carpeta)
             if not problemas:
                 bueno = carpeta / "aprobado.pptx"
                 shutil.copyfile(self.rutas["pptx"], bueno)
@@ -706,10 +747,10 @@ class _Trabajo:
                 break
             self.diseno["arreglos"] += 1
             self.avance(f"Diseño: el diseñador corrige {comun.cuantos(len(problemas), 'problema')}.")
-            respuesta = await agente.consultar(disenador.pedido_de_arreglo(datos_, codigo, problemas), tarea="diseno",
+            respuesta = await agente.consultar(disenador.pedido_de_arreglo(datos_, partes, problemas), tarea="diseno",
                                                esquema=disenador.ESQUEMA_DISENO, etapa=f"diseño, arreglo {intento + 1}",
                                                **comun_)
-            codigo = respuesta["codigo"]
+            partes, faltan = disenador.fusionar(partes, respuesta, total)
         if bueno is None:
             self.diseno.update(estado="base", problemas=problemas)
             self.avance("Diseño: no quedó sin fallas. Entrego la versión base y lo dejo como pendiente.")
@@ -913,8 +954,11 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, medir, disenar
     _limpiar(rutas)
 
     trabajo.avance("Leyendo la lectura aprobada y preparando las diapositivas.")
-    trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion, trabajo.lectura), tarea="redaccion",
-                                           esquema=ESQUEMA_DIAPOSITIVAS, etapa="redacción", **trabajo.comun)
+    # Sin lectura, las páginas de la referencia van en el pedido y la redacción no necesita herramientas.
+    paginas = None if trabajo.lectura is not None else paginas_de_referencia(carpeta_curso, sesion)
+    opciones = trabajo.comun if paginas is None else {**trabajo.comun, "cwd": None, "herramientas": ()}
+    trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion, trabajo.lectura, paginas),
+                                           tarea="redaccion", esquema=ESQUEMA_DIAPOSITIVAS, etapa="redacción", **opciones)
 
     errores: list[revision.Error] = []
     revisados = 0

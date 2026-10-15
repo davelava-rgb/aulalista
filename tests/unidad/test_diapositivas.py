@@ -385,6 +385,33 @@ def test_sin_lectura_salen_de_las_fuentes_y_las_fichas(sin_lectura):
     assert not material.get("desactualizado") and material["lectura_fecha"] == ""
 
 
+def test_sin_lectura_las_paginas_de_referencia_van_en_el_pedido_y_la_redaccion_no_busca(sin_lectura):
+    from app.fichas import almacen
+    ficha = almacen.cargar(sin_lectura, "sesion", 1)
+    almacen.aplicar_formulario(ficha, {"sesion.referencia": "silabo.pdf: página 1"})
+    ficha["confirmada"] = True
+    almacen.guardar(sin_lectura, "sesion", 1, ficha)
+    assert diapositivas.paginas_de_referencia(sin_lectura, 1) == [
+        "[silabo.pdf · página 1] Scrum Master con IA", "[silabo.pdf · página 1] Docente: jefe de capacitación"]
+    _, consulta = generar(sin_lectura, LIMPIAS)
+    redaccion = consulta.llamadas[0]
+    assert "PÁGINAS DEL MATERIAL DE REFERENCIA" in redaccion["prompt"]
+    assert "[silabo.pdf · página 1] Scrum Master con IA" in redaccion["prompt"]
+    assert "busca con Grep" not in redaccion["prompt"]
+    assert redaccion["options"].tools == [] and not redaccion["options"].allowed_tools
+    # Las correcciones y la revisión siguen sin las páginas: solo la redacción las necesita.
+    assert all("PÁGINAS DEL MATERIAL DE REFERENCIA" not in c["prompt"] for c in consulta.llamadas[1:])
+
+
+def test_una_referencia_demasiado_larga_se_busca_con_herramientas(sin_lectura, monkeypatch):
+    from app.fichas import almacen
+    ficha = almacen.cargar(sin_lectura, "sesion", 1)
+    almacen.aplicar_formulario(ficha, {"sesion.referencia": "silabo.pdf"})
+    almacen.guardar(sin_lectura, "sesion", 1, ficha)
+    monkeypatch.setattr(diapositivas, "CARACTERES_DE_REFERENCIA_EN_EL_PEDIDO", 10)
+    assert diapositivas.paginas_de_referencia(sin_lectura, 1) is None
+
+
 def test_sin_lectura_las_diapositivas_de_un_bloque_van_juntas():
     separadas = copy.deepcopy(LIMPIAS["diapositivas"])
     separadas[2], separadas[6] = separadas[6], separadas[2]
@@ -535,8 +562,8 @@ def _con_disenador():
     from app.materiales import disenador
     if not disenador.disponible():
         pytest.skip("Node o los paquetes del diseñador no están instalados")
-    from tests.unidad.test_disenador import DISENO
-    return {"codigo": DISENO, "notas": "Tarjetas y una portada sobre el color principal."}
+    from tests.unidad.test_disenador import respuesta_por_partes
+    return respuesta_por_partes(Diapositivas.model_validate(LIMPIAS).total)
 
 
 def test_con_el_contenido_aprobado_el_disenador_dibuja_y_la_revision_visual_pide_un_arreglo(con_lectura):
@@ -551,7 +578,7 @@ def test_con_el_contenido_aprobado_el_disenador_dibuja_y_la_revision_visual_pide
     assert "module.exports = async (h)" in consulta.llamadas[2]["prompt"]
     arreglo = consulta.llamadas[4]["prompt"]
     assert "DISEÑO · diapositiva 4 («Qué valora más»): Una tabla con mucho texto. Propuesta: Pasar a tarjetas." in arreglo
-    assert "La portada." not in arreglo and "PROGRAMA ACTUAL:" in arreglo
+    assert "La portada." not in arreglo and "PROGRAMA ACTUAL, POR PARTES:" in arreglo
     assert material["revision_visual"] == [visual["cambios"][0]]
     entrega = {s["clave"]: s["lineas"] for s in material["entrega"]["secciones"]}
     assert any("lo dibujó el agente diseñador con 1 ícono" in l for l in entrega["valide"])
@@ -560,8 +587,7 @@ def test_con_el_contenido_aprobado_el_disenador_dibuja_y_la_revision_visual_pide
 
 
 def test_si_el_diseno_no_queda_bien_se_entrega_la_version_base(con_lectura):
-    _con_disenador()
-    roto = {"codigo": 'module.exports = async (h) => { throw new Error("se rompió"); };', "notas": ""}
+    roto = {**_con_disenador(), "comun": 'throw new Error("se rompió");'}
     material, consulta = generar(con_lectura, LIMPIAS, medir=medir_con_imagenes, disenar=True,
                                  despues=(roto,) * (diapositivas.ARREGLOS_DE_DISENO + 1))
     assert material["estado"] == "con pendientes"
@@ -571,8 +597,7 @@ def test_si_el_diseno_no_queda_bien_se_entrega_la_version_base(con_lectura):
 
 
 def test_un_programa_que_usa_require_no_se_corre(con_lectura):
-    _con_disenador()
-    malo = {"codigo": 'const fs = require("fs"); module.exports = async (h) => {};', "notas": ""}
+    malo = {**_con_disenador(), "comun": 'const fs = require("fs");'}
     material, consulta = generar(con_lectura, LIMPIAS, medir=medir_con_imagenes, disenar=True,
                                  despues=(malo,) * (diapositivas.ARREGLOS_DE_DISENO + 1))
     assert material["diseno"]["estado"] == "base"

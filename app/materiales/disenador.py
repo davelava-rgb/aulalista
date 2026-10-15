@@ -14,7 +14,7 @@ import os
 import re
 import shutil
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from pptx import Presentation
@@ -36,10 +36,20 @@ PROHIBIDO = re.compile(
     r"__filename|\bfs\.|\bfetch\s*\(|XMLHttpRequest|WebSocket|\bWorker\b|WebAssembly")
 # Sin require no se puede cargar ningún módulo de red ni de archivos; fetch y WebSocket son globales en Node 22.
 
+# El programa va por partes: el código común y una función por diapositiva. Un arreglo devuelve solo las partes que
+# cambian; reescribir el programa entero en cada arreglo costaba más que el diseño mismo.
 ESQUEMA_DISENO = {
     "type": "object",
-    "properties": {"codigo": {"type": "string"}, "notas": {"type": "string"}},
-    "required": ["codigo", "notas"],
+    "properties": {
+        "comun": {"type": "string"},
+        "diapositivas": {"type": "array", "items": {
+            "type": "object",
+            "properties": {"numero": {"type": "integer"}, "codigo": {"type": "string"}},
+            "required": ["numero", "codigo"], "additionalProperties": False,
+        }},
+        "notas": {"type": "string"},
+    },
+    "required": ["comun", "diapositivas", "notas"],
     "additionalProperties": False,
 }
 
@@ -81,8 +91,17 @@ El contenido ya está escrito y aprobado. Tu trabajo es solo el diseño: escribe
 ese contenido como una presentación profesional, variada y atractiva.
 
 CÓMO ES EL PROGRAMA
-- Devuelve en «codigo» un módulo de JavaScript con esta forma exacta:
-    module.exports = async (h) => { ... };
+- El programa va por partes. AulaLista las arma así:
+    module.exports = async (h) => {
+      [comun]
+      [diapositiva 1]   // cada una dentro de su propia función async, en orden
+      [diapositiva 2]
+      ...
+    };
+- En «comun» va el código que comparten todas las diapositivas: constantes y funciones de ayuda (por ejemplo, el
+  pie, la etiqueta del bloque, las tarjetas). Ya tiene «h». No crea diapositivas.
+- En «diapositivas», una entrada por diapositiva con su «numero» (1 es la portada) y su «codigo»: el cuerpo de una
+  función async sin parámetros que crea esa sola diapositiva con h.pres.addSlide() y usa lo definido en «comun».
 - No uses require, import, process, fs, fetch ni nada fuera de «h». Un programa que los use se rechaza.
 - «h» trae:
   - h.pres: la presentación de pptxgenjs, ya en 16:9 (10 × 5,625 pulgadas). Crea cada diapositiva con
@@ -132,26 +151,72 @@ EL DISEÑO
 """
 
 
-def pedido_de_diseno(datos_: dict) -> str:
-    return "\n".join([
+def _guia_y_datos(datos_: dict) -> list[str]:
+    return [
         GUIA.replace("{etiqueta}", str(PALABRAS_DE_UNA_ETIQUETA)).replace("{minimo}", str(LETRA_MINIMA)),
         "DATOS QUE RECIBE EL PROGRAMA EN «h» (además de h.pres y h.icono):",
-        json.dumps({k: v for k, v in datos_.items()}, ensure_ascii=False),
+        json.dumps(datos_, ensure_ascii=False),
+    ]
+
+
+def pedido_de_diseno(datos_: dict, total: int) -> str:
+    return "\n".join([
+        *_guia_y_datos(datos_),
         "",
+        f"Devuelve «comun» y las {total} diapositivas, de la 1 a la {total}.",
         "En «notas», resume en una o dos frases las decisiones de diseño.",
     ])
 
 
-def pedido_de_arreglo(datos_: dict, codigo: str, problemas: list[str]) -> str:
+def pedido_de_arreglo(datos_: dict, partes: "Partes", problemas: list[str]) -> str:
     return "\n".join([
-        pedido_de_diseno(datos_),
+        *_guia_y_datos(datos_),
         "",
-        "PROGRAMA ACTUAL:",
-        codigo,
+        "PROGRAMA ACTUAL, POR PARTES:",
+        "// comun", partes.comun,
+        *[f"// diapositiva {n}\n{codigo}" for n, codigo in sorted(partes.diapositivas.items())],
         "",
-        "PROBLEMAS QUE ENCONTRÓ AULALISTA AL CORRERLO Y REVISARLO. Corrígelos todos y devuelve el programa completo:",
+        "PROBLEMAS QUE ENCONTRÓ AULALISTA AL CORRERLO Y REVISARLO. Corrígelos todos.",
         *[f"- {p}" for p in problemas],
+        "",
+        "CÓMO DEVOLVER EL ARREGLO",
+        "- En «diapositivas», devuelve SOLO las diapositivas que cambias, cada una con su número y su código completo.",
+        "  Las que no devuelves quedan como están.",
+        "- En «comun», devuelve el código común completo solo si lo cambias. Si no lo cambias, déjalo vacío.",
+        "- En «notas», di en una frase qué cambiaste.",
     ])
+
+
+# ---------- El programa por partes ----------
+
+@dataclass
+class Partes:
+    comun: str = ""
+    diapositivas: dict[int, str] = field(default_factory=dict)
+
+
+def fusionar(partes: Partes | None, respuesta: dict, total: int) -> tuple[Partes, list[str]]:
+    """Agrega a las partes las que devolvió el diseñador. Las que no devolvió quedan como estaban.
+    Devuelve también lo que falta para armar el programa: una diapositiva sin código."""
+    nuevas = Partes(partes.comun, dict(partes.diapositivas)) if partes else Partes()
+    if respuesta.get("comun", "").strip():
+        nuevas.comun = respuesta["comun"]
+    for d in respuesta.get("diapositivas", []):
+        if 1 <= d["numero"] <= total and d["codigo"].strip():
+            nuevas.diapositivas[d["numero"]] = d["codigo"]
+    faltan = [n for n in range(1, total + 1) if n not in nuevas.diapositivas]
+    problemas = [f"FALLA · diseño · falta el código de la diapositiva {', '.join(map(str, faltan))}. Devuelve una "
+                 "entrada en «diapositivas» por cada una."] if faltan else []
+    return nuevas, problemas
+
+
+def armar(partes: Partes) -> str:
+    """El módulo que corre Node: el código común y una función por diapositiva, llamadas en orden."""
+    funciones = "\n".join(f"  async () => {{ // diapositiva {n}\n{codigo}\n  }},"
+                          for n, codigo in sorted(partes.diapositivas.items()))
+    return (f"module.exports = async (h) => {{\n{partes.comun}\n"
+            f"const __diapositivas = [\n{funciones}\n];\n"
+            "for (const dibujar of __diapositivas) await dibujar();\n};\n")
 
 
 # ---------- Revisar y correr el programa ----------
