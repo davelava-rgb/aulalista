@@ -25,7 +25,7 @@ import openpyxl
 from pydantic import ValidationError
 
 from app import agente, entrega, office, skill, tokens
-from app.fichas import almacen, plantillas, verificacion
+from app.fichas import almacen, plantillas, referencia, verificacion
 from app.materiales import comun, docx, ejecucion, estilo, figuras, lectura, practica
 from app.materiales.contenido import ESQUEMA_LABORATORIO, Laboratorio
 from app.validacion import excel, pasada2, revision, revisor, verificador
@@ -152,7 +152,7 @@ def aviso_de_adjuntos(carpeta_curso: Path) -> str:
 
 # ---------- Pedidos al agente ----------
 
-def _contexto(carpeta_curso: Path, sesion: int) -> str:
+def _contexto(carpeta_curso: Path, sesion: int, paginas: list[str] | None = None) -> str:
     ficha_curso = almacen.ruta_ficha(carpeta_curso, "curso", extension=".md").read_text(encoding="utf-8")
     ficha_sesion = almacen.ruta_ficha(carpeta_curso, "sesion", sesion, ".md").read_text(encoding="utf-8")
     fuentes = verificacion.fuentes_utilizables(carpeta_curso)
@@ -170,6 +170,8 @@ def _contexto(carpeta_curso: Path, sesion: int) -> str:
     if lectura.estado(carpeta_curso, sesion).get("estado") == "aprobada" and rutas_lectura["contenido"].exists():
         partes += ["", "LECTURA APROBADA DE LA SESIÓN. Usa su vocabulario y no repitas sus ejemplos en los ejercicios:",
                    json.dumps(comun.leer_json(rutas_lectura["contenido"]).get("bloques", []), ensure_ascii=False)]
+    if paginas:
+        partes += referencia.texto_de_paginas(paginas)
     return "\n".join(partes)
 
 
@@ -236,13 +238,15 @@ CÓMO ENTREGAR EL LABORATORIO (PLAN.md §0, decisión 33)
 """ + (f"- El programa agrega al inicio de la guía: «{aviso}». No lo repitas.\n" if aviso else "")
 
 
-def pedido_de_redaccion(carpeta_curso: Path, sesion: int) -> str:
+def pedido_de_redaccion(carpeta_curso: Path, sesion: int, paginas: list[str] | None = None) -> str:
+    citar = ("Si citas una fuente, toma el pasaje de las páginas del material de referencia, que están arriba." if paginas
+             else "Si citas una fuente, busca con Grep y lee con Read los pasajes antes de escribir.")
     return "\n".join([
-        _contexto(carpeta_curso, sesion),
+        _contexto(carpeta_curso, sesion, paginas),
         instrucciones_de_formato(sesion, aviso_de_adjuntos(carpeta_curso)),
         "TAREA: prepara el laboratorio de la sesión. Actúa como diseñador instruccional. Toma los ejercicios de la ficha",
         "de la sesión: su área, la acción, el entregable, el archivo de práctica con su problema y la respuesta correcta.",
-        "Si citas una fuente, busca con Grep y lee con Read los pasajes antes de escribir.",
+        citar,
         "Antes de entregar, ejecuta mentalmente cada ejercicio como un alumno, con sus archivos: cada paso se puede hacer,",
         "lo que se copia funciona tal cual y el resultado es el entregable de la ficha.",
     ])
@@ -274,6 +278,65 @@ def pedido_de_cambios(carpeta_curso, sesion, datos, problemas) -> str:
 def pedido_de_correccion(carpeta_curso, sesion, datos, problemas) -> str:
     return _pedido_con_problemas(carpeta_curso, sesion, datos, problemas,
                                  ["Devuelve el laboratorio completo con el mismo esquema."])
+
+
+# ---------- Corrección por ejercicio ----------
+# Cuando todos los problemas son de unos ejercicios, se reescriben solo esos ejercicios y sus archivos. Reescribir el
+# laboratorio entero costaba unos 0,58 USD por corrección.
+
+_PROPIEDADES = ESQUEMA_LABORATORIO["properties"]
+ESQUEMA_CORRECCION_POR_EJERCICIO = {
+    "type": "object",
+    "properties": {"ejercicios": _PROPIEDADES["ejercicios"], "archivos": _PROPIEDADES["archivos"],
+                   "pasajes": _PROPIEDADES["pasajes"], "explicaciones": comun.ESQUEMA_EXPLICACIONES,
+                   "datos_nuevos": {"type": "array", "items": {"type": "string"}}},
+    "required": ["ejercicios", "archivos", "pasajes", "explicaciones", "datos_nuevos"],
+    "additionalProperties": False,
+}
+_EJERCICIO = re.compile(r"\bejercicio (\d+)\b|\bS\d+_E(\d+)_", re.I)
+
+
+def ejercicios_nombrados(textos: list[str]) -> set[int] | None:
+    """Los ejercicios a los que pertenecen los problemas. None si alguno no es de un ejercicio (por ejemplo, de
+    «Antes de empezar» o del .zip): entonces se corrige el laboratorio completo."""
+    numeros = set()
+    for texto in textos:
+        encontrados = {int(a or b) for a, b in _EJERCICIO.findall(texto)}
+        if not encontrados:
+            return None
+        numeros |= encontrados
+    return numeros or None
+
+
+def pedido_de_correccion_por_ejercicios(carpeta_curso, sesion, datos, problemas, numeros: set[int]) -> str:
+    cuales = ", ".join(map(str, sorted(numeros)))
+    return _pedido_con_problemas(carpeta_curso, sesion, datos, problemas, [
+        "CÓMO ENTREGAR LA CORRECCIÓN",
+        f"- Los problemas son solo de los ejercicios {cuales}. Corrige solo esos ejercicios.",
+        f"- En «ejercicios», devuelve completos los ejercicios {cuales}, con su mismo número. No devuelvas los demás.",
+        "- En «archivos», devuelve completos los archivos de práctica de esos ejercicios que cambias. Los que no",
+        "  devuelves quedan como están. Un archivo que el ejercicio ya no nombra se quita.",
+        "- En «pasajes», solo los pasajes nuevos que necesitan las oraciones que cambias.",
+    ])
+
+
+def aplicar_por_ejercicios(datos: dict, respuesta: dict, numeros: set[int]) -> tuple[dict, list[int]]:
+    """Reemplaza los ejercicios corregidos y sus archivos. Los demás no se tocan. Devuelve también los ejercicios
+    pedidos que no volvieron."""
+    nuevo = json.loads(json.dumps(datos))
+    devueltos = {e["numero"]: e for e in respuesta.get("ejercicios", []) if e["numero"] in numeros}
+    nuevo["ejercicios"] = [devueltos.get(e["numero"], e) for e in nuevo.get("ejercicios", [])]
+    nombrados = {n for e in devueltos.values() for n in e.get("archivos", [])}
+    archivos = {a["nombre"]: a for a in nuevo.get("archivos", [])
+                if practica.numero_de_ejercicio(a["nombre"]) not in devueltos or a["nombre"] in nombrados}
+    for a in respuesta.get("archivos", []):
+        if practica.numero_de_ejercicio(a["nombre"]) in numeros:
+            archivos[a["nombre"]] = a
+    nuevo["archivos"] = list(archivos.values())
+    vistos = {(p.get("oracion", ""), p["texto"]) for p in nuevo.get("pasajes", [])}
+    nuevo["pasajes"] = nuevo.get("pasajes", []) + [p for p in respuesta.get("pasajes", [])
+                                                     if (p.get("oracion", ""), p["texto"]) not in vistos]
+    return nuevo, sorted(numeros - set(devueltos))
 
 
 # ---------- Estructura ----------
@@ -381,7 +444,7 @@ class _Trabajo:
         fallas = [f for x in ejecuciones for f in x.fallas]
         if fallas:
             self.correcciones["ejecución"] = len(fallas)
-            await self.corregir(fallas, completa=True)
+            await self.corregir(fallas, completa=True, ejercicios={x.numero for x in ejecuciones if x.fallas})
             if not await self.verificar():
                 return ejecuciones
             con_fallas = {x.numero for x in ejecuciones if x.fallas}
@@ -432,12 +495,12 @@ class _Trabajo:
         for intento in range(VUELTAS_DEL_VERIFICADOR + 1):
             self.vuelta += 1
             contenido, problemas = _validar(self.datos, self.carpeta_curso, self.sesion)
-            completa = bool(problemas)
+            completa, ejercicios = bool(problemas), None
             comun.guardar_json(self.rutas["contenido"], self.datos)
             if contenido is not None:
                 self.contenido = contenido
                 problemas = self.crear_archivos(contenido)
-                completa = bool(problemas)
+                completa, ejercicios = bool(problemas), ejercicios_nombrados(problemas)
                 if not problemas:
                     configuracion = verificador.configuracion_del_material(
                         self.carpeta_sesion, MATERIAL, carpeta_practica=CARPETA_PRACTICA)
@@ -454,6 +517,7 @@ class _Trabajo:
                     nombres = {a.nombre for a in contenido.archivos}
                     # Sin oración, o en un archivo de práctica: se arregla con el laboratorio completo.
                     completa = any(not h.oracion or h.seccion.split(" · ")[0] in nombres for h in fallas + avisos)
+                    ejercicios = ejercicios_nombrados([f"{h.seccion} {comun.texto_de(h)}" for h in fallas + avisos])
                     self.historial += comun.historial(fallas + avisos, self.vuelta)
             self.fallas = problemas
             if not problemas:
@@ -463,7 +527,7 @@ class _Trabajo:
                             "No se puede aprobar el laboratorio con fallas.")
                 return False
             self.correcciones["verificador"] += len(problemas)
-            await self.corregir(problemas, completa)
+            await self.corregir(problemas, completa, ejercicios)
         return False
 
     async def revisar(self, bloques: list[pasada2.Bloque], etapa: str) -> revision.Resultado:
@@ -474,9 +538,19 @@ class _Trabajo:
         self.descartados += resultado.descartados
         return resultado
 
-    async def corregir(self, problemas: list[str], completa: bool) -> None:
+    async def corregir(self, problemas: list[str], completa: bool, ejercicios: set[int] | None = None) -> None:
         vuelta = self.vuelta
-        if completa:
+        if completa and ejercicios:
+            cuales = ", ".join(map(str, sorted(ejercicios)))
+            self.avance(f"Corrigiendo solo los ejercicios {cuales}: {comun.cuantos(len(problemas), 'problema')}.")
+            respuesta = await agente.consultar(
+                pedido_de_correccion_por_ejercicios(self.carpeta_curso, self.sesion, self.datos, problemas, ejercicios),
+                tarea="correccion", esquema=ESQUEMA_CORRECCION_POR_EJERCICIO,
+                etapa=f"corrección de ejercicios {vuelta}", **self.comun)
+            self.datos, no_volvieron = aplicar_por_ejercicios(self.datos, respuesta, ejercicios)
+            if no_volvieron:
+                self.avance(f"La corrección no devolvió los ejercicios {', '.join(map(str, no_volvieron))}.")
+        elif completa:
             self.avance(f"Corrigiendo el laboratorio completo: {comun.cuantos(len(problemas), 'problema')}.")
             respuesta = await agente.consultar(pedido_de_correccion(self.carpeta_curso, self.sesion, self.datos, problemas),
                                                tarea="correccion", esquema=ESQUEMA_CORRECCION,
@@ -548,8 +622,11 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, co
     _limpiar(rutas)
 
     trabajo.avance("Leyendo las fichas y las fuentes y escribiendo el laboratorio y sus archivos de práctica.")
-    trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion), tarea="redaccion",
-                                           esquema=ESQUEMA_LABORATORIO, etapa="redacción", **trabajo.comun)
+    # Con material de referencia, sus páginas van en el pedido y la redacción no necesita herramientas.
+    paginas = referencia.paginas(carpeta_curso, _ficha_sesion(carpeta_curso, sesion))
+    opciones = trabajo.comun if paginas is None else {**trabajo.comun, "cwd": None, "herramientas": ()}
+    trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion, paginas), tarea="redaccion",
+                                           esquema=ESQUEMA_LABORATORIO, etapa="redacción", **opciones)
     errores: list[revision.Error] = []
     revisados = 0
     ejecuciones: list[ejecucion.Ejecucion] = []

@@ -95,3 +95,29 @@ def interpretar(carpeta_curso: Path, ficha_sesion: dict) -> tuple[list[Tramo], l
             continue
         tramos.append(Tramo(archivo, rangos, total))
     return tramos, problemas
+
+
+# Hasta este largo, las páginas del material de referencia van dentro del pedido de redacción y el redactor no las
+# busca con herramientas: buscarlas costaba de seis a diez vueltas, y en cada vuelta se paga de nuevo todo lo anterior.
+CARACTERES_EN_EL_PEDIDO = 160_000
+
+
+def paginas(carpeta_curso: Path, ficha_sesion: dict) -> list[str] | None:
+    """Los pasajes de las páginas del material de referencia, copiados por un programa, sin IA, con la forma
+    «[fuente · ubicación] texto». None si la sesión no tiene referencia o si es demasiado larga: entonces el
+    redactor los busca con Grep y Read."""
+    lineas = []
+    for tramo in interpretar(carpeta_curso, ficha_sesion)[0]:
+        for pasaje in convertir.leer_pasajes(carpeta_curso, tramo.archivo):
+            pagina = pasaje.get("pagina") or 0
+            if not tramo.rangos or any(desde <= pagina <= hasta for desde, hasta in tramo.rangos):
+                lineas.append(f"[{tramo.archivo} · {pasaje['ubicacion']}] {pasaje['texto']}")
+    if not lineas or sum(len(l) for l in lineas) > CARACTERES_EN_EL_PEDIDO:
+        return None
+    return lineas
+
+
+def texto_de_paginas(lineas: list[str]) -> list[str]:
+    """El apartado del pedido con las páginas ya copiadas."""
+    return ["", "PÁGINAS DEL MATERIAL DE REFERENCIA, copiadas de la fuente por AulaLista. Una línea por pasaje, con la "
+            "forma «[fuente · ubicación] texto». No las busques con Grep ni Read: están aquí.", *lineas]

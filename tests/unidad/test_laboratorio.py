@@ -309,3 +309,52 @@ def test_un_paso_que_no_dice_donde_va_la_formula_se_detecta_antes():
     datos["ejercicios"][2]["pasos"][2]["texto"] = "Revisa el resultado."
     problemas = practica.revisar(Laboratorio.model_validate(datos), 1, 3)
     assert any("ningún paso dice dónde se copia la fórmula 1" in p for p in problemas)
+
+
+# ---------- Menos costo: corrección por ejercicio y páginas de referencia en el pedido ----------
+
+def test_los_problemas_se_asignan_a_su_ejercicio():
+    nombrados = laboratorio.ejercicios_nombrados
+    assert nombrados(["S1_Laboratorio.docx · Ejercicio 2 · Revisa el aviso FALLA · tiempo"]) == {2}
+    assert nombrados(["S1_E3_capacitacion.xlsx · Horas FALLA", "FALLA · ejecución · ejercicio 1: da #NAME?"]) == {1, 3}
+    # Uno que no es de un ejercicio obliga a corregir el laboratorio completo.
+    assert nombrados(["S1_Laboratorio.docx · Antes de empezar FALLA · tiempo", "FALLA · ejecución · ejercicio 1"]) is None
+
+
+def test_la_correccion_por_ejercicio_no_toca_los_demas():
+    datos = sembrados.limpio()
+    nuevo_e2 = {**datos["ejercicios"][1], "titulo": "Revisa el aviso de Almacén", "archivos": ["S1_E2_aviso-nuevo.docx"]}
+    nuevo_archivo = {**datos["archivos"][1], "nombre": "S1_E2_aviso-nuevo.docx"}
+    respuesta = {"ejercicios": [nuevo_e2, {**datos["ejercicios"][0], "titulo": "No pedido: se ignora"}],
+                 "archivos": [nuevo_archivo], "pasajes": [], "explicaciones": [], "datos_nuevos": []}
+    nuevo, no_volvieron = laboratorio.aplicar_por_ejercicios(datos, respuesta, {2})
+    assert no_volvieron == []
+    assert nuevo["ejercicios"][1]["titulo"] == "Revisa el aviso de Almacén"
+    assert nuevo["ejercicios"][0] == datos["ejercicios"][0] and nuevo["ejercicios"][2] == datos["ejercicios"][2]
+    assert [a["nombre"] for a in nuevo["archivos"]] == ["S1_E1_pedidos-semana.xlsx", "S1_E3_capacitacion.xlsx",
+                                                        "S1_E2_aviso-nuevo.docx"]   # el archivo viejo del E2 se quita
+
+
+def test_una_falla_en_el_archivo_de_un_ejercicio_corrige_solo_ese_ejercicio(sesion):  # noqa: F811
+    con_falla = sembrados.limpio()
+    con_falla["archivos"][1]["parrafos"][2]["texto"] = "Los pedidos se recogen en tienda en 10 minutos."
+    correccion = {"ejercicios": [sembrados.limpio()["ejercicios"][1]], "archivos": [sembrados.limpio()["archivos"][1]],
+                  "pasajes": [], "explicaciones": [], "datos_nuevos": []}
+    material, consulta = generar(sesion, con_falla, correccion)
+    assert material["estado"] == "verificada", material.get("problemas")
+    llamada = consulta.llamadas[1]
+    assert llamada["options"].output_format["schema"] == laboratorio.ESQUEMA_CORRECCION_POR_EJERCICIO
+    assert "Los problemas son solo de los ejercicios 2" in llamada["prompt"]
+
+
+def test_con_referencia_las_paginas_van_en_el_pedido_y_la_redaccion_no_busca(sesion):  # noqa: F811
+    from app.fichas import almacen
+    ficha = almacen.cargar(sesion, "sesion", 1)
+    almacen.aplicar_formulario(ficha, {"sesion.referencia": "silabo.pdf: página 1"})
+    ficha["confirmada"] = True
+    almacen.guardar(sesion, "sesion", 1, ficha)
+    _, consulta = generar(sesion, sembrados.limpio())
+    redaccion = consulta.llamadas[0]
+    assert "[silabo.pdf · página 1] Scrum Master con IA" in redaccion["prompt"]
+    assert "busca con Grep" not in redaccion["prompt"]
+    assert redaccion["options"].tools == [] and not redaccion["options"].allowed_tools

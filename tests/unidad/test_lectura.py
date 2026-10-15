@@ -646,3 +646,21 @@ def test_generar_borra_los_restos_de_la_generacion_anterior(sesion):
     assert not rutas["revision"].exists()
     assert not (rutas["contenido"].parent / "pasada1.json").exists()
     assert not rutas["explicaciones"].exists() or json.loads(rutas["explicaciones"].read_text(encoding="utf-8")) != {"x": "y"}
+
+
+def test_con_referencia_las_paginas_van_en_el_pedido_y_la_redaccion_no_busca(sesion):
+    ficha = almacen.cargar(sesion, "sesion", 1)
+    almacen.aplicar_formulario(ficha, {"sesion.referencia": "silabo.pdf: página 1"})
+    ficha["confirmada"] = True
+    almacen.guardar(sesion, "sesion", 1, ficha)
+    _, consulta = generar(sesion, LIMPIA)
+    redaccion = consulta.llamadas[0]
+    assert "[silabo.pdf · página 1] Scrum Master con IA" in redaccion["prompt"]
+    assert "busca con Grep" not in redaccion["prompt"]
+    assert redaccion["options"].tools == [] and not redaccion["options"].allowed_tools
+    # Sin referencia, la redacción sigue buscando en las fuentes con herramientas.
+    almacen.aplicar_formulario(ficha, {"sesion.referencia": ""})
+    ficha["confirmada"] = True
+    almacen.guardar(sesion, "sesion", 1, ficha)
+    _, consulta = generar(sesion, LIMPIA)
+    assert "busca con Grep" in consulta.llamadas[0]["prompt"] and "Read" in consulta.llamadas[0]["options"].allowed_tools

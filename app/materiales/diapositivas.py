@@ -28,8 +28,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from app import agente, entrega, office, skill, tokens
-from app.fichas import almacen, verificacion
-from app.fuentes import convertir
+from app.fichas import almacen, referencia, verificacion
 from app.materiales import comun, disenador, estilo, lectura
 from app.materiales import pptx as generador
 from app.materiales import contenido as contenido_
@@ -167,24 +166,8 @@ def _texto_de_la_lectura(contenido: Lectura) -> str:
 
 # ---------- Pedidos al agente ----------
 
-# Hasta este largo, las páginas del material de referencia van dentro del pedido de redacción y el redactor no las
-# busca con herramientas: buscarlas costaba unas diez vueltas, y en cada vuelta se paga de nuevo todo lo anterior.
-CARACTERES_DE_REFERENCIA_EN_EL_PEDIDO = 160_000
-
-
 def paginas_de_referencia(carpeta_curso: Path, sesion: int) -> list[str] | None:
-    """Los pasajes de las páginas del material de referencia, copiados por un programa, sin IA. None si la sesión no
-    tiene referencia o si es demasiado larga: entonces el redactor los busca con Grep y Read."""
-    tramos, _ = lectura._referencia(carpeta_curso, sesion)
-    lineas = []
-    for tramo in tramos:
-        for pasaje in convertir.leer_pasajes(carpeta_curso, tramo.archivo):
-            pagina = pasaje.get("pagina") or 0
-            if not tramo.rangos or any(desde <= pagina <= hasta for desde, hasta in tramo.rangos):
-                lineas.append(f"[{tramo.archivo} · {pasaje['ubicacion']}] {pasaje['texto']}")
-    if not lineas or sum(len(l) for l in lineas) > CARACTERES_DE_REFERENCIA_EN_EL_PEDIDO:
-        return None
-    return lineas
+    return referencia.paginas(carpeta_curso, almacen.cargar(carpeta_curso, "sesion", sesion))
 
 
 def _contexto(carpeta_curso: Path, sesion: int, contenido_lectura: Lectura | None,
@@ -220,10 +203,7 @@ def _contexto(carpeta_curso: Path, sesion: int, contenido_lectura: Lectura | Non
         return "\n".join(partes + [
             "ESTA SESIÓN NO TIENE LECTURA. Las diapositivas salen del material de referencia y de las fichas.",
             *referencia_,
-            "",
-            "PÁGINAS DEL MATERIAL DE REFERENCIA, copiadas de la fuente por AulaLista. Una línea por pasaje, con la forma",
-            "«[fuente · ubicación] texto». Son las únicas páginas que usas:",
-            *paginas,
+            *referencia.texto_de_paginas(paginas),
         ])
     return "\n".join(partes + [
         "ESTA SESIÓN NO TIENE LECTURA. Las diapositivas salen del material de referencia y de las fichas.",

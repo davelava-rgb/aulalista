@@ -408,7 +408,8 @@ def test_una_referencia_demasiado_larga_se_busca_con_herramientas(sin_lectura, m
     ficha = almacen.cargar(sin_lectura, "sesion", 1)
     almacen.aplicar_formulario(ficha, {"sesion.referencia": "silabo.pdf"})
     almacen.guardar(sin_lectura, "sesion", 1, ficha)
-    monkeypatch.setattr(diapositivas, "CARACTERES_DE_REFERENCIA_EN_EL_PEDIDO", 10)
+    from app.fichas import referencia
+    monkeypatch.setattr(referencia, "CARACTERES_EN_EL_PEDIDO", 10)
     assert diapositivas.paginas_de_referencia(sin_lectura, 1) is None
 
 
