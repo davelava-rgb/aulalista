@@ -158,12 +158,25 @@ def test_la_respuesta_a_la_pregunta_de_la_herramienta_va_en_el_ejercicio():
     assert any("ejercicio 2: la ficha dice que la herramienta pregunta algo" in p for p in problemas)
 
 
-def test_un_error_de_estructura_se_corrige_con_el_laboratorio_completo(sesion):  # noqa: F811
+def test_un_problema_de_un_ejercicio_antes_de_crear_los_archivos_se_corrige_solo_en_ese_ejercicio(sesion):  # noqa: F811
     roto = sembrados.con(sembrados.SEMBRADOS["espacio por llenar"][0])
+    corregido = {"ejercicios": [sembrados.limpio()["ejercicios"][0]], "archivos": [], "pasajes": [],
+                 "explicaciones": [], "datos_nuevos": []}
+    material, consulta = generar(sesion, roto, corregido)
+    assert material["estado"] == "verificada"
+    llamada = consulta.llamadas[1]
+    assert "«[nombre del cliente]» en lo que el alumno copia" in llamada["prompt"]
+    assert "Los problemas son solo de los ejercicios 1" in llamada["prompt"]
+    assert llamada["options"].output_format["schema"] == laboratorio.ESQUEMA_CORRECCION_POR_EJERCICIO
+    assert llamada["options"].model == "claude-sonnet-5-5"
+
+
+def test_un_error_del_esquema_se_corrige_con_el_laboratorio_completo(sesion):  # noqa: F811
+    roto = sembrados.limpio()
+    del roto["ejercicios"][0]["pasos"]
     corregido = {"laboratorio": sembrados.limpio(), "explicaciones": [], "datos_nuevos": []}
     material, consulta = generar(sesion, roto, corregido)
     assert material["estado"] == "verificada"
-    assert "«[nombre del cliente]» en lo que el alumno copia" in consulta.llamadas[1]["prompt"]
     assert consulta.llamadas[1]["options"].output_format["schema"] == laboratorio.ESQUEMA_CORRECCION
 
 

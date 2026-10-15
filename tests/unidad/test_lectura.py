@@ -315,7 +315,7 @@ def test_mas_de_seis_paginas_es_falla_y_se_pide_acortar(sesion):
     material, consulta = generar(sesion, LIMPIA, {"lectura": LIMPIA, "explicaciones": [], "datos_nuevos": []},
                                  contar_paginas=lambda _: next(paginas))
     assert "FALLA · páginas · S1_Lectura.docx: tiene 7 páginas; el máximo es 6" in consulta.llamadas[1]["prompt"]
-    assert consulta.llamadas[1]["options"].model == "claude-opus-5-5"   # corrección completa del documento
+    assert consulta.llamadas[1]["options"].model == "claude-sonnet-5-5"   # corrección completa del documento
     assert material["estado"] == "verificada"
 
 

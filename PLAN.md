@@ -361,7 +361,7 @@ Gasto de tokens, de mayor a menor probable: redacción, revisión del contenido,
 
 Además:
 
-- `modelos.toml` fija un modelo por tarea: Opus 5.5 para redactar y para el revisor opcional, Sonnet 5.5 para la revisión del contenido y las correcciones por oración.
+- `modelos.toml` fija un modelo por tarea: Opus 5.5 para redactar y para el revisor opcional, Sonnet 5.5 para la revisión del contenido y para todas las correcciones: por oración, por ejercicio y completas (decisión del profesor, 15/10/2026).
 - `max_budget_usd` detiene cada llamada que supere su tope.
 - Las oraciones sin afirmación no van a la IA.
 

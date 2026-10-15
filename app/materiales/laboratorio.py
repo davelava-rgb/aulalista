@@ -495,7 +495,8 @@ class _Trabajo:
         for intento in range(VUELTAS_DEL_VERIFICADOR + 1):
             self.vuelta += 1
             contenido, problemas = _validar(self.datos, self.carpeta_curso, self.sesion)
-            completa, ejercicios = bool(problemas), None
+            # La revisión del programa nombra el ejercicio de cada problema; un error del esquema no (va completa).
+            completa, ejercicios = bool(problemas), ejercicios_nombrados(problemas)
             comun.guardar_json(self.rutas["contenido"], self.datos)
             if contenido is not None:
                 self.contenido = contenido
