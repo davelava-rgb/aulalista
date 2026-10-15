@@ -110,6 +110,20 @@ def _opciones_del_control(campo_id: str) -> str:
     return f" [usa {forma}: {', '.join(opciones)}{otra}]"
 
 
+# Los ejercicios salen del tema de la sesión; la herramienta, del tema del curso (PLAN.md §0, decisión 36).
+_SIN_PREGUNTA = "Deja vacío «Si la herramienta debe preguntar algo»: no hay una herramienta que pregunte."
+DE_QUE_TRATAN_LOS_EJERCICIOS = {
+    frozenset(): "Cada ejercicio practica el tema de la sesión: el alumno hace la acción a mano en su archivo de "
+                 "práctica, en Excel o Word, sin fórmulas ni prompts. " + _SIN_PREGUNTA,
+    frozenset({"excel"}): "Cada ejercicio practica el tema de la sesión en Excel: puede usar fórmulas, nunca prompts. "
+                          + _SIN_PREGUNTA,
+    frozenset({"ia"}): "Cada ejercicio practica el tema de la sesión con un asistente de IA: puede usar prompts, nunca "
+                       "fórmulas.",
+    frozenset({"excel", "ia"}): "Cada ejercicio practica el tema de la sesión con Excel o con un asistente de IA: "
+                                "puede usar fórmulas y prompts.",
+}
+
+
 def pedido_de_propuesta(carpeta_curso: Path, tipo: str, sesion: int | None, ficha: dict) -> str:
     fuentes = verificacion.fuentes_utilizables(carpeta_curso)
     lineas = [
@@ -140,15 +154,22 @@ def pedido_de_propuesta(carpeta_curso: Path, tipo: str, sesion: int | None, fich
         "- Escribe en el idioma del curso, en oraciones cortas y claras.",
     ]
     if tipo == "curso":
-        lineas.append("- En «Sesiones» escribe una línea por sesión que empiece con su número: «1. Título: alcance».")
+        lineas += [
+            "- En «Sesiones» escribe una línea por sesión que empiece con su número: «1. Título: alcance».",
+            "- En «Herramienta de los ejercicios» decide por el tema del curso (PLAN.md §0, decisión 36): «Excel» solo si",
+            "  el curso enseña Excel, «IA» solo si enseña a usar IA, «Excel e IA» si enseña los dos y «ninguna» en los",
+            "  demás casos. Los modelos de diseño no cuentan: guían el formato, no la herramienta.",
+        ]
     else:
         ficha_curso = almacen.ruta_ficha(carpeta_curso, "curso", extension=".md").read_text(encoding="utf-8")
+        herramienta = almacen.herramienta_de_los_ejercicios(carpeta_curso)
         sesiones = {s["numero"]: s["texto"] for s in almacen.sesiones_del_curso(almacen.cargar(carpeta_curso, "curso"))}
         lineas += [
             "- Puedes proponer temas, bloques, ejercicios, problemas sembrados, estaciones y preguntas que "
             "encajen con el alcance de la sesión y con el caso del curso. Todo lo que propongas va con literal = false.",
-            "- Cada ejercicio funciona solo, tiene su archivo de práctica y su problema sembrado, y se ejecuta "
-            "sin llenar nada a mano. Usa de 3 a 5 ejercicios y de 5 a 7 estaciones, una por línea.",
+            "- Cada ejercicio funciona solo, tiene su archivo de práctica y su problema sembrado, y trae todo lo que "
+            "el alumno necesita. Usa de 3 a 5 ejercicios y de 5 a 7 estaciones, una por línea.",
+            "- " + DE_QUE_TRATAN_LOS_EJERCICIOS[herramienta],
             "- Los archivos de práctica y de la evaluación son Excel para datos y Word para textos. "
             "PDF solo si el caso lo exige. Nunca .txt.",
             "- La evaluación tiene 3 preguntas, salvo que la ficha diga otra cantidad. Cada pregunta "
@@ -485,8 +506,9 @@ async def revisar_ejercicios(ficha: dict, curso: str, sesion: int, consulta=agen
     pedido = (
         "Revisa cada ejercicio de esta ficha de laboratorio con dos preguntas.\n"
         "1. ¿Funciona solo, sin el resultado de otro ejercicio?\n"
-        "2. ¿Se puede ejecutar de principio a fin sin llenar nada a mano? Llenar algo a mano solo vale "
-        "si llenarlo es el tema del ejercicio.\n"
+        "2. ¿Se puede hacer de principio a fin con lo que trae, sin inventar datos que faltan? Escribir el "
+        "resultado del ejercicio (una clasificación, una marca, un texto) es el ejercicio, no un dato que falta. "
+        "Llenar espacios en blanco de un texto para copiar solo vale si llenarlos es el tema del ejercicio.\n"
         "Responde por cada ejercicio con su número, las dos respuestas y un motivo de una oración. "
         "Si las dos respuestas son sí, el motivo puede ser «Cumple».\n\n" + texto
     )

@@ -114,6 +114,13 @@ def sin_marcas(texto: str) -> str:
     return "\n".join(sin_marca(l) for l in texto.split("\n")).strip()
 
 
+def herramienta_de_los_ejercicios(carpeta_curso: Path) -> frozenset[str]:
+    """«excel», «ia», los dos o ninguno, según la ficha del curso (PLAN.md §0, decisión 36). Vacío vale «ninguna»:
+    los ejercicios salen del tema de la sesión y el alumno trabaja a mano en el archivo de práctica."""
+    texto = valor(cargar(carpeta_curso, "curso"), "herramientas.ejercicios").strip().lower()
+    return frozenset(nombre for nombre, patron in (("excel", r"\bexcel\b"), ("ia", r"\bia\b")) if re.search(patron, texto))
+
+
 def poner_por_omision(ficha: dict) -> None:
     """El docente y el contacto vacíos de la ficha del curso toman su valor por defecto. Se pueden cambiar,
     pero no quedar vacíos (decisión 27)."""

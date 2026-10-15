@@ -91,11 +91,15 @@ Termina un material, haz la validación doble, entrégalo y espera la aprobació
 
 - No menciones marcas, botones, menús ni funciones exclusivas de un producto, salvo los que nombran las fuentes del curso o las fichas: esos se nombran tal cual.
 - Explica cada concepto por lo que hace, no por cómo lo llama cada marca.
-- Si un ejercicio necesita un archivo, escribe "adjunta el archivo". Agrega una sola vez, al inicio de la guía, la alternativa: "Si tu herramienta no acepta archivos, copia el texto del archivo y pégalo en el mensaje".
+- Si los ejercicios usan IA y uno necesita un archivo, escribe "adjunta el archivo". Agrega una sola vez, al inicio de la guía, la alternativa: "Si tu herramienta no acepta archivos, copia el texto del archivo y pégalo en el mensaje".
 
 ### Ejercicios que se ejecutan
 
 Estas reglas valen para todo ejercicio que el alumno ejecuta en una herramienta: un prompt, una fórmula, una consulta, un comando.
+
+- Los ejercicios practican el tema de la sesión. La herramienta sale de "Herramienta de los ejercicios", en la ficha del curso, y esa respuesta sale del tema del curso. Los modelos dan la estructura de la guía, nunca la herramienta.
+- Usa prompts solo si el curso trata de IA. Usa fórmulas solo si el curso trata de Excel.
+- Con "ninguna", el alumno hace la acción a mano en su archivo de práctica, en Excel o en Word. Los pasos dicen qué revisar y dónde escribe su resultado. El ejercicio no lleva recuadros para copiar, salvo una plantilla si completarla es el tema.
 
 - Lo que el alumno copia funciona tal cual. No lleva espacios por llenar a mano, salvo que llenarlos sea el tema del ejercicio.
 - Todo insumo llega como archivo de práctica o ya está escrito en el ejercicio.
@@ -151,7 +155,7 @@ Estructura de cada ejercicio en la guía del alumno:
 2. Situación de 2 a 3 líneas que indica el área.
 3. Nombres exactos de los archivos de práctica.
 4. Instrucción en pasos numerados.
-5. Lo que el alumno copia, en uno o dos recuadros. Si es un prompt, usa rol, contexto, tarea, formato de salida y restricciones.
+5. Lo que el alumno copia, en uno o dos recuadros, solo si el ejercicio lo necesita. Si es un prompt, usa rol, contexto, tarea, formato de salida y restricciones.
 6. "Mejora el resultado (opcional)": un pedido de seguimiento que enseñe a iterar. El título lleva siempre la palabra "(opcional)".
 
 El ejercicio no lleva las secciones "Cómo se ve un buen resultado" ni "Criterio de calidad".
@@ -383,6 +387,7 @@ FICHA DEL CURSO
 - Enlaces o datos de contacto:
 
 7. Herramientas
+- Herramienta de los ejercicios (ninguna, Excel, IA o Excel e IA):
 - ¿Material neutral respecto a marcas? (sí o no):
 - Si no es neutral, herramienta y versión que usan los alumnos:
 - ¿La herramienta de los alumnos acepta archivos adjuntos? (sí, no o no sé):

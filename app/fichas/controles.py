@@ -58,6 +58,14 @@ CONTROLES = {
                       "por_omision": "profesional",
                       "descripciones": {nombre: e.descripcion for nombre, e in ESTILOS.items()},
                       "ayuda": "Cambia la portada, los títulos, los recuadros y el tono."},
+    "herramientas.ejercicios": {
+        "tipo": "opciones", "titulo": "¿Con qué herramienta hace el alumno los ejercicios?",
+        "opciones": (("ninguna", "Ninguna: el alumno hace la tarea a mano en el archivo de práctica (Excel o Word)"),
+                     ("Excel", "Excel: los ejercicios usan fórmulas, porque el curso trata de Excel"),
+                     ("IA", "IA: los ejercicios usan prompts, porque el curso trata de IA"),
+                     ("Excel e IA", "Excel e IA: fórmulas y prompts, porque el curso trata de los dos")),
+        "ayuda": "Sale del tema del curso, no de los modelos. Vacío: ninguna.",
+    },
     "herramientas.neutral": {
         "tipo": "opciones", "titulo": "¿El material habla en general o nombra una herramienta?",
         "opciones": (("sí", "Hablar en general, sin nombrar productos («una IA generativa», «una hoja de cálculo»)"),

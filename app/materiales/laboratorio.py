@@ -9,8 +9,9 @@ Flujo, igual al de la lectura:
    en Word y el .zip.
 5. Primera pasada: el verificador, sobre la guía y los archivos de práctica. Segunda pasada: la revisión del
    contenido, un bloque por ejercicio. Una sola corrección; lo que quede va a la entrega como pendiente.
-6. Ejecución de cada ejercicio como un alumno: las fórmulas con Excel y los prompts con Claude, y la comparación con
-   la respuesta correcta de la ficha (PLAN.md §0, decisión 35). Una fórmula que da error se corrige una vez; una
+6. Ejecución de cada ejercicio como un alumno: las fórmulas con Excel, los prompts con Claude y los ejercicios a
+   mano con Claude como alumno, y la comparación con la respuesta correcta de la ficha (PLAN.md §0, decisiones 35 y
+   36). Una fórmula que da error se corrige una vez; una
    diferencia con la ficha va a la entrega como pendiente. No hay guía del profesor.
 """
 
@@ -115,13 +116,30 @@ def ejercicios_de_la_ficha(carpeta_curso: Path, sesion: int) -> list[int]:
     return almacen.bloques_llenos(_ficha_sesion(carpeta_curso, sesion), "ejercicio", plantillas.MAX_EJERCICIOS, ids)
 
 
+def herramienta(carpeta_curso: Path) -> frozenset[str]:
+    """«excel», «ia», los dos o ninguno: sale del tema del curso (PLAN.md §0, decisión 36)."""
+    return almacen.herramienta_de_los_ejercicios(carpeta_curso)
+
+
+def recuadros_permitidos(herramienta_: frozenset[str]) -> frozenset[str]:
+    """Una plantilla vale en cualquier curso; una fórmula, solo si el curso trata de Excel; un prompt, solo de IA."""
+    return frozenset({"plantilla"} | ({"formula"} if "excel" in herramienta_ else set())
+                     | ({"prompt"} if "ia" in herramienta_ else set()))
+
+
+def nombre_de_la_herramienta(herramienta_: frozenset[str]) -> str:
+    return {frozenset(): "ninguna", frozenset({"excel"}): "Excel", frozenset({"ia"}): "IA"}.get(herramienta_, "Excel e IA")
+
+
 def respuestas_a_la_herramienta(carpeta_curso: Path, sesion: int) -> dict[int, str]:
+    if "ia" not in herramienta(carpeta_curso):
+        return {}                       # sin IA no hay una herramienta que pregunte (decisión 36)
     ficha = _ficha_sesion(carpeta_curso, sesion)
     respuestas = {}
     for n in ejercicios_de_la_ficha(carpeta_curso, sesion):
         texto = almacen.valor(ficha, f"ejercicio.{n}.pregunta_herramienta").strip()
         # «No aplica», «ninguna» o «no» dicen que la herramienta no pregunta nada: no hay respuesta que exigir.
-        if texto and not re.match(r"^(no aplica|no|ninguna|n/?a|-)", texto, re.I):
+        if texto and not re.match(r"^(no aplica|no\b|ninguna|n/?a\b|-)", texto, re.I):
             respuestas[n] = texto
     return respuestas
 
@@ -145,6 +163,8 @@ def fecha_de_referencia(carpeta_curso: Path) -> str:
 
 def aviso_de_adjuntos(carpeta_curso: Path) -> str:
     """SKILL.md, «Neutralidad»: la alternativa va una sola vez, al inicio, si la herramienta puede no aceptar archivos."""
+    if "ia" not in herramienta(carpeta_curso):
+        return ""                       # sin IA, el alumno abre el archivo: no lo adjunta
     ficha = almacen.cargar(carpeta_curso, "curso")
     adjuntos = almacen.valor(ficha, "herramientas.adjuntos").strip().lower()
     return "" if adjuntos.startswith("sí") or adjuntos.startswith("si") else AVISO_ADJUNTOS
@@ -175,13 +195,61 @@ def _contexto(carpeta_curso: Path, sesion: int, paginas: list[str] | None = None
     return "\n".join(partes)
 
 
-def instrucciones_de_formato(sesion: int, aviso: str) -> str:
+_RECUADRO_PROMPT = "    - «prompt»: una línea por parte: rol, contexto, tarea, formato de salida y restricciones."
+_RECUADRO_FORMULA = (
+    '    - «formula»: «titulo» como «Fórmula 1 · Revisa si el riesgo se puede aceptar», «explicacion» con una línea que\n'
+    '      dice qué avisa o calcula, y en «lineas» la fórmula con los nombres de las funciones en español y los datos\n'
+    '      separados por comas («=SI(Y(H2="Aceptar",E2>4),"NO SE PUEDE ACEPTAR","OK")»). Un programa ejecuta los pasos\n'
+    '      tal cual y Excel calcula el archivo (decisión 35), así que se escriben con estas formas exactas:\n'
+    '      «Copia la fórmula 1 en la celda L2», «Copia la celda L2 hacia abajo, hasta la fila 9» y\n'
+    '      «Escribe **Total** en la celda A10». Un paso que cambia de hoja la nombra: «Entra a la hoja **Riesgos**».')
+_RECUADRO_PLANTILLA = "    - «plantilla»: un texto que el alumno completa; solo si completarlo es el tema del ejercicio."
+
+
+def _de_la_herramienta(herramienta_: frozenset[str]) -> dict[str, str]:
+    """Las partes del pedido que cambian con la herramienta de los ejercicios (decisión 36)."""
+    ia, excel = "ia" in herramienta_, "excel" in herramienta_
+    tipos = [t for t in ("prompt", "formula", "plantilla") if t in recuadros_permitidos(herramienta_)]
+    prohibidos = [n for t, n in (("prompt", "prompts"), ("formula", "fórmulas")) if t not in tipos]
+    sin = "prompt ni fórmula" if ia and excel else "prompt" if ia else "fórmula" if excel else "nada que copiar"
+    return {
+        "herramienta": (
+            f"- Herramienta de los ejercicios, según la ficha del curso: {nombre_de_la_herramienta(herramienta_)}. Cada\n"
+            "  ejercicio practica el tema de la sesión con la acción de la ficha. Los modelos y la referencia dan la\n"
+            "  estructura de la guía, no la herramienta."
+            + (f"\n  En este curso no hay {' ni '.join(prohibidos)}: no los escribas en ningún ejercicio ni en la mejora."
+               if prohibidos else "")
+            + ("" if ia or excel else
+               "\n  El alumno hace la acción a mano en su archivo de práctica: lo abre, revisa lo que dicen los pasos y\n"
+               "  escribe su resultado en Excel o en Word.")),
+        "archivo": ("Si un archivo hace falta, el paso dice «adjunta el archivo». Si la herramienta debe detenerse a\n"
+                    "    preguntar, ordénalo y escribe la respuesta exacta." if ia else
+                    "El primer paso abre el archivo de práctica. Los pasos dicen qué revisar y dónde escribe\n"
+                    "    el alumno su resultado: la columna y la celda exactas, o el apartado del documento."),
+        "copiar": (f"de cero a cuatro recuadros, con su «tipo» ({', '.join(tipos)}). Si el alumno no copia nada, déjalo\n"
+                   "    vacío" + ("" if ia or excel else ": es lo normal en este curso") + "."),
+        "recuadros": "\n".join(([_RECUADRO_PROMPT] if ia else []) + ([_RECUADRO_FORMULA] if excel else [])
+                               + [_RECUADRO_PLANTILLA]),
+        "ejecucion": ("- Un programa ejecuta cada ejercicio como un alumno: "
+                      + ("cada prompt en una conversación nueva con Claude, con el texto de los archivos adjuntos; " if ia else "")
+                      + ("cada fórmula con Excel; " if excel else "")
+                      + f"un ejercicio sin {sin} lo hace Claude a mano, siguiendo los pasos\n  con el texto de sus "
+                      "archivos. Lo que sale se compara con la respuesta correcta de la ficha."),
+        "columnas": ("Deja vacías las columnas donde el alumno copiará las fórmulas o escribirá su resultado."
+                     if excel else "Deja vacías las columnas donde el alumno escribirá su resultado."),
+        "formula": "el recuadro «Antes de copiar una fórmula» si hay fórmulas, " if excel else "",
+    }
+
+
+def instrucciones_de_formato(sesion: int, aviso: str, herramienta_: frozenset[str] = frozenset()) -> str:
+    h = _de_la_herramienta(herramienta_)
     return f"""
 CÓMO ENTREGAR EL LABORATORIO (PLAN.md §0, decisión 33)
+{h["herramienta"]}
 - Devuelve solo los datos del esquema. Un programa crea la guía en Word con esta estructura: portada, «Antes de
-  empezar», la tabla de archivos, el recuadro «Antes de copiar una fórmula» si hay fórmulas, y cada ejercicio con
-  «Área:», «Situación», «Archivos de práctica», «Pasos», sus recuadros y «{docx.MEJORA}». También crea los archivos
-  de práctica reales, la figura de cada ejercicio que la necesite y el .zip.
+  empezar», la tabla de archivos, {h["formula"]}y cada ejercicio con «Área:», «Situación», «Archivos de práctica»,
+  «Pasos», sus recuadros y «{docx.MEJORA}». También crea los archivos de práctica reales, la figura de cada
+  ejercicio que la necesite y el .zip.
 - antes_de_empezar:
   - contexto: de 2 a 4 oraciones con la empresa o institución del caso, qué hace y qué debe hacer ahora, y la fecha
     de referencia de la ficha. El programa agrega «{docx.CADA_UNO_SOLO}».
@@ -196,8 +264,7 @@ CÓMO ENTREGAR EL LABORATORIO (PLAN.md §0, decisión 33)
   - situacion: de 2 a 3 oraciones: quién pide qué y para qué sirve el entregable.
   - archivos: los nombres exactos de los archivos de práctica de ese ejercicio.
   - pasos: en el orden real. Cada paso es una sola acción y nombra la hoja y la celda o la columna exactas. Puedes
-    poner en negrita el nombre de una hoja o de un apartado con **dos asteriscos**. Si un archivo hace falta, el paso
-    dice «adjunta el archivo». Si la herramienta debe detenerse a preguntar, ordénalo y escribe la respuesta exacta.
+    poner en negrita el nombre de una hoja o de un apartado con **dos asteriscos**. {h["archivo"]}
   - figura: una por ejercicio como máximo. Ponla en el paso que pide ubicar algo en el archivo: una columna, una
     celda, un rango o un párrafo. Si un paso pide ubicar algo, la figura es obligatoria: un programa lo revisa.
     Si ningún paso pide ubicar algo, deja todas en null. No menciones la figura en el
@@ -206,18 +273,11 @@ CÓMO ENTREGAR EL LABORATORIO (PLAN.md §0, decisión 33)
       que señala («C5», «B2:B9»). La fila 1 es la de los encabezados.
     - Word: «marcas» con un trozo del texto del archivo, copiado tal cual. «hoja» y «rango» vacíos.
     - descripcion: una línea que dice qué muestra.
-  - copiar: de uno a cuatro recuadros, con su «tipo»:
-    - «prompt»: una línea por parte: rol, contexto, tarea, formato de salida y restricciones.
-    - «formula»: «titulo» como «Fórmula 1 · Revisa si el riesgo se puede aceptar», «explicacion» con una línea que
-      dice qué avisa o calcula, y en «lineas» la fórmula con los nombres de las funciones en español y los datos
-      separados por comas («=SI(Y(H2="Aceptar",E2>4),"NO SE PUEDE ACEPTAR","OK")»). Un programa ejecuta los pasos
-      tal cual y Excel calcula el archivo (decisión 35), así que se escriben con estas formas exactas:
-      «Copia la fórmula 1 en la celda L2», «Copia la celda L2 hacia abajo, hasta la fila 9» y
-      «Escribe **Total** en la celda A10». Un paso que cambia de hoja la nombra: «Entra a la hoja **Riesgos**».
-    - «plantilla»: un texto que el alumno completa; solo si completarlo es el tema del ejercicio.
+  - copiar: {h["copiar"]}
+{h["recuadros"]}
     Lo que se copia funciona tal cual: sin corchetes, guiones bajos ni espacios por llenar, salvo en una plantilla.
   - Comillas («» o “”) solo para copiar texto tal cual de una fuente: el verificador las busca en las fuentes. El
-    texto que el alumno escribe o que la herramienta debe usar va en **negrita**, sin comillas.
+    texto que el alumno escribe va en **negrita**, sin comillas.
   - mejora: «texto» con lo que se agrega y para qué; «pasos» y «copiar» si hacen falta, con las mismas reglas.
   - No escribas «Cómo se ve un buen resultado» ni «Criterio de calidad»: la skill no los permite.
 - archivos: cada archivo de práctica, con nombre S{sesion}_E[ejercicio]_[descripcion-corta] en minúsculas y con
@@ -225,13 +285,11 @@ CÓMO ENTREGAR EL LABORATORIO (PLAN.md §0, decisión 33)
   usa solo sus archivos: ninguno necesita el resultado de otro.
   - descripcion: lo que dirá la tabla de archivos («Ocho riesgos de Recursos Humanos con su opción de tratamiento»).
   - Excel: «hojas», cada una con un nombre corto, «encabezados» y «filas». Datos ficticios y coherentes con los datos
-    fijos del caso. Los números van como números. Deja vacías las columnas donde el alumno copiará las fórmulas.
+    fijos del caso. Los números van como números. {h["columnas"]}
   - Word: «parrafos» (estilo «titulo», «texto» o «lista») y, si hace falta, «tabla».
   - Si el ejercicio depende de fechas o plazos, escribe la fecha de referencia de la ficha dentro del archivo.
   - problema: el problema que el archivo trae a propósito, según la ficha. No va en la guía del alumno.
-- Un programa ejecuta cada ejercicio como un alumno: cada prompt en una conversación nueva con Claude, con el
-  texto de los archivos adjuntos, y cada fórmula con Excel. Lo que sale se compara con la respuesta correcta de la
-  ficha.
+{h["ejecucion"]}
 - pasajes: los pasajes de las fuentes que usaste: «oracion» del laboratorio que sostiene, la fuente, la ubicación y
   en «texto» el pasaje copiado, de 40 palabras como máximo.
 - decisiones: una entrada por punto, con «texto» y «tipo» («sin fuente», «decisión» o «nota»).
@@ -243,7 +301,7 @@ def pedido_de_redaccion(carpeta_curso: Path, sesion: int, paginas: list[str] | N
              else "Si citas una fuente, busca con Grep y lee con Read los pasajes antes de escribir.")
     return "\n".join([
         _contexto(carpeta_curso, sesion, paginas),
-        instrucciones_de_formato(sesion, aviso_de_adjuntos(carpeta_curso)),
+        instrucciones_de_formato(sesion, aviso_de_adjuntos(carpeta_curso), herramienta(carpeta_curso)),
         "TAREA: prepara el laboratorio de la sesión. Actúa como diseñador instruccional. Toma los ejercicios de la ficha",
         "de la sesión: su área, la acción, el entregable, el archivo de práctica con su problema y la respuesta correcta.",
         citar,
@@ -255,7 +313,7 @@ def pedido_de_redaccion(carpeta_curso: Path, sesion: int, paginas: list[str] | N
 def _pedido_con_problemas(carpeta_curso, sesion, datos: dict, problemas: list[str], como_entregar: list[str]) -> str:
     return "\n".join([
         _contexto(carpeta_curso, sesion),
-        instrucciones_de_formato(sesion, aviso_de_adjuntos(carpeta_curso)),
+        instrucciones_de_formato(sesion, aviso_de_adjuntos(carpeta_curso), herramienta(carpeta_curso)),
         comun.REGLAS_DE_CORRECCION,
         *como_entregar,
         "",
@@ -347,7 +405,8 @@ def _validar(datos: dict, carpeta_curso: Path, sesion: int) -> tuple[Laboratorio
     except ValidationError as error:
         return None, [f"FALLA · estructura · {'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in error.errors()]
     problemas = practica.revisar(contenido, sesion, len(ejercicios_de_la_ficha(carpeta_curso, sesion)),
-                                 fecha_de_referencia(carpeta_curso), respuestas_a_la_herramienta(carpeta_curso, sesion))
+                                 fecha_de_referencia(carpeta_curso), respuestas_a_la_herramienta(carpeta_curso, sesion),
+                                 recuadros_permitidos(herramienta(carpeta_curso)))
     return (None if problemas else contenido), problemas
 
 
@@ -439,7 +498,8 @@ class _Trabajo:
     async def ejecutar_y_corregir(self) -> list[ejecucion.Ejecucion]:
         """Ejecuta cada ejercicio. Una fórmula que da error lleva a una corrección completa y a una nueva ejecución de
         esos ejercicios; si sigue, queda como falla. Las diferencias con la ficha quedan como pendientes."""
-        self.avance("Ejecutando cada ejercicio como un alumno: las fórmulas con Excel y los prompts con Claude.")
+        self.avance("Ejecutando cada ejercicio como un alumno: las fórmulas con Excel, los prompts con Claude y los "
+                    "ejercicios a mano con Claude como alumno.")
         ejecuciones = await self.ejecutar()
         fallas = [f for x in ejecuciones for f in x.fallas]
         if fallas:
@@ -689,7 +749,8 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, co
 
 def _resumen_de_ejecucion(ejecuciones: list[ejecucion.Ejecucion]) -> dict:
     return {"ejercicios": len(ejecuciones), "formulas": sum(len(x.celdas) for x in ejecuciones),
-            "conversaciones": sum(x.conversaciones for x in ejecuciones),
+            "conversaciones": sum(x.conversaciones for x in ejecuciones if not x.a_mano),
+            "a_mano": [x.numero for x in ejecuciones if x.a_mano],
             "coinciden": [x.numero for x in ejecuciones if x.coincide],
             "diferencias": sum(len(x.diferencias) for x in ejecuciones),
             "descartadas": sum(x.descartadas for x in ejecuciones),
@@ -725,9 +786,12 @@ def _entrega(material: dict) -> dict:
     ]
     ej = material.get("ejecucion") or {}
     if ej.get("ejercicios"):
+        partes = ([f"{comun.cuantos(ej['formulas'], 'celda')} con fórmula calculadas con Excel"] if ej["formulas"] else []) \
+            + ([f"{comun.cuantos(ej['conversaciones'], 'conversación')} nuevas con Claude"] if ej["conversaciones"] else []) \
+            + ([f"{comun.cuantos(len(ej.get('a_mano', [])), 'ejercicio')} hechos a mano por Claude como alumno"]
+               if ej.get("a_mano") else [])
         probe.append(f"Ejecuté {comun.cuantos(ej['ejercicios'], 'ejercicio')} como un alumno: "
-                     f"{comun.cuantos(ej['formulas'], 'celda')} con fórmula calculadas con Excel y "
-                     f"{comun.cuantos(ej['conversaciones'], 'conversación')} nuevas con Claude.")
+                     + (", ".join(partes[:-1]) + " y " + partes[-1] if len(partes) > 1 else "".join(partes)) + ".")
         if ej["coinciden"]:
             probe.append("Coinciden con la respuesta correcta de la ficha: "
                          + ", ".join(f"ejercicio {n}" for n in ej["coinciden"]) + ".")
@@ -757,10 +821,15 @@ def _entrega(material: dict) -> dict:
     costo = material["costo"]
     valide.append(f"Costo de este laboratorio: {costo['llamadas']} llamadas, {costo['costo_usd']:.2f} USD estimados.")
     if ej.get("ejercicios"):
-        no_pude = [f"Ejecuté los prompts con Claude ({ej['modelo']}), con el texto de cada archivo dentro del mensaje. "
-                   "La herramienta de los alumnos puede responder distinto.",
-                   "Las indicaciones que dependen de lo que responda la herramienta («Si falta…») no se ejecutaron.",
-                   *ej["no_pude"]]
+        con_prompt = ej["conversaciones"] > 0
+        no_pude = ([f"Ejecuté los prompts con Claude ({ej['modelo']}), con el texto de cada archivo dentro del mensaje. "
+                    "La herramienta de los alumnos puede responder distinto.",
+                    "Las indicaciones que dependen de lo que responda la herramienta («Si falta…») no se ejecutaron."]
+                   if con_prompt else [])
+        if ej.get("a_mano"):
+            no_pude.append(f"Los ejercicios a mano los hizo Claude ({ej['modelo']}) con el texto de sus archivos. "
+                           "No abrió Excel ni Word: un alumno puede equivocarse en otros lugares.")
+        no_pude += ej["no_pude"]
     else:
         no_pude = ["No ejecuté los ejercicios porque quedaron fallas antes de llegar a la ejecución."]
     if not r.get("bloques"):

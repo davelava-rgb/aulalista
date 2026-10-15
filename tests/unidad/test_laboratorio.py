@@ -371,3 +371,116 @@ def test_con_referencia_las_paginas_van_en_el_pedido_y_la_redaccion_no_busca(ses
     assert "[silabo.pdf · página 1] Scrum Master con IA" in redaccion["prompt"]
     assert "busca con Grep" not in redaccion["prompt"]
     assert redaccion["options"].tools == [] and not redaccion["options"].allowed_tools
+
+
+# ---------- Herramienta de los ejercicios (PLAN.md §0, decisión 36) ----------
+
+def poner_herramienta(carpeta, valor):
+    """Cambia «Herramienta de los ejercicios» en la ficha del curso sin tocar su confirmación."""
+    from app.fichas import almacen
+    ficha = almacen.cargar(carpeta, "curso")
+    ficha["campos"]["herramientas.ejercicios"] = {"valor": valor, "origen": "profesor", "estado": ""}
+    almacen.guardar(carpeta, "curso", None, ficha)
+
+
+@pytest.mark.parametrize("valor, esperado", [
+    ("", set()), ("ninguna", set()), ("Excel", {"excel"}), ("IA", {"ia"}), ("Excel e IA", {"excel", "ia"}),
+    ("Ninguna: el alumno trabaja a mano", set()),
+])
+def test_la_herramienta_sale_de_la_ficha_del_curso(sesion, valor, esperado):  # noqa: F811
+    poner_herramienta(sesion, valor)
+    assert laboratorio.herramienta(sesion) == esperado
+
+
+def test_un_curso_sin_herramienta_no_pide_prompts_ni_formulas():
+    texto = laboratorio.instrucciones_de_formato(1, "", frozenset())
+    assert "Herramienta de los ejercicios, según la ficha del curso: ninguna" in texto
+    assert "En este curso no hay prompts ni fórmulas" in texto
+    assert "«prompt»:" not in texto and "«formula»:" not in texto and "adjunta el archivo" not in texto
+    assert "Antes de copiar una fórmula" not in texto
+    assert "lo hace Claude a mano" in texto
+    completo = laboratorio.instrucciones_de_formato(1, "", frozenset({"excel", "ia"}))
+    assert "«prompt»:" in completo and "«formula»:" in completo and "adjunta el archivo" in completo
+    assert "En este curso no hay" not in completo
+
+
+def test_sin_ia_no_hay_aviso_de_adjuntos_ni_respuesta_a_la_herramienta(sesion):  # noqa: F811
+    from app.fichas import almacen
+    ficha = almacen.cargar(sesion, "sesion", 1)
+    ficha["campos"]["ejercicio.2.pregunta_herramienta"] = {"valor": "Sí, usa el aviso de ayer", "origen": "x", "estado": ""}
+    almacen.guardar(sesion, "sesion", 1, ficha)
+    poner_herramienta(sesion, "ninguna")
+    assert laboratorio.respuestas_a_la_herramienta(sesion, 1) == {}
+    assert laboratorio.aviso_de_adjuntos(sesion) == ""
+    pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
+    assert "ejercicio.2.pregunta_herramienta" not in pagina and "ejercicio.2.respuesta" in pagina
+    poner_herramienta(sesion, "IA")
+    assert "ejercicio.2.pregunta_herramienta" in cliente.get("/cursos/scrum/sesiones/1/ficha").text
+
+
+def test_el_laboratorio_a_mano_no_tiene_problemas_en_un_curso_sin_herramienta(sesion):  # noqa: F811
+    poner_herramienta(sesion, "ninguna")
+    contenido, problemas = laboratorio._validar(sembrados.a_mano(), sesion, 1)
+    assert problemas == [] and contenido is not None
+    contenido, problemas = laboratorio._validar(sembrados.limpio(), sesion, 1)   # con prompts y fórmulas
+    assert any("trae un recuadro de prompt y el curso no usa IA" in p for p in problemas)
+    assert any("trae un recuadro de fórmula y el curso no usa Excel" in p for p in problemas)
+
+
+@pytest.mark.parametrize("nombre", list(sembrados.SEMBRADOS_SIN_HERRAMIENTA))
+def test_cada_error_de_herramienta_sembrado_se_detecta(sesion, nombre):  # noqa: F811
+    poner_herramienta(sesion, "ninguna")
+    cambio, esperado = sembrados.SEMBRADOS_SIN_HERRAMIENTA[nombre]
+    contenido, problemas = laboratorio._validar(sembrados.con_a_mano(cambio), sesion, 1)
+    assert contenido is None
+    assert any(esperado in p for p in problemas), problemas
+
+
+def test_en_un_curso_de_excel_vale_la_formula_y_no_el_prompt(sesion):  # noqa: F811
+    poner_herramienta(sesion, "Excel")
+    _, problemas = laboratorio._validar(sembrados.limpio(), sesion, 1)
+    assert any("ejercicio 1: trae un recuadro de prompt" in p for p in problemas)
+    assert not any("recuadro de fórmula" in p for p in problemas)
+
+
+def test_un_ejercicio_a_mano_lo_hace_claude_como_alumno(sesion):  # noqa: F811
+    poner_herramienta(sesion, "ninguna")
+    generar(sesion, sembrados.a_mano())                       # crea los archivos de práctica reales
+    rutas = laboratorio.archivos(sesion, 1)
+    consulta = herramienta_y_comparacion()
+    resultados = asyncio.run(ejecucion.ejecutar(
+        Laboratorio.model_validate(sembrados.a_mano()), carpeta_practica=rutas["practica"], carpeta=rutas["ejecucion"],
+        respuestas_ficha={1: "La situación 4 contradice", 2: "La situación 4 contradice", 3: "La situación 4 contradice"},
+        respuestas_alumno={}, recalcular=excel_simulado(),
+        llamada={"curso": "scrum", "sesion": "S1", "material": "laboratorio", "consulta": consulta}))
+    conversaciones = [l for l in consulta.llamadas if l["options"].output_format is None]
+    assert len(conversaciones) == 3                                      # uno por ejercicio, todos a mano
+    primero = conversaciones[0]["prompt"]
+    assert primero.startswith("Eres un alumno de un curso. Haz este ejercicio de laboratorio a mano")
+    assert "[Archivo de práctica: S1_E1_pedidos-semana.xlsx]" in primero and "P-103 | Cliente C | Envío" in primero
+    assert "3. Escribe Recoge o Envía en la columna Revisión de cada pedido." in primero
+    assert "La situación 4 contradice" not in primero                    # Claude no ve la respuesta de la ficha
+    assert conversaciones[0]["options"].tools == []
+    assert all(r.a_mano and r.coincide and not r.no_pude for r in resultados)
+    assert resultados[0].salida() == "Pedido P-103: Envío. La situación 4 contradice."
+    registro = ejecucion.a_markdown(resultados, "Ejecución", "claude-sonnet-5-5")
+    assert "**Lo que hizo Claude a mano:**" in registro
+
+
+def test_la_entrega_de_un_laboratorio_a_mano_no_habla_de_prompts(sesion):  # noqa: F811
+    poner_herramienta(sesion, "ninguna")
+
+    async def a_mano(contenido, **_):
+        return [ejecucion.Ejecucion(e.numero, e.titulo, respuesta_ficha="La situación 4 contradice", a_mano=True,
+                                    conversacion=[ejecucion.Turno("guía", "pasos"), ejecucion.Turno("resultado", "ok")])
+                for e in contenido.ejercicios]
+
+    material, consulta = generar(sesion, sembrados.a_mano(), ejecutar=a_mano)
+    assert material["estado"] == "verificada", material.get("problemas")
+    entrega = {s["clave"]: s["lineas"] for s in material["entrega"]["secciones"]}
+    assert "Ejecuté 3 ejercicios como un alumno: 3 ejercicios hechos a mano por Claude como alumno." in entrega["probe"]
+    assert not any("prompt" in l for l in entrega["no_pude"])
+    redaccion = consulta.llamadas[0]["prompt"]
+    assert "En este curso no hay prompts ni fórmulas" in redaccion and laboratorio.AVISO_ADJUNTOS not in redaccion
+    textos = [p.text for p in Document(laboratorio.archivos(sesion, 1)["word"]).paragraphs]
+    assert laboratorio.AVISO_ADJUNTOS not in textos

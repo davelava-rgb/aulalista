@@ -149,3 +149,58 @@ SEMBRADOS = {
     "espacio por llenar en una fórmula":(lambda d: d["ejercicios"][2]["copiar"][0].update(lineas=['=SI(B2<___,"X","OK")']),
                                           "«___» en lo que el alumno copia"),
 }
+
+
+# ---------- Curso sin IA ni Excel (PLAN.md §0, decisión 36) ----------
+# El alumno hace la acción a mano en su archivo de práctica: los ejercicios no traen recuadros para copiar.
+
+def _a_mano() -> dict:
+    datos = limpio()
+    primero, segundo, tercero = datos["ejercicios"]
+    primero["pasos"][2] = _paso("Escribe **Recoge** o **Envía** en la columna Revisión de cada pedido.")
+    segundo["pasos"][2] = _paso("Escribe debajo de esa oración dónde se recogen los pedidos urgentes.")
+    tercero["pasos"] = [
+        primero["pasos"][0] | {"texto": "Abre el archivo S1_E3_capacitacion.xlsx."},
+        _paso("Revisa las horas de cada persona en la columna Horas de la hoja **Horas**.",
+              tercero["pasos"][0]["figura"]),
+        _paso("Escribe **REVISAR** en la columna Revisión de cada persona con menos de 5 horas."),
+    ]
+    for e in datos["ejercicios"]:
+        e["copiar"] = []
+    tercero["mejora"] = {"texto": "Escribe una nota que diga a quién se le pide completar sus horas.",
+                         "pasos": ["Escribe la nota en la celda A6."], "copiar": []}
+    return datos
+
+
+A_MANO = _a_mano()
+
+
+def a_mano() -> dict:
+    return copy.deepcopy(A_MANO)
+
+
+def con_a_mano(cambio) -> dict:
+    datos = a_mano()
+    cambio(datos)
+    return datos
+
+
+_PROMPT = {"tipo": "prompt", "titulo": "Prompt", "explicacion": "", "lineas": ["Tarea: clasifica los pedidos."]}
+_FORMULA = {"tipo": "formula", "titulo": "Fórmula 1 · Revisa las horas", "explicacion": "Avisa si faltan horas.",
+            "lineas": ['=SI(B2<5,"REVISAR","OK")']}
+
+# Errores que solo son errores si el curso no usa IA ni Excel: (cambio, texto que debe aparecer en el problema).
+SEMBRADOS_SIN_HERRAMIENTA = {
+    "prompt en un curso sin IA": (lambda d: d["ejercicios"][0]["copiar"].append(dict(_PROMPT)),
+                                  "trae un recuadro de prompt y el curso no usa IA"),
+    "fórmula en un curso sin Excel": (lambda d: d["ejercicios"][2]["copiar"].append(dict(_FORMULA)),
+                                      "trae un recuadro de fórmula y el curso no usa Excel"),
+    "prompt en la mejora": (lambda d: d["ejercicios"][1]["mejora"]["copiar"].append(dict(_PROMPT)),
+                            "trae un recuadro de prompt"),
+    "paso que adjunta el archivo": (lambda d: d["ejercicios"][1]["pasos"].append(
+                                        _paso("Adjunta el archivo y pide una revisión del aviso.")),
+                                    "dice «Adjunta» y el curso no usa IA"),
+    "paso que copia una fórmula": (lambda d: d["ejercicios"][2]["pasos"].append(
+                                       _paso("Copia la fórmula 1 en la celda C2.")),
+                                   "dice «fórmula» y el curso no usa Excel"),
+}

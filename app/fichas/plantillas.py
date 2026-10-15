@@ -98,6 +98,7 @@ FICHA_DEL_CURSO = (
             _c("portada.contacto", "Enlaces o datos de contacto"),
         )),
         Seccion("7. Herramientas", (
+            _c("herramientas.ejercicios", "Herramienta de los ejercicios (ninguna, Excel, IA o Excel e IA)"),
             _c("herramientas.neutral", "¿Material neutral respecto a marcas? (sí o no)"),
             _c("herramientas.cual", "Si no es neutral, herramienta y versión que usan los alumnos"),
             _c("herramientas.adjuntos", "¿La herramienta de los alumnos acepta archivos adjuntos? (sí, no o no sé)"),
@@ -249,8 +250,10 @@ def renderizar(tipo: str, valores: dict, anotar=lambda campo_id: "") -> str:
     return "\n".join(lineas) + "\n"
 
 
-def vista(tipo: str, campos: dict) -> list[dict]:
-    """Estructura para el formulario de la página: secciones con sus campos y bloques repetidos."""
+def vista(tipo: str, campos: dict, ocultos: tuple[str, ...] = ()) -> list[dict]:
+    """Estructura para el formulario de la página: secciones con sus campos y bloques repetidos.
+    `ocultos`: campos de los bloques repetidos que no se muestran (por ejemplo, «pregunta_herramienta» si el curso
+    no usa IA)."""
     def dato(campo: Campo, campo_id: str, seccion: Seccion, etiqueta: str | None = None) -> dict:
         guardado = campos.get(campo_id) or {}
         control = controles.vista(campo_id, guardado.get("valor", ""))
@@ -275,7 +278,7 @@ def vista(tipo: str, campos: dict) -> list[dict]:
                 for numero in range(1, elemento.maximo + 1):
                     bloques.append({"numero": numero, "campos": [
                         dato(c, f"{elemento.prefijo}.{numero}.{c.id}", seccion, c.etiqueta.replace("[número]", str(numero)))
-                        for c in elemento.campos
+                        for c in elemento.campos if c.id not in ocultos
                     ]})
                 elementos.append({"repetible": True, "nombre": elemento.prefijo, "encabezado": elemento.encabezado.lstrip("- "), "bloques": bloques})
             elif elemento.tipo == "grupo":

@@ -372,7 +372,7 @@ class Ejercicio(BaseModel):
     situacion: str                       # de 2 a 3 líneas que indican el área
     archivos: list[str] = Field(default_factory=list)
     pasos: list[Paso] = Field(min_length=2, max_length=20)
-    copiar: list[Recuadro] = Field(min_length=1, max_length=4)
+    copiar: list[Recuadro] = Field(default_factory=list, max_length=4)   # vacío si el alumno trabaja a mano
     mejora: Mejora
 
 

@@ -7,7 +7,9 @@ PLAN.md §0, decisión 35, y «Lo que no se puede construir como está escrito»
   mensaje. Después van la respuesta exacta del alumno, si la ficha la trae, y los prompts de «Mejora el resultado».
 - Lo que salió se compara con la respuesta correcta de la ficha. Cada diferencia trae un trozo copiado de la ficha
   y otro de lo que salió; un programa los busca y descarta la diferencia sin prueba. Lo que queda es pendiente.
-- Las plantillas no se ejecutan: las completa el alumno.
+- A mano (PLAN.md §0, decisión 36): un ejercicio sin prompt ni fórmula lo hace Claude como alumno, en una
+  conversación nueva y sin herramientas. Recibe el texto de sus archivos de práctica, la situación y los pasos de la
+  guía, y entrega lo que escribiría en el archivo. Así también se completa una plantilla.
 """
 
 import re
@@ -59,6 +61,7 @@ class Ejecucion:
     respuesta_ficha: str = ""
     celdas: list[dict] = field(default_factory=list)          # archivo, hoja, celda, formula, valor
     conversacion: list[Turno] = field(default_factory=list)
+    a_mano: bool = False                                      # la conversación es Claude haciendo el ejercicio a mano
     fallas: list[str] = field(default_factory=list)
     diferencias: list[Diferencia] = field(default_factory=list)
     descartadas: int = 0
@@ -76,7 +79,7 @@ class Ejecucion:
     def salida(self) -> str:
         """Lo que salió: los valores calculados y la última respuesta de la herramienta antes de la mejora."""
         partes = [f"{c['archivo']} · hoja {c['hoja']} · celda {c['celda']}: {c['valor']}" for c in self.celdas]
-        respuestas = [t.texto for t in self.conversacion if t.rol == "herramienta"]
+        respuestas = [t.texto for t in self.conversacion if t.rol in ("herramienta", "resultado")]
         return "\n".join(partes + respuestas)
 
     def pendientes(self) -> list[str]:
@@ -208,6 +211,38 @@ async def _conversar(e: Ejercicio, carpeta_practica: Path, respuesta_alumno: str
     return turnos
 
 
+# ---------- A mano, con Claude como alumno ----------
+
+def pedido_a_mano(e: Ejercicio, adjuntos: dict[str, str]) -> str:
+    """Lo que tiene el alumno: sus archivos, la situación y los pasos de la guía. Nada de la ficha ni de la respuesta."""
+    pasos = [f"{i}. {p.texto.replace('**', '')}" for i, p in enumerate(e.pasos, start=1)]
+    plantillas = [f"{r.titulo}:\n" + "\n".join(r.lineas) for r in e.copiar if r.tipo == "plantilla"]
+    archivos = [f"[Archivo de práctica: {nombre}]\n{texto}\n[Fin de {nombre}]" for nombre, texto in adjuntos.items()]
+    return "\n".join([
+        "Eres un alumno de un curso. Haz este ejercicio de laboratorio a mano, tal como dice la guía. No tienes",
+        "otra ayuda: solo los archivos de práctica, la situación y los pasos. Sigue cada paso en su orden.",
+        "Al terminar, entrega lo que escribiste en el archivo: en un Excel, una tabla con la fila y las columnas que",
+        "llenaste; en un Word, el texto que agregaste o cambiaste. No expliques cómo lo hiciste.",
+        "",
+        *archivos,
+        "",
+        f"EJERCICIO {e.numero} · {e.titulo}",
+        e.situacion,
+        "",
+        "PASOS:",
+        *pasos,
+        *(["", "PLANTILLA QUE COMPLETAS:", *plantillas] if plantillas else []),
+    ])
+
+
+async def _a_mano(e: Ejercicio, carpeta_practica: Path, llamada: dict) -> list[Turno]:
+    adjuntos = {n: texto_del_archivo(carpeta_practica / n) for n in e.archivos if (carpeta_practica / n).exists()}
+    pedido = pedido_a_mano(e, adjuntos)
+    respuesta = await agente.conversar(pedido, tarea="ejecucion", etapa=f"ejecución a mano ejercicio {e.numero}",
+                                       **llamada)
+    return [Turno("guía", pedido), Turno("resultado", respuesta)]
+
+
 # ---------- Comparación con la respuesta de la ficha ----------
 
 def _normal(texto: str) -> str:
@@ -265,11 +300,9 @@ async def ejecutar(contenido: Laboratorio, *, carpeta_practica: Path, carpeta: P
         ejecucion = Ejecucion(e.numero, e.titulo, respuesta_ficha=respuestas_ficha.get(e.numero, "").strip())
         ejecucion.celdas, ejecucion.fallas = _formulas(e, carpeta_practica, carpeta / f"E{e.numero}", recalcular)
         ejecucion.conversacion = await _conversar(e, carpeta_practica, respuestas_alumno.get(e.numero, ""), llamada)
-        if any(r.tipo == "plantilla" for r in [*e.copiar, *e.mejora.copiar]):
-            ejecucion.no_pude.append(f"Ejercicio {e.numero}: la plantilla no se ejecuta; la completa el alumno.")
-        if not (ejecucion.celdas or ejecucion.conversacion):
-            ejecucion.no_pude.append(f"Ejercicio {e.numero}: no trae un prompt ni una fórmula que se puedan ejecutar.")
-        elif not ejecucion.respuesta_ficha:
+        if not (ejecucion.celdas or ejecucion.conversacion or ejecucion.fallas):
+            ejecucion.conversacion, ejecucion.a_mano = await _a_mano(e, carpeta_practica, llamada), True
+        if not ejecucion.respuesta_ficha:
             ejecucion.no_pude.append(f"Ejercicio {e.numero}: la ficha no trae la respuesta correcta para compararla.")
         elif not ejecucion.fallas:
             respuesta = await agente.consultar(pedido_de_comparacion(ejecucion, e.situacion),
@@ -285,7 +318,9 @@ def a_markdown(ejecuciones: list[Ejecucion], titulo: str, modelo: str) -> str:
     """El registro de la ejecución para el profesor: qué se copió, qué respondió la herramienta y qué se calculó."""
     lineas = [f"# {titulo}", "",
               f"Cada prompt se ejecutó en una conversación nueva con Claude ({modelo}), sin herramientas, con el texto "
-              "de cada archivo adjunto dentro del mensaje. Cada fórmula se copió donde dice el paso y la calculó Excel.",
+              "de cada archivo adjunto dentro del mensaje. Cada fórmula se copió donde dice el paso y la calculó Excel. "
+              "Cada ejercicio sin prompt ni fórmula lo hizo Claude a mano, como un alumno, con el texto de sus "
+              "archivos, la situación y los pasos de la guía.",
               ""]
     for x in ejecuciones:
         lineas += [f"## Ejercicio {x.numero} · {x.titulo}", ""]
@@ -295,7 +330,8 @@ def a_markdown(ejecuciones: list[Ejecucion], titulo: str, modelo: str) -> str:
                        for c in x.celdas]
             lineas.append("")
         for t in x.conversacion:
-            quien = "Alumno" if t.rol == "alumno" else "Herramienta"
+            quien = {"alumno": "Alumno", "herramienta": "Herramienta", "guía": "Lo que recibió Claude como alumno",
+                     "resultado": "Lo que hizo Claude a mano"}[t.rol]
             lineas += [f"**{quien}:**", "", *[f"> {l}" if l else ">" for l in t.texto.splitlines()], ""]
         if x.fallas or x.diferencias:
             lineas += ["Resultado: no coincide.", "", *[f"- {f}" for f in x.fallas], *[f"- {p}" for p in x.pendientes()], ""]

@@ -409,3 +409,19 @@ def test_la_propuesta_ordena_como_la_fuente_y_no_prohibe_sus_terminos(curso):
     assert "en el orden en que la fuente los presenta" in pedido
     assert "No pongas como variante un término que la fuente usa" in pedido
     assert "Los temas, los bloques y los pasos van en el orden de la fuente." in pedido
+
+
+def test_la_propuesta_decide_la_herramienta_por_el_tema_del_curso(curso):
+    """Decisión 36: la herramienta sale del tema del curso; los ejercicios, del tema de la sesión."""
+    pedido = flujo.pedido_de_propuesta(curso, "curso", None, almacen.cargar(curso, "curso"))
+    assert "herramientas.ejercicios: Herramienta de los ejercicios" in pedido
+    assert "[usa una de estas, tal cual: ninguna, Excel, IA, Excel e IA]" in pedido
+    assert "Los modelos de diseño no cuentan" in pedido
+    ficha_curso_confirmada(curso)                           # Scrum Master con IA: «Excel e IA»
+    pedido = flujo.pedido_de_propuesta(curso, "sesion", 1, almacen.cargar(curso, "sesion", 1))
+    assert flujo.DE_QUE_TRATAN_LOS_EJERCICIOS[frozenset({"excel", "ia"})] in pedido
+    ficha = almacen.cargar(curso, "curso")
+    ficha["campos"]["herramientas.ejercicios"] = {"valor": "ninguna", "origen": "profesor", "estado": ""}
+    almacen.guardar(curso, "curso", None, ficha)
+    pedido = flujo.pedido_de_propuesta(curso, "sesion", 1, almacen.cargar(curso, "sesion", 1))
+    assert "sin fórmulas ni prompts" in pedido and "Deja vacío «Si la herramienta debe preguntar algo»" in pedido

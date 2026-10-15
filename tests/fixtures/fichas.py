@@ -11,6 +11,7 @@ CURSO = {
     "caso.areas": "Ventas, Almacén, Recursos Humanos y Finanzas",
     "datos.fecha": "lunes 5 de octubre de 2026",
     "datos.fijos": "Duración de cada Sprint: dos semanas\nTienda principal: Sucursal Centro\nLos pedidos se recogen en tienda",
+    "herramientas.ejercicios": "Excel e IA",
     "materiales.nunca": "",
 }
 

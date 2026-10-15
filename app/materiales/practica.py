@@ -204,7 +204,8 @@ def _texto_de_archivo(archivo: ArchivoPractica) -> str:
 
 
 def revisar(contenido: Laboratorio, sesion: int, ejercicios_de_la_ficha: int, fecha_de_referencia: str = "",
-            respuestas_a_la_herramienta: dict[int, str] | None = None) -> list[str]:
+            respuestas_a_la_herramienta: dict[int, str] | None = None,
+            permitidos: frozenset[str] = frozenset({"prompt", "formula", "plantilla"})) -> list[str]:
     """Lo que un programa comprueba antes de crear los archivos (SKILL.md, «Material 3» y «Ejercicios que se
     ejecutan»). Cada problema es una FALLA de estructura: se arregla con una corrección completa."""
     problemas = []
@@ -244,6 +245,7 @@ def revisar(contenido: Laboratorio, sesion: int, ejercicios_de_la_ficha: int, fe
         if otro and int(otro.group(1)) != e.numero:
             problemas.append(f"FALLA · estructura · ejercicio {e.numero}: usa el resultado del ejercicio {otro.group(1)}. "
                              "Cada ejercicio funciona solo.")
+        problemas += _revisar_herramienta(e, texto, permitidos)
         for recuadro in [*e.copiar, *e.mejora.copiar]:
             if recuadro.tipo == "plantilla":
                 continue                      # completar la plantilla es el tema del ejercicio
@@ -281,6 +283,28 @@ def revisar(contenido: Laboratorio, sesion: int, ejercicios_de_la_ficha: int, fe
             problemas.append(f"FALLA · estructura · ejercicio {e.numero}: la ficha dice que la herramienta pregunta algo "
                              f"y que el alumno responde «{respuesta}». Ordena que se detenga a preguntar y escribe esa "
                              "respuesta exacta.")
+    return problemas
+
+
+NOMBRE_DEL_RECUADRO = {"prompt": "prompt", "formula": "fórmula", "plantilla": "plantilla"}
+_MENCIONA_IA = re.compile(r"\bprompts?\b|\badjunta\b|\basistente de IA\b|\bIA generativa\b", re.I)
+_MENCIONA_FORMULA = re.compile(r"\bf[óo]rmulas?\b", re.I)
+
+
+def _revisar_herramienta(e, texto: str, permitidos: frozenset[str]) -> list[str]:
+    """PLAN.md §0, decisión 36: un prompt solo en un curso de IA y una fórmula solo en un curso de Excel. Los
+    ejercicios practican el tema de la sesión; la herramienta sale del tema del curso, no de un modelo."""
+    problemas = []
+    for tipo in sorted({r.tipo for r in [*e.copiar, *e.mejora.copiar]} - permitidos):
+        problemas.append(f"FALLA · herramienta · ejercicio {e.numero}: trae un recuadro de {NOMBRE_DEL_RECUADRO[tipo]} y "
+                         f"el curso no usa {'IA' if tipo == 'prompt' else 'Excel'} (ficha del curso, «Herramienta de los "
+                         "ejercicios»). El alumno hace la acción de la ficha en su archivo de práctica.")
+    for tipo, patron in (("prompt", _MENCIONA_IA), ("formula", _MENCIONA_FORMULA)):
+        m = patron.search(texto)
+        if tipo not in permitidos and m:
+            problemas.append(f"FALLA · herramienta · ejercicio {e.numero}: dice «{m.group(0)}» y el curso no usa "
+                             f"{'IA' if tipo == 'prompt' else 'Excel'}. Escribe el paso como una acción que el alumno "
+                             "hace en su archivo de práctica.")
     return problemas
 
 

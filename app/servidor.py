@@ -192,7 +192,9 @@ def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, m
         "curso": curso, "nombre": cursos.nombre(curso), "titulo": titulo, "ficha": ficha,
         "propuesta": flujo.estado_propuesta(carpeta, tipo, sesion),
         "hay_propuestos": any((d or {}).get("estado") == almacen.PROPUESTO for d in ficha["campos"].values()),
-        "secciones": plantillas_fichas.vista(tipo, ficha["campos"]),
+        # La respuesta a una pregunta de la herramienta solo existe si el curso usa IA (decisión 36).
+        "secciones": plantillas_fichas.vista(tipo, ficha["campos"], () if tipo == "curso" or "ia" in
+                                             almacen.herramienta_de_los_ejercicios(carpeta) else ("pregunta_herramienta",)),
         "preguntas": almacen.preguntas_pendientes(ficha),
         "errores": errores or [], "mensaje": mensaje, "corregibles": corregibles,
         "versiones": almacen.listar_versiones(carpeta, tipo, sesion),
