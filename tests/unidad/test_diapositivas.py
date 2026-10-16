@@ -14,6 +14,7 @@ from pptx import Presentation
 from pptx.util import Cm, Pt
 
 from app import office, servidor
+from app.fichas import almacen
 from app.materiales import comun, diapositivas, estilo, lectura
 from app.materiales import pptx as generador
 from app.materiales.contenido import Diapositivas
@@ -656,3 +657,45 @@ def test_un_desborde_grande_una_tabla_o_sin_margen_no_se_ajustan(presentacion):
     sin_margen = round(margen, 1)            # lo que sobra más la holgura supera el margen que hay
     assert diapositivas.ajustar_desbordes_pequenos(copia, [office.Desborde(2, texto, sin_margen)]) == []
     assert _primer_texto(copia, 2) == (texto, letra, margen)             # no tocó nada
+
+
+# ---------- Reanudar desde lo guardado (PLAN.md §0, decisión 40) ----------
+
+def _con_fallas(carpeta):
+    """Una corrida que termina con fallas: el desborde de 1.4 cm no se va en ninguna de las tres correcciones."""
+    def medir(ruta, carpeta_imagenes):
+        return office.Medicion(15, [office.Desborde(8, "Los pilares de Scrum son tres.", 1.4)], [])
+    corta = {**LIMPIAS["diapositivas"][5], "frases": ["Scrum tiene tres pilares."]}
+    material, _ = generar(carpeta, LIMPIAS, *[solo(8, corta)] * diapositivas.VUELTAS_DEL_VERIFICADOR,
+                          medir=medir, revisar=False)
+    assert material["estado"] == "con fallas"
+    return comun.leer_json(diapositivas.archivos(carpeta, 1)["contenido"])
+
+
+def test_reanudar_sigue_desde_lo_guardado_sin_redactar_de_nuevo(con_lectura):
+    guardado = _con_fallas(con_lectura)
+    assert diapositivas.se_puede_reanudar(con_lectura, 1)
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
+    assert "Reanudar desde lo guardado</button>" in pagina
+    consulta = consulta_en_secuencia(SIN_ERRORES)
+    material = asyncio.run(diapositivas.reanudar(con_lectura, "scrum", 1, consulta=consulta,
+                                                 medir=medir_sin_desbordes, disenar=False))
+    assert material["estado"] == "verificada", material.get("problemas")
+    assert len(consulta.llamadas) == 1                         # solo la revisión del contenido: no hubo redacción
+    assert comun.leer_json(diapositivas.archivos(con_lectura, 1)["contenido"]) == guardado
+    assert any("Reanudo desde lo guardado" in a for a in material["avance"])
+    no_pude = {s["clave"]: s["lineas"] for s in material["entrega"]["secciones"]}["no_pude"]
+    assert any("Reanudé desde lo guardado" in l and "decisión 40" in l for l in no_pude)
+    assert not diapositivas.se_puede_reanudar(con_lectura, 1)   # ya quedó bien: no hay nada que reanudar
+
+
+def test_no_se_reanuda_si_las_fichas_cambiaron(con_lectura):
+    _con_fallas(con_lectura)
+    almacen.marcar_desactualizados(con_lectura, 1)
+    assert not diapositivas.se_puede_reanudar(con_lectura, 1)
+    assert "Reanudar desde lo guardado" not in cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
+    r = cliente.post("/cursos/scrum/sesiones/1/materiales/diapositivas/reanudar", follow_redirects=False)
+    assert "No hay una corrida guardada que se pueda reanudar" in unquote(r.headers["location"])
+    with pytest.raises(diapositivas.NoSePuedeEmpezar):
+        asyncio.run(diapositivas.reanudar(con_lectura, "scrum", 1, consulta=consulta_en_secuencia(),
+                                          medir=medir_sin_desbordes, disenar=False))

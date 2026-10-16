@@ -493,7 +493,9 @@ def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False
              "incluido": incluido, "situacion": _situacion(datos, estado, incluido)}
         faltan = modulo.faltan(carpeta, sesion) if puede_empezar and incluido else {"ficha": [], "otros": []}
         if detalle:
-            m |= {"faltan": faltan, "gasto_corrida": modulo.gasto_de_la_corrida(carpeta, curso, sesion),
+            reanudable = hasattr(modulo, "se_puede_reanudar") and modulo.se_puede_reanudar(carpeta, sesion)
+            m |= {"faltan": faltan, "reanudable": reanudable,
+                  "gasto_corrida": modulo.gasto_de_la_corrida(carpeta, curso, sesion),
                   "costo_ref": _costo_de_referencia(carpeta, curso, sesion, clave, numeros)}
         materiales.append(m)
         if siguiente or not incluido:
@@ -664,6 +666,19 @@ def generar_material(curso: str, sesion: int, material: str):
     if modulo.estado(carpeta, sesion).get("estado") == "trabajando":
         return RedirectResponse(destino, status_code=303)
     _trabajo_en_segundo_plano(modulo.generar, carpeta, curso, sesion, clave=(curso, sesion, material))
+    return RedirectResponse(destino, status_code=303)
+
+
+@app.post("/cursos/{curso}/sesiones/{sesion}/materiales/{material}/reanudar")
+def reanudar_material(curso: str, sesion: int, material: str):
+    """Sigue desde el contenido guardado de la corrida anterior (PLAN.md §0, decisión 40)."""
+    modulo = _material(material)["modulo"]
+    carpeta = _carpeta(curso)
+    destino = _url_material(curso, sesion, material)
+    if not hasattr(modulo, "reanudar") or not modulo.se_puede_reanudar(carpeta, sesion):
+        mensaje = "No hay una corrida guardada que se pueda reanudar. Genera el material de nuevo."
+        return RedirectResponse(destino + "?mensaje=" + quote(mensaje), status_code=303)
+    _trabajo_en_segundo_plano(modulo.reanudar, carpeta, curso, sesion, clave=(curso, sesion, material))
     return RedirectResponse(destino, status_code=303)
 
 

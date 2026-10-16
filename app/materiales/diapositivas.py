@@ -947,21 +947,45 @@ def _limpiar(rutas: dict[str, Path]) -> None:
     shutil.rmtree(rutas["imagenes"], ignore_errors=True)
 
 
+def se_puede_reanudar(carpeta_curso: Path, sesion: int) -> bool:
+    """Decisión 40: hay contenido guardado de una corrida que no terminó bien, y ni las fichas ni la lectura
+    cambiaron desde entonces."""
+    material = estado(carpeta_curso, sesion)
+    pendiente = faltan(carpeta_curso, sesion)
+    return (material.get("estado") in ("con fallas", "detenida", "error") and not material.get("desactualizado")
+            and archivos(carpeta_curso, sesion)["contenido"].exists() and not pendiente["ficha"] and not pendiente["otros"])
+
+
+async def reanudar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.query, medir=None,
+                   disenar: bool | None = None) -> dict:
+    """Sigue desde el contenido guardado, sin repetir la redacción ni sus correcciones (PLAN.md §0, decisión 40)."""
+    if not se_puede_reanudar(carpeta_curso, sesion):
+        raise NoSePuedeEmpezar("No se pueden reanudar las diapositivas: no hay una corrida guardada que siga a las "
+                               "fichas y a la lectura de ahora. Genéralas de nuevo.")
+    return await generar(carpeta_curso, curso, sesion, consulta, medir, disenar, desde_guardado=True)
+
+
 async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.query, medir=None,
-                  disenar: bool | None = None) -> dict:
+                  disenar: bool | None = None, desde_guardado: bool = False) -> dict:
     """`medir` reemplaza a PowerPoint en las pruebas: recibe el .pptx y la carpeta de imágenes.
-    `disenar`: None usa el agente diseñador si Node y sus paquetes están instalados (decisión 32)."""
+    `disenar`: None usa el agente diseñador si Node y sus paquetes están instalados (decisión 32).
+    `desde_guardado`: toma el contenido de la corrida anterior en lugar de redactarlo (decisión 40)."""
     pendiente = faltan(carpeta_curso, sesion)
     if pendiente["ficha"] or pendiente["otros"]:
         raise NoSePuedeEmpezar("No se pueden generar las diapositivas. "
                                + " ".join(pendiente["ficha"] + pendiente["otros"]))
     rutas = archivos(carpeta_curso, sesion)
+    guardado = None
+    if desde_guardado:
+        guardado = {"datos": comun.leer_json(rutas["contenido"]),
+                    "explicaciones": comun.leer_json(rutas["explicaciones"]) if rutas["explicaciones"].exists() else {},
+                    "fecha": _estado(carpeta_curso, sesion).get("fecha", "")}
     rutas["contenido"].parent.mkdir(parents=True, exist_ok=True)
     _actualizar(carpeta_curso, sesion, estado="trabajando", previo="", avance=[], error="", desactualizado=False,
                 entrega={}, aprobada="", revisor={}, corrida_desde=tokens.lineas(curso),
                 lectura_fecha=lectura.estado(carpeta_curso, sesion).get("fecha", "") if usa_lectura(carpeta_curso, sesion) else "")
     try:
-        return await _generar(carpeta_curso, curso, sesion, rutas, consulta, medir, disenar)
+        return await _generar(carpeta_curso, curso, sesion, rutas, consulta, medir, disenar, guardado)
     except asyncio.CancelledError:
         marcar_detenida(carpeta_curso, sesion)
         raise
@@ -970,7 +994,7 @@ async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.
         raise
 
 
-async def _generar(carpeta_curso, curso, sesion, rutas, consulta, medir, disenar=None) -> dict:
+async def _generar(carpeta_curso, curso, sesion, rutas, consulta, medir, disenar=None, guardado=None) -> dict:
     inicio = tokens.lineas(curso)
     # Antes de gastar tokens: la skill tiene todo lo que se usará y la configuración del verificador se lee.
     skill.comprobar(secciones=SECCIONES_DE_LA_SKILL + pasada2.SECCIONES_DE_LA_SKILL + revisor.SECCIONES_DE_LA_SKILL,
@@ -979,12 +1003,19 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, medir, disenar
     verificador.verificar.leer_configuracion(verificador.configuracion_del_material(trabajo.carpeta_sesion, MATERIAL))
     _limpiar(rutas)
 
-    trabajo.avance("Leyendo la lectura aprobada y preparando las diapositivas.")
-    # Sin lectura, las páginas de la referencia van en el pedido y la redacción no necesita herramientas.
-    paginas = None if trabajo.lectura is not None else paginas_de_referencia(carpeta_curso, sesion)
-    opciones = trabajo.comun if paginas is None else {**trabajo.comun, "cwd": None, "herramientas": ()}
-    trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion, trabajo.lectura, paginas),
-                                           tarea="redaccion", esquema=ESQUEMA_DIAPOSITIVAS, etapa="redacción", **opciones)
+    if guardado is not None:
+        # Decisión 40: el contenido ya redactado y corregido de la corrida anterior; no se pide de nuevo.
+        trabajo.datos, trabajo.explicaciones = guardado["datos"], guardado["explicaciones"]
+        trabajo.avance(f"Reanudo desde lo guardado de la corrida del {guardado['fecha'][:16].replace('T', ' ')}: "
+                       "no repito la redacción ni sus correcciones.")
+    else:
+        trabajo.avance("Leyendo la lectura aprobada y preparando las diapositivas.")
+        # Sin lectura, las páginas de la referencia van en el pedido y la redacción no necesita herramientas.
+        paginas = None if trabajo.lectura is not None else paginas_de_referencia(carpeta_curso, sesion)
+        opciones = trabajo.comun if paginas is None else {**trabajo.comun, "cwd": None, "herramientas": ()}
+        trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion, trabajo.lectura, paginas),
+                                               tarea="redaccion", esquema=ESQUEMA_DIAPOSITIVAS, etapa="redacción",
+                                               **opciones)
 
     errores: list[revision.Error] = []
     revisados = 0
@@ -1029,6 +1060,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, medir, disenar
         referencia=[t.describir() for t in lectura._referencia(carpeta_curso, sesion)[0]] if trabajo.lectura is None else [],
         datos_agregados=trabajo.datos_agregados,
         ajustes=trabajo.ajustes,
+        reanudada=guardado["fecha"] if guardado is not None else "",
         revision_visual=trabajo.revision_visual,
         diseno=trabajo.diseno,
         archivos={"pptx": rutas["pptx"].name, "excel": rutas["excel"].name, "entrega": rutas["entrega"].name},
@@ -1155,6 +1187,9 @@ def _entrega(material: dict) -> dict:
     valide.append(f"Costo de estas diapositivas: {costo['llamadas']} llamadas, {costo['costo_usd']:.2f} USD estimados.")
 
     no_pude = []
+    if material.get("reanudada"):
+        no_pude.append(f"Reanudé desde lo guardado de la corrida del {material['reanudada'][:16].replace('T', ' ')} "
+                       "(PLAN.md §0, decisión 40). El historial de las vueltas de esa corrida no está en el Excel.")
     if not r.get("bloques"):
         no_pude.append("La revisión del contenido no corrió porque quedaron fallas.")
     if not material.get("medidas"):
