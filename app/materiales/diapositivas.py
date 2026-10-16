@@ -25,6 +25,7 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
+from pptx import Presentation
 from pydantic import ValidationError
 
 from app import agente, entrega, office, skill, tokens
@@ -593,6 +594,42 @@ def desbordes_como_hallazgos(medicion: office.Medicion, contenido: Diapositivas,
     return hallazgos
 
 
+# Decisión 39: un texto que se pasa 0.5 cm o menos se arregla sin IA, recortando el margen interior del recuadro.
+DESBORDE_AJUSTABLE_CM = 0.5
+HOLGURA_CM = 0.1                 # PowerPoint redondea la medida a 0.1 cm: se recorta un poco más de lo que sobra
+EMU_POR_CM = 360000
+
+
+def ajustar_desbordes_pequenos(ruta: Path, desbordes: list[office.Desborde]) -> list[str]:
+    """Recorta el margen interior (arriba y abajo) de cada recuadro que se pasa DESBORDE_AJUSTABLE_CM o menos, solo
+    lo necesario, sin IA ni costo (PLAN.md §0, decisión 39). La letra no cambia. Solo actúa si todos los desbordes
+    son así de pequeños; si hay una tabla o un texto que se pasa más, no toca nada y lo corrige la IA. Un recuadro
+    sin margen suficiente queda como está. Devuelve una línea por recuadro ajustado."""
+    if not desbordes or any(d.es_tabla or d.sobra_cm > DESBORDE_AJUSTABLE_CM for d in desbordes):
+        return []
+    presentacion = Presentation(str(ruta))
+    ajustes = []
+    for d in desbordes:
+        for figura in presentacion.slides[d.diapositiva - 1].shapes:
+            if not figura.has_text_frame or " ".join(figura.text_frame.text.split())[:200] != d.texto:
+                continue
+            marco = figura.text_frame
+            falta = round((d.sobra_cm + HOLGURA_CM) * EMU_POR_CM)
+            if marco.margin_top + marco.margin_bottom >= falta:
+                arriba = min(marco.margin_top, falta // 2)        # se reparte entre arriba y abajo
+                abajo = falta - arriba
+                if abajo > marco.margin_bottom:
+                    arriba, abajo = falta - marco.margin_bottom, marco.margin_bottom
+                marco.margin_top, marco.margin_bottom = marco.margin_top - arriba, marco.margin_bottom - abajo
+                ajustes.append(f"Diapositiva {d.diapositiva}: recorté {falta / EMU_POR_CM:.1f} cm del margen interior "
+                               f"del recuadro «{d.texto[:60]}», que se pasaba {d.sobra_cm:.1f} cm. La letra no cambia "
+                               "(PLAN.md §0, decisión 39).")
+            break
+    if ajustes:
+        presentacion.save(str(ruta))
+    return ajustes
+
+
 # ---------- Generación ----------
 
 class _Trabajo:
@@ -621,6 +658,7 @@ class _Trabajo:
         self.descartados: list[dict] = []
         self.revision_visual: list[dict] = []
         self.diseno: dict = {}
+        self.ajustes: list[str] = []     # recuadros con el margen recortado en el PowerPoint actual (decisión 39)
         self.usar_disenador = False
         self.vuelta = 0
 
@@ -630,6 +668,31 @@ class _Trabajo:
     def corpus(self) -> Corpus:
         extras = [fuente_de_la_lectura(self.lectura)] if self.lectura is not None else []
         return Corpus.del_curso(self.carpeta_curso, self.sesion, extras=extras)
+
+    def medir_y_verificar(self, explicar: bool = True) -> tuple[list, list]:
+        """Mide el PowerPoint con PowerPoint y corre el verificador. Si las únicas fallas son desbordes de 0.5 cm o
+        menos, recorta el margen interior de esos recuadros y mide de nuevo (decisión 39). Devuelve fallas y avisos."""
+        def una_vez():
+            self.medicion = self._medir(self.rutas["pptx"], self.rutas["imagenes"])
+            configuracion = verificador.configuracion_del_material(self.carpeta_sesion, MATERIAL)
+            self.resultado = verificador.ejecutar(
+                configuracion, [self.rutas["pptx"]], self.rutas["excel"], self.explicaciones,
+                hallazgos_extra=desbordes_como_hallazgos(self.medicion, self.contenido, self.rutas["pptx"].name))
+            if explicar and comun.explicar_literales(self.resultado, self.explicaciones, self.corpus()):
+                comun.guardar_json(self.rutas["explicaciones"], self.explicaciones)
+                verificador.anotar_explicaciones(self.rutas["excel"], self.explicaciones)
+            excel.anotar_reglas(self.rutas["excel"], comun.AVISOS_INFORMATIVOS, comun.NOTA_INFORMATIVA)
+            return comun.hallazgos_abiertos(self.resultado, self.explicaciones)
+
+        fallas, avisos = una_vez()
+        if fallas and all(h.regla == "desborde" for h in fallas):
+            ajustes = ajustar_desbordes_pequenos(self.rutas["pptx"], self.medicion.desbordes)
+            if ajustes:
+                self.ajustes += ajustes
+                self.avance(f"Ajuste sin IA: recorté el margen interior de {comun.cuantos(len(ajustes), 'recuadro')} "
+                            "que se pasaba 0.5 cm o menos. La letra no cambia. Mido de nuevo.")
+                fallas, avisos = una_vez()
+        return fallas, avisos
 
     async def verificar(self) -> bool:
         """Genera el PowerPoint, lo mide y corre el verificador. Corrige sus fallas hasta VUELTAS_DEL_VERIFICADOR
@@ -642,16 +705,8 @@ class _Trabajo:
             if contenido is not None:
                 self.contenido = contenido
                 generador.generar_diapositivas(contenido, self.identidad, self.portada, self.rutas["pptx"])
-                self.medicion = self._medir(self.rutas["pptx"], self.rutas["imagenes"])
-                configuracion = verificador.configuracion_del_material(self.carpeta_sesion, MATERIAL)
-                self.resultado = verificador.ejecutar(
-                    configuracion, [self.rutas["pptx"]], self.rutas["excel"], self.explicaciones,
-                    hallazgos_extra=desbordes_como_hallazgos(self.medicion, contenido, self.rutas["pptx"].name))
-                if comun.explicar_literales(self.resultado, self.explicaciones, self.corpus()):
-                    comun.guardar_json(self.rutas["explicaciones"], self.explicaciones)
-                    verificador.anotar_explicaciones(self.rutas["excel"], self.explicaciones)
-                excel.anotar_reglas(self.rutas["excel"], comun.AVISOS_INFORMATIVOS, comun.NOTA_INFORMATIVA)
-                fallas, avisos = comun.hallazgos_abiertos(self.resultado, self.explicaciones)
+                self.ajustes = []
+                fallas, avisos = self.medir_y_verificar()
                 self.avance(f"Verificador y medición con PowerPoint, vuelta {self.vuelta}: {self.resultado.resumen()}.")
                 problemas = [comun.texto_de(h) for h in fallas + avisos]
                 completa = any(not h.oracion for h in fallas)   # cantidad, notas y desbordes: del documento entero
@@ -677,19 +732,11 @@ class _Trabajo:
         if not corrida.ok:
             return [f"FALLA · diseño · el programa no corrió: {corrida.error}"]
         self.diseno["iconos"] = len(corrida.iconos)
+        self.ajustes = []
         problemas = disenador.revisar_pptx(self.rutas["pptx"], self.contenido, self.portada, self.identidad)
         if problemas:
             return problemas
-        self.medicion = self._medir(self.rutas["pptx"], self.rutas["imagenes"])
-        configuracion = verificador.configuracion_del_material(self.carpeta_sesion, MATERIAL)
-        self.resultado = verificador.ejecutar(
-            configuracion, [self.rutas["pptx"]], self.rutas["excel"], self.explicaciones,
-            hallazgos_extra=desbordes_como_hallazgos(self.medicion, self.contenido, self.rutas["pptx"].name))
-        if comun.explicar_literales(self.resultado, self.explicaciones, self.corpus()):
-            comun.guardar_json(self.rutas["explicaciones"], self.explicaciones)
-            verificador.anotar_explicaciones(self.rutas["excel"], self.explicaciones)
-        excel.anotar_reglas(self.rutas["excel"], comun.AVISOS_INFORMATIVOS, comun.NOTA_INFORMATIVA)
-        fallas, _ = comun.hallazgos_abiertos(self.resultado, self.explicaciones)
+        fallas, _ = self.medir_y_verificar()
         self.avance(f"Diseño medido con PowerPoint y verificado: {self.resultado.resumen()}.")
         return [comun.texto_de(h) for h in fallas]
 
@@ -701,6 +748,7 @@ class _Trabajo:
         base = carpeta / "base.pptx"
         carpeta.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(self.rutas["pptx"], base)
+        ajustes_base, ajustes_bueno = list(self.ajustes), []    # los ajustes viajan con su PowerPoint (decisión 39)
         datos_ = disenador.datos(self.contenido, self.identidad, self.portada, carpeta)
         comun_ = {"curso": self.curso, "sesion": f"S{self.sesion}", "material": CLAVE, "consulta": self.consulta}
         self.avance("Diseño: el agente diseñador escribe la presentación con íconos y la identidad de la ficha.")
@@ -716,6 +764,7 @@ class _Trabajo:
             if not problemas:
                 bueno = carpeta / "aprobado.pptx"
                 shutil.copyfile(self.rutas["pptx"], bueno)
+                ajustes_bueno = list(self.ajustes)
                 (carpeta / "aprobado.js").write_text(codigo, encoding="utf-8")
                 if visual_hecha:
                     break
@@ -735,21 +784,18 @@ class _Trabajo:
             self.diseno.update(estado="base", problemas=problemas)
             self.avance("Diseño: no quedó sin fallas. Entrego la versión base y lo dejo como pendiente.")
             shutil.copyfile(base, self.rutas["pptx"])
+            self.ajustes = ajustes_base
         else:
             self.diseno.update(estado="diseñada", problemas=[])
             if problemas:                       # el último arreglo rompió algo: vale el último diseño sin fallas
                 shutil.copyfile(bueno, self.rutas["pptx"])
+                self.ajustes = ajustes_bueno
         if bueno is None or problemas:
             await self.probar_diseno_final()
 
     async def probar_diseno_final(self) -> None:
         """Mide y verifica de nuevo el PowerPoint que se entrega (el base o el último diseño sin fallas)."""
-        self.medicion = self._medir(self.rutas["pptx"], self.rutas["imagenes"])
-        configuracion = verificador.configuracion_del_material(self.carpeta_sesion, MATERIAL)
-        self.resultado = verificador.ejecutar(
-            configuracion, [self.rutas["pptx"]], self.rutas["excel"], self.explicaciones,
-            hallazgos_extra=desbordes_como_hallazgos(self.medicion, self.contenido, self.rutas["pptx"].name))
-        excel.anotar_reglas(self.rutas["excel"], comun.AVISOS_INFORMATIVOS, comun.NOTA_INFORMATIVA)
+        self.medir_y_verificar(explicar=False)
 
     async def revisar(self, bloques: list[pasada2.Bloque], etapa: str) -> revision.Resultado:
         resultado = await revision.ejecutar(
@@ -982,6 +1028,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, medir, disenar
         base="lectura" if trabajo.lectura is not None else "fuentes",
         referencia=[t.describir() for t in lectura._referencia(carpeta_curso, sesion)[0]] if trabajo.lectura is None else [],
         datos_agregados=trabajo.datos_agregados,
+        ajustes=trabajo.ajustes,
         revision_visual=trabajo.revision_visual,
         diseno=trabajo.diseno,
         archivos={"pptx": rutas["pptx"].name, "excel": rutas["excel"].name, "entrega": rutas["entrega"].name},
@@ -1122,6 +1169,7 @@ def _entrega(material: dict) -> dict:
                       "(PLAN.md §0, decisión 26).")
     decidi += [d["texto"] for d in material["decisiones"] if d["tipo"] == "decisión"]
     decidi += [f"Dato nuevo del caso, agregado a la ficha del curso: {d}" for d in material.get("datos_agregados", [])]
+    decidi += material.get("ajustes", [])
     if not decidi:
         decidi.append("Nada que revisar: todo salió de la lectura aprobada. Las notas del redactor están en "
                       "la hoja Hallazgos.")

@@ -3,6 +3,7 @@
 import asyncio
 import copy
 import re
+import shutil
 import zipfile
 from urllib.parse import unquote
 
@@ -608,3 +609,50 @@ def test_un_programa_que_usa_require_no_se_corre(con_lectura):
 def disenador_esquema():
     from app.materiales import disenador
     return disenador.ESQUEMA_DISENO
+
+
+# ---------- Desbordes pequeños sin IA (PLAN.md §0, decisión 39) ----------
+
+def _primer_texto(ruta, numero: int):
+    """El primer recuadro con texto de una diapositiva: su texto como lo mide PowerPoint, el tamaño de su letra y
+    la suma de sus márgenes interiores de arriba y abajo, en cm."""
+    for figura in Presentation(ruta).slides[numero - 1].shapes:
+        if figura.has_text_frame and figura.text_frame.text.strip():
+            corridas = [c for p in figura.text_frame.paragraphs for c in p.runs]
+            marco = figura.text_frame
+            return (" ".join(marco.text.split())[:200], corridas[0].font.size,
+                    round((marco.margin_top + marco.margin_bottom) / diapositivas.EMU_POR_CM, 2))
+    raise AssertionError("sin texto")
+
+
+def test_un_desborde_pequeno_recorta_el_margen_sin_ia_y_sin_bajar_la_letra(con_lectura):
+    vistos = {}
+
+    def medir(ruta, carpeta):
+        if not vistos:
+            vistos["texto"], vistos["letra"], vistos["margen"] = _primer_texto(ruta, 8)
+            return office.Medicion(15, [office.Desborde(8, vistos["texto"], 0.1)], [])
+        return medir_sin_desbordes(ruta, carpeta)
+
+    material, consulta = generar(con_lectura, LIMPIAS, medir=medir)
+    assert material["estado"] == "verificada", material.get("problemas")
+    assert len(consulta.llamadas) == 2                       # redacción y revisión: el ajuste no llamó a la IA
+    texto, letra, margen = _primer_texto(diapositivas.archivos(con_lectura, 1)["pptx"], 8)
+    assert (texto, letra) == (vistos["texto"], vistos["letra"])          # la letra no cambia
+    assert margen == round(vistos["margen"] - 0.2, 2)                    # 0.1 cm que sobra más 0.1 de holgura
+    assert any("Ajuste sin IA: recorté el margen interior de 1 recuadro" in a for a in material["avance"])
+    decidi = {s["clave"]: s["lineas"] for s in material["entrega"]["secciones"]}["decidi"]
+    assert any(l.startswith("Diapositiva 8: recorté 0.2 cm del margen interior") and "decisión 39" in l for l in decidi)
+
+
+def test_un_desborde_grande_una_tabla_o_sin_margen_no_se_ajustan(presentacion):
+    ruta, _ = presentacion
+    texto, letra, margen = _primer_texto(ruta, 2)
+    copia = ruta.with_name("copia.pptx")
+    shutil.copyfile(ruta, copia)
+    assert diapositivas.ajustar_desbordes_pequenos(copia, [office.Desborde(2, texto, 0.6)]) == []
+    assert diapositivas.ajustar_desbordes_pequenos(
+        copia, [office.Desborde(2, texto, 0.1), office.Desborde(3, "tabla", 0.1, es_tabla=True)]) == []
+    sin_margen = round(margen, 1)            # lo que sobra más la holgura supera el margen que hay
+    assert diapositivas.ajustar_desbordes_pequenos(copia, [office.Desborde(2, texto, sin_margen)]) == []
+    assert _primer_texto(copia, 2) == (texto, letra, margen)             # no tocó nada
