@@ -382,3 +382,20 @@ main.hoja .material .cabeza h1 { margin: 0; }
 .listo li.si::before { content: "✓"; color: var(--bien); }
 .listo li.no::before { content: "!"; color: var(--error); }
 @media (max-width: 30rem) { .bloque-accion { padding: 0.25rem 1rem 0.5rem; } }
+
+/* Página de inicio: un curso por fila, con su avance y el paso que sigue. */
+.cursos { margin: 1rem 0 2.5rem; padding: 0; list-style: none; border-top: 1px solid var(--borde); }
+.curso { max-width: none; padding: 1.25rem 0; border-bottom: 1px solid var(--borde); }
+.curso-cabeza { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.25rem 1rem; }
+.curso-cabeza h2 { margin: 0; font-size: 1.25rem; }
+.curso-cabeza h2 a { color: var(--texto); text-decoration: none; }
+.curso-cabeza h2 a:hover { color: var(--principal); text-decoration: underline; }
+.curso-avance { margin: 0.35rem 0 0.5rem; }
+/* Un tramo por material: verde aprobado, rojo con problema, gris lo demás. La frase de arriba dice lo mismo en palabras. */
+.tramos { display: flex; gap: 3px; max-width: 24rem; margin-bottom: 0.75rem; }
+.tramo { flex: 1; height: 6px; border-radius: 3px; background: var(--borde); }
+.tramo.bien { background: var(--bien); }
+.tramo.error { background: var(--error); }
+.curso-problema { margin: 0 0 0.35rem; color: var(--error); font-size: 0.9375rem; }
+.curso-sigue { margin: 0.5rem 0 0; }
+.listo-todo { color: var(--bien); font-weight: bold; }

@@ -51,7 +51,17 @@ def lector_de_imagenes(curso: str) -> convertir.LectorImagen:
 
 @app.get("/")
 def inicio(request: Request, mensaje: str = ""):
-    lista = [{**c, "nombre": _nombre(c["curso"]), "gasto": tokens.total(c["curso"])} for c in cursos.listar()]
+    lista = []
+    for c in cursos.listar():
+        panel = _panel(cursos.carpeta(c["curso"]), c["curso"], "inicio")
+        materiales = [m for s in panel["sesiones"] for m in s["materiales"]]
+        lista.append({**c, "nombre": _nombre(c["curso"]), "gasto": panel["gasto"], "sigue": _que_sigue(c["curso"], panel),
+                      "sesiones": len(panel["sesiones"]), "materiales": len(materiales),
+                      "aprobados": sum(1 for m in materiales if m["situacion"]["clase"] == "bien"),
+                      "tramos": [m["situacion"]["clase"] for m in materiales],
+                      "con_problema": [f"Sesión {s['numero']}: {m['corto'].lower()} {m['situacion']['texto'].lower()}"
+                                       for s in panel["sesiones"] for m in s["materiales"]
+                                       if m["situacion"]["clase"] == "error"]})
     sistema = tokens.total(tokens.CURSO_SISTEMA)
     total = {"llamadas": sistema["llamadas"] + sum(c["gasto"]["llamadas"] for c in lista),
              "costo_usd": sistema["costo_usd"] + sum(c["gasto"]["costo_usd"] for c in lista)}
@@ -566,6 +576,7 @@ def _panel(carpeta, curso: str, actual: str) -> dict:
                                 "sigue": m["clave"] == vista["siguiente"]["ancla"]} for m in incluidos],
                 "hechos": sum(1 for m in incluidos if m["situacion"]["clase"] == "bien"),
                 "van": len(incluidos),
+                "siguiente": vista["siguiente"], "puede_empezar": vista["puede_empezar"],
             })
     return {
         "actual": actual,
@@ -574,6 +585,28 @@ def _panel(carpeta, curso: str, actual: str) -> dict:
         "sesiones": sesiones,
         "gasto": tokens.total(curso),
     }
+
+
+def _que_sigue(curso: str, panel: dict) -> dict | None:
+    """El primer paso pendiente del curso, en el orden del trabajo: fuentes, ficha del curso y, sesión por sesión,
+    su ficha y sus materiales. None si todo está aprobado. Es lo que la página de inicio enlaza."""
+    base = f"/cursos/{curso}"
+    fuentes = panel["fuentes"]["texto"]
+    if fuentes == "Sin subir":
+        return {"texto": "Sube las fuentes del curso.", "url": base + "#fuentes"}
+    if fuentes.endswith("sin convertir"):
+        return {"texto": "Convierte las fuentes a texto.", "url": base + "#fuentes"}
+    if fuentes == "Por revisar":
+        return {"texto": "Revisa el texto que la IA leyó de las imágenes.", "url": base + "#fuentes"}
+    if panel["ficha_curso"]["clase"] != "bien":
+        return {"texto": "Confirma la ficha del curso.", "url": base + "/ficha"}
+    for s in panel["sesiones"]:
+        if not s["puede_empezar"]:
+            return {"texto": f"Sesión {s['numero']}: confirma su ficha.", "url": f"{base}/sesiones/{s['numero']}/ficha"}
+        if s["siguiente"]["ancla"]:
+            return {"texto": f"Sesión {s['numero']}: {s['siguiente']['texto'][:1].lower()}{s['siguiente']['texto'][1:]}",
+                    "url": f"{base}/sesiones/{s['numero']}/materiales/{s['siguiente']['ancla']}"}
+    return None
 
 
 def _material(material: str) -> dict:

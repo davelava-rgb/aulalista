@@ -299,3 +299,27 @@ def test_el_curso_se_llama_igual_en_todas_partes_y_los_terminos_se_definen(sesio
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     assert "Se detuvo por un error antes de terminar." in pagina
     assert "<summary>Detalle del error</summary><p><code>Traceback: algo falló</code>" in pagina
+
+
+def test_el_inicio_muestra_el_avance_de_cada_curso_y_enlaza_lo_que_sigue(sesion):  # noqa: F811
+    pagina = cliente.get("/").text
+    assert "0 de 6 materiales aprobados en 2 sesiones." in pagina
+    assert '<strong>Sigue:</strong> <a href="/cursos/scrum/sesiones/1/materiales/lectura">Sesión 1: genera la lectura.</a>' in pagina
+    _poner(sesion, "lectura", estado="con fallas")
+    pagina = cliente.get("/").text
+    assert '<p class="curso-problema">Sesión 1: lectura con fallas.</p>' in pagina
+    assert pagina.count('<span class="tramo error">') == 1
+    for clave in ("lectura", "diapositivas", "laboratorio"):
+        _poner(sesion, clave, estado="aprobada", aprobada="2026-10-15T10:00:00")
+    pagina = cliente.get("/").text
+    assert '<a href="/cursos/scrum/sesiones/2/ficha">Sesión 2: confirma su ficha.</a>' in pagina   # la 1 ya está
+    listo = {"fuentes": {"texto": "1 lista"}, "ficha_curso": {"clase": "bien"},
+             "sesiones": [{"numero": 1, "puede_empezar": True, "siguiente": {"ancla": "", "texto": "Listo"}}]}
+    assert servidor._que_sigue("scrum", listo) is None      # todo aprobado: la página dice que no queda nada
+
+
+def test_el_inicio_de_un_curso_nuevo_enlaza_las_fuentes(entorno):
+    cliente.post("/cursos", data={"nombre": "Curso vacío"})
+    pagina = cliente.get("/").text
+    assert '<a href="/cursos/curso-vacio#fuentes">Sube las fuentes del curso.</a>' in pagina
+    assert "Las sesiones aparecen al confirmar la ficha del curso." in pagina

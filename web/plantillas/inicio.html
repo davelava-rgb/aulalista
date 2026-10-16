@@ -6,15 +6,36 @@
 {% block contenido %}
 <h1>Cursos</h1>
 {% if cursos %}
-<ul class="lista">
-  {% for c in cursos %}<li><a href="/cursos/{{ c.curso }}">{{ c.nombre }}</a> <span class="nota">({{ usd(c.gasto.costo_usd) }} estimados)</span></li>{% endfor %}
+{# Un curso por fila: su avance y un enlace directo al paso que sigue. #}
+<ul class="cursos">
+  {% for c in cursos %}
+  <li class="curso">
+    <div class="curso-cabeza">
+      <h2><a href="/cursos/{{ c.curso }}">{{ c.nombre }}</a></h2>
+      <span class="nota">{{ usd(c.gasto.costo_usd) }} estimados</span>
+    </div>
+    {% if c.materiales %}
+    <p class="curso-avance">{{ c.aprobados }} de {{ c.materiales }} {{ "material aprobado" if c.materiales == 1 else "materiales aprobados" }} en {{ c.sesiones }} {{ "sesión" if c.sesiones == 1 else "sesiones" }}.</p>
+    <div class="tramos" aria-hidden="true">{% for t in c.tramos %}<span class="tramo {{ t }}"></span>{% endfor %}</div>
+    {% else %}
+    <p class="curso-avance">Las sesiones aparecen al confirmar la ficha del curso.</p>
+    {% endif %}
+    {% for p in c.con_problema %}<p class="curso-problema">{{ p }}.</p>{% endfor %}
+    {% if c.sigue %}
+    <p class="curso-sigue"><strong>Sigue:</strong> <a href="{{ c.sigue.url }}">{{ c.sigue.texto }}</a></p>
+    {% else %}
+    <p class="curso-sigue listo-todo">Todos los materiales están aprobados.</p>
+    {% endif %}
+  </li>
+  {% endfor %}
 </ul>
 {% else %}
-<p>Todavía no hay cursos.</p>
+<p>Todavía no hay cursos. Crea el primero con su nombre; después subes sus fuentes y llenas su ficha.</p>
 {% endif %}
 
+<h2>Curso nuevo</h2>
 <form method="post" action="/cursos" class="fila">
-  <label for="nombre">Nombre del curso nuevo</label>
+  <label for="nombre">Nombre del curso</label>
   <input id="nombre" name="nombre" required maxlength="120">
   <button type="submit">Crear curso</button>
 </form>
