@@ -33,7 +33,7 @@
         <ul>
           {{ elemento("Ficha de la sesión", "/cursos/" ~ curso ~ "/sesiones/" ~ s.numero ~ "/ficha", s.ficha, "ficha-" ~ s.numero) }}
           {% for m in s.materiales %}
-          <li><a class="panel-item panel-material" href="/cursos/{{ curso }}/sesiones/{{ s.numero }}#{{ m.clave }}"{% if panel.actual == "sesion-" ~ s.numero %} aria-current="location"{% endif %}>
+          <li><a class="panel-item panel-material" href="/cursos/{{ curso }}/sesiones/{{ s.numero }}/materiales/{{ m.clave }}"{% if panel.actual == m.clave ~ "-" ~ s.numero %} aria-current="page"{% endif %}>
             <span class="panel-nombre">{{ m.corto }}{% if m.sigue %} <span class="panel-sigue">Sigue</span>{% endif %}</span>
             {{ indicador(m.situacion) }}</a></li>
           {% endfor %}

@@ -34,25 +34,69 @@ def test_la_ultima_corrida_suma_solo_las_llamadas_seguidas_del_final(entorno):
     assert tokens.ultima_corrida("scrum", "completar ficha") is None
 
 
-def test_la_franja_muestra_los_materiales_y_el_siguiente_paso_sin_la_evaluacion(sesion):  # noqa: F811
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
-    assert 'aria-label="Materiales de la sesión"' in pagina
-    for nombre in ("1. Lectura", "2. Diapositivas", "3. Laboratorio"):
-        assert nombre in pagina
+def test_la_sesion_abre_el_material_del_siguiente_paso_sin_la_evaluacion(sesion):  # noqa: F811
+    r = cliente.get("/cursos/scrum/sesiones/1", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/cursos/scrum/sesiones/1/materiales/lectura"
+    pagina = cliente.get(r.headers["location"]).text
+    for clave in ("lectura", "diapositivas", "laboratorio"):
+        assert f'href="/cursos/scrum/sesiones/1/materiales/{clave}"' in pagina
     assert "Evaluación y clave" not in pagina and "Etapa posterior" not in pagina  # sin etapa 9 (decisión 37)
     assert "Siguiente paso:" in pagina and "Genera la lectura." in pagina
+    assert "Sesión 1 · Material 1 de 3" in pagina
+
+
+def test_sin_fichas_la_sesion_abre_la_ficha(sesion):  # noqa: F811
+    almacen.guardar(sesion, "sesion", 1, {**almacen.cargar(sesion, "sesion", 1), "confirmada": False})
+    r = cliente.get("/cursos/scrum/sesiones/1", follow_redirects=False)
+    assert r.headers["location"] == "/cursos/scrum/sesiones/1/ficha"
+
+
+def test_un_material_que_no_existe_da_404(sesion):  # noqa: F811
+    assert cliente.get("/cursos/scrum/sesiones/1/materiales/evaluacion").status_code == 404
+
+
+def test_las_acciones_vuelven_a_la_pagina_del_material(sesion):  # noqa: F811
+    r = cliente.post("/cursos/scrum/sesiones/1/materiales/diapositivas", follow_redirects=False)
+    assert r.headers["location"].startswith("/cursos/scrum/sesiones/1/materiales/diapositivas?mensaje=")
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
+    assert 'href="/cursos/scrum/sesiones/1/materiales/diapositivas" aria-current="page"' in pagina
+
+
+def test_el_recorrido_dice_en_que_paso_va_el_material(sesion):  # noqa: F811
+    datos = servidor.MATERIALES["laboratorio"]
+    def pasos(**estado):
+        return [(r["clase"], r["nota"]) for r in servidor._recorrido(datos, estado)]
+    assert pasos() == [("ahora", "Pendiente"), ("pendiente", "Sin IA"), ("pendiente", "Con IA, por bloque"),
+                       ("pendiente", "Lo decides tú")]
+    assert pasos(estado="trabajando")[0] == ("ahora", "En curso")
+    assert pasos(estado="detenida")[0] == ("ahora", "Detenido por ti")
+    assert pasos(estado="error")[0] == ("falla", "Se detuvo por un error")
+    assert pasos(estado="con fallas")[:2] == [("hecho", "Listo"), ("falla", "Con fallas")]
+    pendientes = {"secciones": [{"clave": "pendientes", "titulo": "Decisiones pendientes", "lineas": ["Una duda"]}]}
+    assert pasos(estado="con pendientes", entrega=pendientes)[2:] == [("hecho", "Con pendientes"), ("ahora", "Lo decides tú")]
+    assert pasos(estado="verificada")[2] == ("hecho", "Sin errores abiertos")
+    assert pasos(estado="aprobada", aprobada="2026-10-15T10:00:00")[3] == ("hecho", "El 2026-10-15")
+    assert pasos(estado="aprobada", desactualizado=True)[0] == ("ahora", "Las fichas cambiaron")
+
+
+def test_el_recorrido_se_ve_en_la_pagina_con_su_estado_en_palabras(sesion):  # noqa: F811
+    _poner(sesion, "lectura", estado="con fallas")
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    assert 'aria-label="Recorrido del material"' in pagina
+    assert '<li class="falla"><strong>Verificar</strong> <span class="paso-nota">Con fallas</span>' in pagina
+    assert "(con problema)" in pagina
 
 
 def test_el_laboratorio_concuerda_en_masculino(sesion):  # noqa: F811
     _poner(sesion, "laboratorio", estado="aprobada", aprobada="2026-10-15T10:00:00")
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/laboratorio").text
     assert "Aprobado por ti el 2026-10-15" in pagina and "Aprobada por ti" not in pagina
     assert "AulaLista lo reemplaza" in pagina
 
 
 def test_el_estado_lleva_icono_color_y_palabra(sesion):  # noqa: F811
     _poner(sesion, "lectura", estado="con fallas")
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     assert '<span class="indicador error"><svg' in pagina and "Con fallas</span>" in pagina
 
 
@@ -63,20 +107,20 @@ def test_un_material_aprobado_desactualizado_no_se_ve_aprobado(sesion):  # noqa:
 
 
 def test_generar_de_nuevo_un_material_aprobado_pide_confirmacion(sesion):  # noqa: F811
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     assert "data-confirmar=" not in pagina
     _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00")
-    assert "data-confirmar=\"La lectura ya está aprobada." in cliente.get("/cursos/scrum/sesiones/1").text
+    assert "data-confirmar=\"La lectura ya está aprobada." in cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
 
 
 def test_el_boton_generar_dice_lo_que_gasto_la_ultima_corrida(sesion):  # noqa: F811
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     assert "Todavía no hay una corrida anterior para estimar el costo." in pagina
     _poner(sesion, "lectura", estado="verificada", corrida_desde=tokens.lineas("scrum"))
     with open(sesion / "tokens.jsonl", "a", encoding="utf-8") as archivo:
         archivo.write(json.dumps({"fecha": "x", "curso": "scrum", "sesion": "S1", "material": "lectura",
                                   "etapa": "redacción", "tokens_entrada": 1, "tokens_salida": 1, "costo_usd": 0.42}) + "\n")
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     # El costo se dice una sola vez: en «Gasto desde la última vez» y el botón remite a esa línea.
     assert "Gasto desde la última vez que pulsaste Generar: 1 llamada, 0.42 USD estimados." in pagina
     assert "Gasta tokens, como la corrida de arriba." in pagina
@@ -94,7 +138,7 @@ def test_la_entrega_resume_en_una_linea_y_pliega_los_detalles(sesion):  # noqa: 
         {"clave": "probe", "titulo": "Qué probé", "lineas": ["Algo."]},
         {"clave": "pendientes", "titulo": "Decisiones pendientes", "lineas": ["Una.", "Otra."]}]}
     _poner(sesion, "lectura", estado="con pendientes", entrega=entrega)
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     assert "1 archivo · 2 decisiones pendientes" in pagina
     assert '<details class="detalle">' in pagina and "Detalles de la entrega: qué probé</summary>" in pagina
 
@@ -176,7 +220,7 @@ def test_el_panel_marca_la_pagina_actual_y_abre_su_sesion(sesion):  # noqa: F811
 
 def test_el_panel_muestra_el_estado_con_palabra_el_siguiente_paso_y_el_gasto(sesion):  # noqa: F811
     _poner(sesion, "lectura", estado="con fallas")
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     panel = pagina.split('id="panel"')[1].split("</nav>")[0]
     assert 'Lectura <span class="panel-sigue">Sigue</span>' in panel
     assert '<span class="indicador error"><svg' in panel and "Con fallas</span>" in panel

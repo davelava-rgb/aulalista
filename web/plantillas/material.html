@@ -1,41 +1,34 @@
 {% extends "_entorno.html" %}
 {% from "_estado.html" import indicador, costo, usd %}
 
-{% block titulo %}Sesión {{ sesion }} · AulaLista{% endblock %}
-{% block ruta %} › <a href="/cursos/{{ curso }}">{{ nombre }}</a> › <span aria-current="page">Sesión {{ sesion }}</span>{% endblock %}
+{% block titulo %}{{ m.titulo }} · Sesión {{ sesion }} · AulaLista{% endblock %}
+{% block ruta %} › <a href="/cursos/{{ curso }}">{{ nombre }}</a> › Sesión {{ sesion }} › <span aria-current="page">{{ m.titulo }}</span>{% endblock %}
 
 {% macro forma(m, raiz) %}{{ raiz ~ m.o ~ ("s" if m.plural else "") }}{% endmacro %}
 
 {% block contenido %}
-<h1>Sesión {{ sesion }}</h1>
-<p><a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">Ficha de la sesión</a>:
-  {{ 'confirmada.' if puede_empezar else 'falta confirmar las fichas. Ningún material empieza sin ellas. Una ficha queda confirmada al guardarla completa.' }}</p>
-
-<div id="franja">
-<nav class="franja" aria-label="Materiales de la sesión">
-  <ol>
-    {% for m in materiales %}
-    <li class="{{ 'actual' if siguiente.ancla == m.clave }}">
-      <a class="nombre" href="#{{ m.clave }}">{{ m.numero }}. {{ m.corto }}</a>
-      {{ indicador(m.situacion) }}
-    </li>
-    {% endfor %}
-  </ol>
-</nav>
-<p class="siguiente"><strong>Siguiente paso:</strong>
-  {% if siguiente.ancla %}<a href="#{{ siguiente.ancla }}">{{ siguiente.texto }}</a>
-  {% elif not puede_empezar %}<a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">{{ siguiente.texto }}</a>
-  {% else %}{{ siguiente.texto }}{% endif %}</p>
-</div>
-
-{% for m in materiales %}
 {% set e = m.estado %}
 {% set base = "/cursos/" ~ curso ~ "/sesiones/" ~ sesion ~ "/materiales/" ~ m.clave %}
 <section class="material" id="{{ m.clave }}" data-estado="{{ e.estado or '' }}" data-avance="{{ (e.avance or []) | length }}" aria-labelledby="t-{{ m.clave }}">
+  <p class="donde">Sesión {{ sesion }} · Material {{ m.numero }} de {{ total }}</p>
   <div class="cabeza">
-    <h2 id="t-{{ m.clave }}">{{ m.numero }}. {{ m.titulo }}</h2>
+    <h1 id="t-{{ m.clave }}">{{ m.titulo }}</h1>
     {{ indicador(m.situacion) }}
   </div>
+  {% if m.incluido %}
+  <ol class="recorrido" id="recorrido" aria-label="Recorrido del material">
+    {% for r in recorrido %}<li class="{{ r.clase }}"><strong>{{ r.paso }}</strong> <span class="paso-nota">{{ r.nota }}</span>
+      <span class="sr">{{ {"hecho": "(hecho)", "ahora": "(paso actual)", "falla": "(con problema)", "pendiente": "(pendiente)"}[r.clase] }}</span></li>{% endfor %}
+  </ol>
+  {% endif %}
+  {% if not puede_empezar %}
+  <p>Falta confirmar las fichas. Ningún material empieza sin ellas. Una ficha queda confirmada al guardarla completa.</p>
+  {% endif %}
+  <p class="siguiente" id="siguiente"><strong>Siguiente paso:</strong>
+    {% if siguiente.ancla == m.clave %}{{ siguiente.texto }}
+    {% elif siguiente.ancla %}<a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/{{ siguiente.ancla }}">{{ siguiente.texto }}</a>
+    {% elif not puede_empezar %}<a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">{{ siguiente.texto }}</a>
+    {% else %}{{ siguiente.texto }}{% endif %}</p>
   {% if not m.incluido %}
   <p class="estado-material">«Materiales de esta sesión», en la <a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">ficha de la sesión</a>, no {{ "incluyen" if m.plural else "incluye" }} {{ m.el }}.</p>
   {% else %}
@@ -57,10 +50,10 @@
   {% set pendientes = secciones | selectattr("clave", "equalto", "pendientes") | list %}
   {% set n_archivos = archivos[0].lineas | length if archivos else 0 %}
   {% set n_pendientes = pendientes[0].lineas | length if pendientes else 0 %}
-  <h3>Entrega</h3>
+  <h2>Entrega</h2>
   <p class="resumen">{{ n_archivos }} {{ "archivo" if n_archivos == 1 else "archivos" }} · {{ n_pendientes }} {{ "decisión pendiente" if n_pendientes == 1 else "decisiones pendientes" }}{% if e.avisos_de_diseno %} · {{ e.avisos_de_diseno | length }} {{ "aviso" if e.avisos_de_diseno | length == 1 else "avisos" }} de diseño{% endif %}</p>
   {% if archivos %}
-  <h4>{{ archivos[0].titulo }}</h4>
+  <h3>{{ archivos[0].titulo }}</h3>
   <ul class="lista">
     {% for l in archivos[0].lineas %}{% set archivo, resto = l.split(": ", 1) %}
     <li><a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/descargar/{{ archivo }}">{{ archivo }}</a>: {{ resto }}</li>
@@ -69,7 +62,7 @@
   {% endif %}
   {% set por_decidir = e.estado in ("verificada", "con pendientes", "con fallas") %}
   {% if pendientes and por_decidir %}
-  <h4>{{ pendientes[0].titulo }}</h4>
+  <h3>{{ pendientes[0].titulo }}</h3>
   <ul class="lista">{% for l in pendientes[0].lineas %}<li>{{ l }}</li>{% endfor %}</ul>
   {% endif %}
   {% if secciones | rejectattr("clave", "in", ["archivos", "pendientes"] if por_decidir else ["archivos"]) | list or e.avisos_de_diseno %}
@@ -77,11 +70,11 @@
     {% set resto = secciones | rejectattr("clave", "equalto", "archivos") | list %}
     <summary>Detalles de la entrega: {% for s in resto if not (s.clave == "pendientes" and por_decidir) %}{{ s.titulo | lower }}{{ ", " if not loop.last }}{% endfor %}{% if e.avisos_de_diseno %} y avisos de diseño{% endif %}</summary>
     {% for s in secciones if s.clave != "archivos" and not (s.clave == "pendientes" and por_decidir) %}
-    <h4>{{ s.titulo }}</h4>
+    <h3>{{ s.titulo }}</h3>
     <ul class="lista">{% for l in s.lineas %}<li>{{ l }}</li>{% endfor %}</ul>
     {% endfor %}
     {% if e.avisos_de_diseno %}
-    <h4>Avisos de diseño</h4>
+    <h3>Avisos de diseño</h3>
     <ul class="lista">{% for a in e.avisos_de_diseno %}<li>{{ a }}</li>{% endfor %}</ul>
     {% endif %}
   </details>
@@ -143,17 +136,16 @@
   {% endif %}
   {% endif %}
 </section>
-{% endfor %}
 
 <p class="nota">Gasto total de este curso, con todas las corridas: {{ gasto.llamadas }} llamadas, {{ usd(gasto.costo_usd) }} estimados.</p>
 {% endblock %}
 
 {% block scripts %}
 <script>
-  // Mientras se trabaja en algún material, la página pide su versión nueva cada 5 segundos y cambia solo
-  // lo que cambió: el avance se agrega al final y el foco y la lectura no se pierden.
+  // Mientras se trabaja en este material o en otro de la sesión, la página pide su versión nueva cada 5 segundos
+  // y cambia solo lo que cambió: el avance se agrega al final y el foco y la lectura no se pierden.
   (function () {
-    const trabajando = () => document.querySelector('section.material[data-estado="trabajando"]');
+    const trabajando = () => document.querySelector('section.material[data-estado="trabajando"], #panel .indicador.trabajando');
     if (!trabajando()) return;
     async function actualizar() {
       let nueva;
@@ -174,8 +166,10 @@
           actual.replaceWith(otra);
         }
       });
-      const franja = document.getElementById("franja"), franjaNueva = nueva.getElementById("franja");
-      if (franja && franjaNueva && !franja.contains(document.activeElement)) franja.replaceWith(franjaNueva);
+      ["recorrido", "siguiente"].forEach((id) => {
+        const actual = document.getElementById(id), otra = nueva.getElementById(id);
+        if (actual && otra) actual.replaceWith(otra);
+      });
       const panel = document.getElementById("panel"), panelNuevo = nueva.getElementById("panel");
       if (panel && panelNuevo && !panel.contains(document.activeElement)) panel.replaceWith(panelNuevo);
       if (trabajando()) setTimeout(actualizar, 5000);

@@ -271,13 +271,6 @@ strong.alerta, span.alerta { color: var(--error); }
 .indicador.espera, .indicador.trabajando { color: var(--texto); }
 .indicador.neutro { color: var(--texto); font-weight: normal; opacity: 0.8; }
 
-/* Franja con los materiales de la sesión y el siguiente paso. */
-.franja ol { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr)); gap: 0.5rem; margin: 1rem 0 0.5rem; padding: 0; list-style: none; }
-.franja li { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.5rem 0.75rem; border: 1px solid var(--suave); border-radius: 6px; max-width: none; }
-.franja li.actual { border-color: var(--principal); }
-.franja .nombre { font-weight: bold; }
-.franja .indicador { white-space: normal; }
-.franja a.nombre { min-height: 24px; }
 .siguiente { margin: 0 0 1rem; }
 
 /* Avance por sesión en la tabla del curso. */
@@ -324,7 +317,6 @@ main.hoja { max-width: 50rem; margin: 0; padding: 2rem 2.5rem 4rem; }
 .panel-item .panel-nombre { flex: 1; min-width: 0; }
 .panel-item[aria-current] { background: var(--fondo); font-weight: bold; }
 .panel-item[aria-current]::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--principal); }
-.panel-item[aria-current="location"]::before { opacity: 0.5; }
 .panel-sesion > summary { display: block;
   min-height: 44px; padding: 0.5rem 1.25rem; cursor: pointer; font-size: 0.9375rem; font-weight: bold; list-style: none; }
 .panel-sesion > summary::-webkit-details-marker { display: none; }
@@ -351,4 +343,31 @@ main.hoja { max-width: 50rem; margin: 0; padding: 2rem 2.5rem 4rem; }
   .panel-sesion .panel-item { flex: none; padding: 0.25rem 1rem; white-space: nowrap; }
   .panel-item[aria-current]::before { top: auto; right: 0; width: auto; height: 3px; }
   main.hoja { padding: 1.5rem 1rem 3rem; }
+}
+
+/* Página de un material: la hoja entera es el material, sin recuadro (decisión 38). */
+main.hoja .material { margin: 0; padding: 0; border: 0; }
+main.hoja .material .cabeza h1 { margin: 0; }
+.donde { margin: 0 0 0.5rem; font-size: 0.8125rem; opacity: 0.8; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Recorrido: Generar, Verificar, Revisar y Aprobar. Es una secuencia de verdad, por eso lleva números. */
+.recorrido { display: grid; grid-template-columns: repeat(4, 1fr); margin: 1.5rem 0 1.25rem; padding: 0; list-style: none; counter-reset: paso; }
+.recorrido li { position: relative; max-width: none; padding: 1.75rem 0.75rem 0 0; font-size: 0.8125rem; line-height: 1.35; counter-increment: paso; }
+.recorrido li::before { content: counter(paso); position: absolute; top: 0; left: 0; z-index: 1; width: 1.375rem; height: 1.375rem;
+  box-sizing: border-box; border: 1.5px solid var(--borde); border-radius: 50%; background: var(--fondo);
+  font-size: 0.75rem; font-weight: bold; line-height: 1.2rem; text-align: center; }
+.recorrido li::after { content: ""; position: absolute; top: 0.65rem; left: 1.375rem; right: 0; height: 2px; background: var(--borde); }
+.recorrido li:last-child::after { display: none; }
+.recorrido strong { display: block; font-size: 0.9375rem; }
+.recorrido .paso-nota { opacity: 0.8; }
+.recorrido li.hecho::before { content: "✓"; border-color: var(--bien); background: var(--bien); color: var(--fondo); }
+.recorrido li.hecho::after { background: var(--bien); }
+.recorrido li.ahora::before { border-color: var(--principal); color: var(--principal); }
+.recorrido li.ahora strong { color: var(--principal); }
+.recorrido li.falla::before { content: "!"; border-color: var(--error); background: var(--error); color: var(--fondo); }
+.recorrido li.falla strong, .recorrido li.falla .paso-nota { color: var(--error); opacity: 1; }
+@media (max-width: 30rem) {
+  .recorrido { grid-template-columns: 1fr 1fr; row-gap: 1rem; }
+  .recorrido li:nth-child(2)::after { display: none; }
 }

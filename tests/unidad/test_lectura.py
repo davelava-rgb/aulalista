@@ -357,14 +357,14 @@ def test_la_pagina_muestra_el_gasto_de_la_ultima_corrida_aunque_falle(sesion):
     assert lectura.estado(sesion, 1)["estado"] == "error"
     gasto = lectura.gasto_de_la_corrida(sesion, "scrum", 1)
     assert gasto["llamadas"] == tokens.total("scrum")["llamadas"] - antes == 1
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     assert "Gasto desde la última vez que pulsaste Generar: 1 llamada," in pagina
     assert "Gasto total de este curso, con todas las corridas:" in pagina
 
 
 def test_sin_generar_no_muestra_gasto_de_corrida(sesion):
     assert lectura.gasto_de_la_corrida(sesion, "scrum", 1) is None
-    assert "Gasto desde la última vez" not in cliente.get("/cursos/scrum/sesiones/1").text
+    assert "Gasto desde la última vez" not in cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
 
 
 def test_el_word_real_cuenta_sus_paginas_con_word(sesion):
@@ -396,7 +396,7 @@ def test_detener_corta_la_generacion_en_curso(sesion, monkeypatch):
             break
         time.sleep(0.05)
     assert lectura.estado(sesion, 1)["estado"] == "trabajando"
-    assert "Detener</button>" in cliente.get("/cursos/scrum/sesiones/1").text
+    assert "Detener</button>" in cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura/detener", follow_redirects=False)
     assert r.status_code == 303 and "Deteniendo" in __import__("urllib.parse").parse.unquote(r.headers["location"])
     for hilo in [h for h in threading.enumerate() if h.daemon]:
@@ -405,7 +405,7 @@ def test_detener_corta_la_generacion_en_curso(sesion, monkeypatch):
     assert estado["estado"] == "detenida"
     assert "· Detenido por ti." in estado["avance"][-1]
     assert ("scrum", 1, lectura.CLAVE) not in servidor._TRABAJOS
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     assert "Detenida por ti. Puedes generarla de nuevo." in pagina and "Detener</button>" not in pagina
 
 
@@ -415,7 +415,7 @@ def test_detener_libera_una_lectura_que_quedo_trabajando(sesion):
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura/detener", follow_redirects=False)
     assert "Trabajo detenido" in __import__("urllib.parse").parse.unquote(r.headers["location"])
     assert lectura.estado(sesion, 1)["estado"] == "detenida"
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     assert "Generar de nuevo" in pagina and "disabled" not in pagina.split("Generar de nuevo")[0].rsplit("<button", 1)[1]
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura/detener", follow_redirects=False)
     assert "no estaba trabajando" in __import__("urllib.parse").parse.unquote(r.headers["location"])
@@ -435,7 +435,7 @@ def test_la_pagina_de_la_sesion_genera_y_permite_descargar(sesion, monkeypatch):
     servidor_hilos = [h for h in __import__("threading").enumerate() if h.daemon]
     for hilo in servidor_hilos:
         hilo.join(timeout=60)
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     assert "Verificada" in pagina and "S1_Lectura.docx" in pagina
     descarga = cliente.get("/cursos/scrum/sesiones/1/descargar/S1_Lectura.docx")
     assert descarga.status_code == 200 and descarga.content[:2] == b"PK"
@@ -448,8 +448,8 @@ def test_sin_fichas_el_boton_esta_desactivado(entorno):
     carpeta = entorno["cursos"] / "otro"
     almacen.guardar(carpeta, "curso", None, datos.ficha("curso", datos.CURSO))
     flujo.confirmar_curso(carpeta)
-    pagina = cliente.get("/cursos/otro/sesiones/1").text
-    assert "falta confirmar las fichas" in pagina
+    pagina = cliente.get("/cursos/otro/sesiones/1/materiales/lectura").text
+    assert "Falta confirmar las fichas" in pagina
     assert re.search(r"<button type=\"submit\"\s+disabled[\s>]", pagina)
 
 
@@ -518,7 +518,7 @@ def test_sin_bloques_la_lectura_no_empieza_y_la_pagina_dice_que_falta(sesion):
     almacen.guardar(sesion, "sesion", 1, ficha)          # la ficha sigue confirmada
     with pytest.raises(lectura.NoSePuedeEmpezar, match="La lectura necesita de 2 a 4 bloques"):
         asyncio.run(lectura.generar(sesion, "scrum", 1, consulta=consulta_en_secuencia()))
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     assert "Para generar la lectura, completa en la" in pagina and "La lectura necesita de 2 a 4 bloques, o un material de referencia." in pagina
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura", follow_redirects=True)
     assert "Falta en la ficha de la sesión: La lectura necesita de 2 a 4 bloques, o un material de referencia." in r.text

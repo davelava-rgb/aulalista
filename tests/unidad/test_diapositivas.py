@@ -221,8 +221,8 @@ def test_sin_la_lectura_aprobada_no_empieza(sesion):  # noqa: F811
     assert diapositivas.faltan(sesion, 1)["otros"] == ["Aprueba primero la lectura: las diapositivas salen de ella."]
     with pytest.raises(diapositivas.NoSePuedeEmpezar):
         asyncio.run(diapositivas.generar(sesion, "scrum", 1, consulta=consulta_en_secuencia(), medir=medir_sin_desbordes))
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
-    assert "2. Diapositivas" in pagina and "Aprueba primero la lectura" in pagina
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
+    assert '<h1 id="t-diapositivas">Diapositivas</h1>' in pagina and "Aprueba primero la lectura" in pagina
     boton = pagina.split("Generar diapositivas")[0].rsplit("<button", 1)[1]
     assert "disabled" in boton
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/diapositivas", follow_redirects=False)
@@ -314,17 +314,17 @@ def test_si_la_lectura_se_genera_de_nuevo_quedan_desactualizadas(con_lectura):
     assert diapositivas.estado(con_lectura, 1)["desactualizado"] is True
     with pytest.raises(diapositivas.NoSePuedeAprobar):
         diapositivas.aprobar(con_lectura, 1)
-    assert "Desactualizadas: la lectura o las fichas cambiaron." in cliente.get("/cursos/scrum/sesiones/1").text
+    assert "Desactualizadas: la lectura o las fichas cambiaron." in cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
 
 
 def test_se_aprueban_desde_la_pagina(con_lectura):
     generar(con_lectura, LIMPIAS)
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
     assert "Aprobar las diapositivas" in pagina and "S1_Diapositivas.pptx" in pagina
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/diapositivas/aprobar", follow_redirects=False)
     assert "Diapositivas aprobadas." in unquote(r.headers["location"])
     assert diapositivas.estado(con_lectura, 1)["estado"] == "aprobada"
-    assert "Aprobadas por ti el" in cliente.get("/cursos/scrum/sesiones/1").text
+    assert "Aprobadas por ti el" in cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
 
 
 def test_detener_y_material_desconocido(con_lectura):

@@ -551,7 +551,7 @@ def _estado_de_fuentes(carpeta) -> dict:
 
 def _panel(carpeta, curso: str, actual: str) -> dict:
     """El panel del curso que va a la izquierda de cada página del curso (PLAN.md §0, decisión 38).
-    `actual` dice qué página se ve: «curso», «fuentes», «ficha-curso», «sesion-N» o «ficha-N»."""
+    `actual` dice qué página se ve: «curso», «fuentes», «ficha-curso», «ficha-N» o «[material]-N»."""
     ficha_curso = almacen.cargar(carpeta, "curso")
     sesiones = []
     if ficha_curso["confirmada"]:
@@ -561,7 +561,7 @@ def _panel(carpeta, curso: str, actual: str) -> dict:
             incluidos = [m for m in vista["materiales"] if m["incluido"]]
             sesiones.append({
                 "numero": n, "texto": s["texto"],
-                "abierta": actual in (f"sesion-{n}", f"ficha-{n}"),
+                "abierta": actual in [f"ficha-{n}"] + [f"{c}-{n}" for c in MATERIALES],
                 "ficha": _estado_de_ficha(almacen.cargar(carpeta, "sesion", n)["confirmada"],
                                           almacen.ruta_ficha(carpeta, "sesion", n).exists()),
                 "materiales": [{"clave": m["clave"], "corto": m["corto"], "situacion": m["situacion"],
@@ -584,16 +584,64 @@ def _material(material: str) -> dict:
     return MATERIALES[material]
 
 
+def _url_material(curso: str, sesion: int, material: str) -> str:
+    return f"/cursos/{curso}/sesiones/{sesion}/materiales/{material}"
+
+
+# Pasos del recorrido de un material (PLAN.md §0, decisión 38). Cada paso: «hecho», «ahora», «falla» o «pendiente».
+PASOS = ("Generar", "Verificar", "Revisar", "Aprobar")
+
+
+def _recorrido(datos: dict, estado: dict) -> list[dict]:
+    """Dónde está el material entre Generar, Verificar, Revisar y Aprobar, con una nota corta por paso.
+    Mientras trabaja no se sabe en qué paso va: se muestra «En curso» en Generar."""
+    e = estado.get("estado")
+    notas = ["Pendiente", "Sin IA", "Con IA, por bloque", "Lo decides tú"]
+    clases = ["ahora", "pendiente", "pendiente", "pendiente"]
+    if estado.get("desactualizado") and e in ("aprobada", "verificada", "con pendientes"):
+        notas[0] = "Las fichas cambiaron"
+    elif e == "trabajando":
+        notas[0] = "En curso"
+    elif e == "detenida":
+        notas[0] = _forma(datos, "Detenid") + " por ti"
+    elif e == "error":
+        clases[0], notas[0] = "falla", "Se detuvo por un error"
+    elif e == "con fallas":
+        clases[:2], notas[:2] = ["hecho", "falla"], ["Listo", "Con fallas"]
+    elif e in ("verificada", "con pendientes", "aprobada"):
+        clases = ["hecho", "hecho", "hecho", "hecho" if e == "aprobada" else "ahora"]
+        notas[:3] = ["Listo", "Sin fallas", "Con pendientes" if estado.get("entrega") and any(
+            s["clave"] == "pendientes" and s["lineas"] for s in estado["entrega"]["secciones"]) else "Sin errores abiertos"]
+        if e == "aprobada":
+            notas[3] = "El " + (estado.get("aprobada") or "")[:10]
+    return [{"paso": p, "clase": c, "nota": n} for p, c, n in zip(PASOS, clases, notas)]
+
+
 @app.get("/cursos/{curso}/sesiones/{sesion}")
-def ver_sesion(request: Request, curso: str, sesion: int, mensaje: str = ""):
+def ver_sesion(curso: str, sesion: int):
+    """La sesión abre en el material del siguiente paso; sin fichas confirmadas, en la ficha de la sesión."""
+    carpeta = _carpeta(curso)
+    _exigir_ficha_del_curso(carpeta, curso)
+    vista = _vista_de_materiales(carpeta, curso, sesion)
+    if not vista["puede_empezar"]:
+        return RedirectResponse(_url_ficha(curso, sesion), status_code=303)
+    incluidos = [m["clave"] for m in vista["materiales"] if m["incluido"]] or list(MATERIALES)
+    return RedirectResponse(_url_material(curso, sesion, vista["siguiente"]["ancla"] or incluidos[0]), status_code=303)
+
+
+@app.get("/cursos/{curso}/sesiones/{sesion}/materiales/{material}")
+def ver_material(request: Request, curso: str, sesion: int, material: str, mensaje: str = ""):
+    _material(material)
     carpeta = _carpeta(curso)
     _exigir_ficha_del_curso(carpeta, curso)
     vista = _vista_de_materiales(carpeta, curso, sesion, detalle=True)
-    return plantillas.TemplateResponse(request, "sesion.html", {
+    m = next(x for x in vista["materiales"] if x["clave"] == material)
+    return plantillas.TemplateResponse(request, "material.html", {
         "curso": curso, "nombre": cursos.nombre(curso), "sesion": sesion, "mensaje": mensaje,
-        **vista, "gasto": tokens.total(curso),
-        "costo_revisor": tokens.ultima_corrida(curso, "revisor independiente"),
-        "panel": _panel(carpeta, curso, f"sesion-{sesion}"),
+        "m": m, "recorrido": _recorrido(m, m["estado"]), "total": len(vista["materiales"]),
+        "puede_empezar": vista["puede_empezar"], "siguiente": vista["siguiente"],
+        "gasto": tokens.total(curso), "costo_revisor": tokens.ultima_corrida(curso, "revisor independiente"),
+        "panel": _panel(carpeta, curso, f"{material}-{sesion}"),
     })
 
 
@@ -601,7 +649,7 @@ def ver_sesion(request: Request, curso: str, sesion: int, mensaje: str = ""):
 def generar_material(curso: str, sesion: int, material: str):
     modulo = _material(material)["modulo"]
     carpeta = _carpeta(curso)
-    destino = f"/cursos/{curso}/sesiones/{sesion}"
+    destino = _url_material(curso, sesion, material)
     if not almacen.puede_empezar_material(carpeta, sesion):
         return RedirectResponse(destino + "?mensaje=" + quote("Guarda completas las dos fichas antes de generar: así quedan confirmadas."), status_code=303)
     faltan = modulo.faltan(carpeta, sesion)
@@ -621,7 +669,7 @@ def revisor_del_material(curso: str, sesion: int, material: str):
     """El revisor independiente opcional (PLAN.md §0, decisión 22): lo pide el profesor."""
     datos = _material(material)
     carpeta = _carpeta(curso)
-    destino = f"/cursos/{curso}/sesiones/{sesion}"
+    destino = _url_material(curso, sesion, material)
     if datos["modulo"].estado(carpeta, sesion).get("estado") not in ("verificada", "con pendientes", "aprobada"):
         generado = "generadas" if datos["plural"] else "generada"
         mensaje = f"El revisor revisa {datos['el']} ya {generado} y sin fallas."
@@ -635,7 +683,7 @@ def detener_material(curso: str, sesion: int, material: str):
     """Cancela la generación en curso. Si no hay ninguna (el servidor se cerró a mitad de camino),
     libera el material que quedó en «Trabajando»."""
     datos = _material(material)
-    destino = f"/cursos/{curso}/sesiones/{sesion}"
+    destino = _url_material(curso, sesion, material)
     with _CANDADO:
         trabajo = _TRABAJOS.get((curso, sesion, material))
     if trabajo:
@@ -652,7 +700,7 @@ def detener_material(curso: str, sesion: int, material: str):
 @app.post("/cursos/{curso}/sesiones/{sesion}/materiales/{material}/aprobar")
 def aprobar_material(curso: str, sesion: int, material: str):
     datos = _material(material)
-    destino = f"/cursos/{curso}/sesiones/{sesion}"
+    destino = _url_material(curso, sesion, material)
     try:
         datos["modulo"].aprobar(_carpeta(curso), sesion)
     except datos["modulo"].NoSePuedeAprobar as error:

@@ -183,10 +183,10 @@ def test_un_error_del_esquema_se_corrige_con_el_laboratorio_completo(sesion):  #
 # ---------- Página ----------
 
 def test_la_pagina_de_la_sesion_genera_y_aprueba_el_laboratorio(sesion, monkeypatch):  # noqa: F811
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
-    assert "3. Laboratorio y archivos de práctica" in pagina and "Generar laboratorio" in pagina
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/laboratorio").text
+    assert '<h1 id="t-laboratorio">Laboratorio y archivos de práctica</h1>' in pagina and "Generar laboratorio" in pagina
     generar(sesion, sembrados.limpio())
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/laboratorio").text
     assert "S1_Laboratorio.docx" in pagina and "S1_Laboratorio_Archivos.zip" in pagina
     r = cliente.get("/cursos/scrum/sesiones/1/descargar/S1_Laboratorio_Archivos.zip")
     assert r.status_code == 200 and r.content[:2] == b"PK"

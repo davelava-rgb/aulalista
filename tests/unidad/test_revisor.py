@@ -177,7 +177,7 @@ cliente = TestClient(servidor.app)
 
 def test_el_profesor_aprueba_la_lectura_desde_la_pagina(sesion):
     generar(sesion, LIMPIA)
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     for titulo in TITULOS:
         assert titulo in pagina
     assert entrega.PREGUNTA in pagina and "Aprobar la lectura" in pagina and "Pedir revisor independiente" in pagina
@@ -185,12 +185,12 @@ def test_el_profesor_aprueba_la_lectura_desde_la_pagina(sesion):
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura/aprobar", follow_redirects=False)
     assert r.status_code == 303
     assert lectura.estado(sesion, 1)["estado"] == "aprobada"
-    assert "Aprobada" in cliente.get("/cursos/scrum/sesiones/1").text
+    assert "Aprobada" in cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
 
 
 def test_con_pendientes_la_pagina_deja_aprobar(sesion):
     generar(sesion, LIMPIA, respuesta(error(RELLENO, "vacío")), cambios(), revisar=False)
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     assert "Lista, con pendientes de la revisión" in pagina and "Aprobar la lectura" in pagina
     cliente.post("/cursos/scrum/sesiones/1/materiales/lectura/aprobar")
     assert lectura.estado(sesion, 1)["estado"] == "aprobada"
@@ -204,7 +204,7 @@ def test_no_se_aprueba_una_lectura_desactualizada_ni_con_fallas(sesion):
     assert "Las fichas cambiaron" in r.text
     generar(sesion, con_error("Lee este bloque en 10 minutos."), *[cambios()] * lectura.VUELTAS_DEL_VERIFICADOR,
             revisar=False)
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     assert "Aprobar la lectura" not in pagina and "Decisiones pendientes" in pagina
     assert "Pedir revisor independiente" not in pagina
     cliente.post("/cursos/scrum/sesiones/1/materiales/lectura/aprobar")
@@ -244,7 +244,7 @@ def test_generar_de_nuevo_borra_la_entrega_y_la_aprobacion_anteriores(sesion):
         generar(sesion, revisar=False)      # la redacción falla: no hay respuesta
     material = lectura.estado(sesion, 1)
     assert material["estado"] == "error" and material["entrega"] == {} and material["aprobada"] == ""
-    assert "Aprobar la lectura" not in cliente.get("/cursos/scrum/sesiones/1").text
+    assert "Aprobar la lectura" not in cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
 
 # ---------- Lista de verificación por material (PLAN.md §0, decisión 11) ----------
 
