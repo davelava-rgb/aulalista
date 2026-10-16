@@ -8,6 +8,7 @@
   --marca: #1e0253;
   --marca-texto: #e9e9e9;
   color-scheme: light;
+  accent-color: var(--principal);
 }
 
 /* Modo oscuro: sigue a Windows, salvo que el profesor elija uno con el alternador (data-tema en <html>). */
@@ -73,17 +74,17 @@ a { color: var(--principal); }
 .ruta { font-size: 0.875rem; margin: 0 0 1rem; overflow-wrap: anywhere; }
 
 /* Cabecera de FuturaSoft: el morado de la marca solo vive aquí. */
-.marca { background: var(--marca); color: var(--marca-texto); }
-.marca-interior { max-width: 64rem; margin: 0 auto; padding: 0.75rem 1rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; }
-.marca .logo { display: inline-flex; }
-.marca .logo img { display: block; height: 44px; width: auto; }
-.marca .producto { padding-left: 1rem; border-left: 1px solid var(--marca-texto); font-size: 1.125rem; font-weight: bold; }
-.marca .logo:focus-visible, .marca button:focus-visible { outline: 3px solid var(--marca-texto); outline-offset: 2px; }
+.cabecera { background: var(--marca); color: var(--marca-texto); }
+.cabecera-interior { max-width: 64rem; margin: 0 auto; padding: 0.75rem 1rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; }
+.cabecera .logo { display: inline-flex; }
+.cabecera .logo img { display: block; height: 44px; width: auto; }
+.cabecera .producto { padding-left: 1rem; border-left: 1px solid var(--marca-texto); font-size: 1.125rem; font-weight: bold; }
+.cabecera .logo:focus-visible, .cabecera button:focus-visible { outline: 3px solid var(--marca-texto); outline-offset: 2px; }
 button.tema { margin-left: auto; min-height: 44px; padding: 0 0.75rem; font-size: 0.875rem;
   background: transparent; color: var(--marca-texto); border: 1px solid var(--marca-texto); }
 @media (max-width: 30rem) {
-  .marca .logo img { height: 36px; }
-  .marca .producto { font-size: 1rem; }
+  .cabecera .logo img { height: 36px; }
+  .cabecera .producto { font-size: 1rem; }
   button.tema { margin-left: 0; }
 }
 h1, h2, h3 { overflow-wrap: anywhere; }
@@ -122,8 +123,11 @@ input:focus-visible { outline: 3px solid var(--principal); outline-offset: 2px; 
 
 .lista { padding-left: 1.25rem; }
 
+::selection { background: var(--principal); color: var(--fondo); }
+
 table.datos {
   width: 100%;
+  font-variant-numeric: tabular-nums;
   margin: 1rem 0;
   font-size: 0.9375rem;
 }
@@ -243,7 +247,6 @@ input.numero { width: 8rem; }
 
 .material { margin-top: 1.5rem; padding: 0.5rem 1rem 1rem; border: 1px solid var(--principal); border-radius: 6px; }
 .avance { font-size: 0.875rem; }
-.material.posterior { border-style: dashed; }
 .material .cabeza { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 1rem; }
 .material .cabeza h2 { margin: 0.75rem 0; }
 .material h3 { margin-bottom: 0.25rem; }
@@ -261,7 +264,7 @@ strong.alerta, span.alerta { color: var(--error); }
 .indicador.bien { color: var(--bien); }
 .indicador.error { color: var(--error); }
 .indicador.espera, .indicador.trabajando { color: var(--texto); }
-.indicador.neutro, .indicador.posterior { color: var(--texto); font-weight: normal; opacity: 0.8; }
+.indicador.neutro { color: var(--texto); font-weight: normal; opacity: 0.8; }
 
 /* Franja con los materiales de la sesión y el siguiente paso. */
 .franja ol { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr)); gap: 0.5rem; margin: 1rem 0 0.5rem; padding: 0; list-style: none; }

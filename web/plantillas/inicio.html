@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% from "_estado.html" import usd %}
 
-{% block contenido %}
-<h1>AulaLista</h1>
+{% block navegacion %}{% endblock %}
 
-<h2>Cursos</h2>
+{% block contenido %}
+<h1>Cursos</h1>
 {% if cursos %}
 <ul class="lista">
   {% for c in cursos %}<li><a href="/cursos/{{ c.curso }}">{{ c.nombre }}</a> <span class="nota">· {{ usd(c.gasto.costo_usd) }} estimados</span></li>{% endfor %}

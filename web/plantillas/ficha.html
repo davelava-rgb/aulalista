@@ -112,7 +112,7 @@
 <h1>{{ titulo }}</h1>
 
 <p class="estado-ficha {{ 'confirmada' if ficha.confirmada else 'pendiente' }}">
-  {% if ficha.confirmada %}Confirmada.{% if desactualizados %} Los materiales {{ desactualizados | join(', ') }} quedaron desactualizados.{% endif %}
+  {% if ficha.confirmada %}Confirmada.{% if desactualizados %} Hay que generar de nuevo {{ desactualizados }}, porque las fichas cambiaron.{% endif %}
   {% else %}Sin confirmar. Queda confirmada al guardarla completa. Ningún material empieza sin las dos fichas confirmadas.{% endif %}
 </p>
 

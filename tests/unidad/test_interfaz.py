@@ -34,12 +34,12 @@ def test_la_ultima_corrida_suma_solo_las_llamadas_seguidas_del_final(entorno):
     assert tokens.ultima_corrida("scrum", "completar ficha") is None
 
 
-def test_la_franja_muestra_los_materiales_el_siguiente_paso_y_la_evaluacion_como_etapa_posterior(sesion):  # noqa: F811
+def test_la_franja_muestra_los_materiales_y_el_siguiente_paso_sin_la_evaluacion(sesion):  # noqa: F811
     pagina = cliente.get("/cursos/scrum/sesiones/1").text
     assert 'aria-label="Materiales de la sesión"' in pagina
-    for nombre in ("1. Lectura", "2. Diapositivas", "3. Laboratorio", "4. Evaluación y clave"):
+    for nombre in ("1. Lectura", "2. Diapositivas", "3. Laboratorio"):
         assert nombre in pagina
-    assert "Etapa posterior" in pagina
+    assert "Evaluación y clave" not in pagina and "Etapa posterior" not in pagina  # sin etapa 9 (decisión 37)
     assert "Siguiente paso:" in pagina and "Genera la lectura." in pagina
 
 

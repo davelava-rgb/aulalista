@@ -56,6 +56,7 @@ Términos usados en este plan:
 | 34 | Sin práctica interactiva. Se quita la etapa 8: AulaLista no genera la práctica web en HTML. Las fichas ya no piden sus estaciones y «Materiales de esta sesión» ofrece cinco materiales; «los seis» de una ficha anterior vale como todos. Es una excepción a la skill («Material 5») y al SPEC §3 (aprobado el 2026-10-13) |
 | 35 | Sin guía del profesor; la ejecución pasa al laboratorio. a) AulaLista no genera la guía del profesor («Material 4» de la skill) y la etapa 7b queda solo como ejecución. «Materiales de esta sesión» ofrece cuatro materiales; «los cinco» o «los seis» de una ficha anterior valen como todos. b) Después de la revisión del contenido, cada ejercicio se ejecuta como un alumno: un programa sigue los pasos tal cual («Copia la fórmula N en la celda X», «Copia la celda X hacia abajo, hasta la fila N», «Escribe **texto** en la celda X») y Excel calcula; cada prompt va en una conversación nueva con Claude (Sonnet, `ejecucion` en `config/modelos.toml`), sin herramientas, con el texto de los archivos adjuntos en el mensaje, más la respuesta exacta del alumno si la ficha la trae y los prompts de «Mejora el resultado». c) Una fórmula con un valor de error es una FALLA: una corrección completa y una nueva ejecución de ese ejercicio; si sigue, el laboratorio queda con fallas. d) Lo que salió se compara con la respuesta correcta de la ficha (Sonnet, `comparacion_ejecucion`). Cada diferencia trae un trozo copiado de la ficha y otro de lo que salió; un programa los busca y descarta la diferencia sin prueba. Las que quedan van a la entrega como pendientes y el profesor decide. e) El registro de la ejecución queda en `S[N]_Laboratorio_Ejecucion.md`. Los problemas sembrados van a «Qué decidí por mi cuenta» de la entrega. Es una excepción a la skill («Material 4») y al SPEC §3 (aprobado el 2026-10-13) |
 | 36 | La herramienta de los ejercicios sale del tema del curso. a) La ficha del curso trae «Herramienta de los ejercicios» en la sección 7: ninguna, Excel, IA o Excel e IA. Vacío vale «ninguna». La propone el agente por el tema del curso; los modelos y la referencia del laboratorio dan la estructura, no la herramienta. b) Los ejercicios practican el tema de la sesión. Un prompt solo va en un curso de IA y una fórmula solo en un curso de Excel. Con «ninguna», el alumno hace la acción a mano en su archivo de práctica y el ejercicio no trae recuadros, salvo una plantilla si completarla es el tema. Un programa da FALLA si un ejercicio trae un recuadro o nombra un prompt, una fórmula o un adjunto que el curso no usa. c) Sin IA no hay aviso de adjuntos, y la pregunta «Si la herramienta debe preguntar algo» no se muestra ni se usa. d) La ejecución de la decisión 35 sigue igual para prompts y fórmulas. Un ejercicio sin prompt ni fórmula lo hace Claude a mano como alumno: una conversación nueva, sin herramientas, con el texto de sus archivos, la situación y los pasos, sin la respuesta de la ficha. Lo que entrega se compara con la respuesta correcta de la ficha. e) Cambia la skill: «Ejercicios que se ejecutan», «Neutralidad» y el punto 5 de «Material 3» (los recuadros, solo si el ejercicio los necesita) (aprobado el 2026-10-15) |
+| 37 | Sin evaluación ni clave. Se quita la etapa 9: AulaLista no genera la evaluación práctica (PBQ) ni su clave. La interfaz ya no la muestra como etapa posterior. Las fichas no cambian todavía. Es una excepción a la skill («Material 6») y al SPEC §4 (aprobado el 2026-10-16) |
 
 ### Contradicciones encontradas
 
@@ -210,7 +211,7 @@ Respecto del SPEC §12, el orden cambia en dos puntos:
 | 7a | Laboratorio, archivos e imágenes | Recibe la guía, el .zip y las figuras sacadas de los archivos reales |
 | 7b | Ejecución de los ejercicios (sin guía del profesor, decisión 35) | La entrega del laboratorio dice qué coincide con la ficha y el registro muestra lo que salió al ejecutar cada ejercicio |
 | 8 | ~~Práctica interactiva~~ | Quitada (decisión 34) |
-| 9 | Evaluación y clave | Dos Word y un .zip aparte. Ningún otro material da una respuesta |
+| 9 | ~~Evaluación y clave~~ | Quitada (decisión 37) |
 
 Reglas de las fichas (etapa 4):
 
@@ -221,7 +222,7 @@ Reglas de las fichas (etapa 4):
 - Ningún material empieza sin la ficha de la sesión confirmada.
 - La propuesta desde las fuentes llena solo campos vacíos. Si dos archivos se contradicen, muestra las dos versiones. Hace como máximo cuatro preguntas por vez.
 
-Curso de prueba: un curso ficticio pequeño en `tests/fixtures/`, con su ficha y fuentes propias. La prueba final del SPEC §13, con una sesión real, la hace el profesor al terminar la etapa 9.
+Curso de prueba: un curso ficticio pequeño en `tests/fixtures/`, con su ficha y fuentes propias. La prueba final del SPEC §13, con una sesión real, la hace el profesor al terminar la etapa 7b (decisión 37).
 
 ## 5. Validación
 

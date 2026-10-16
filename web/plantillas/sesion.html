@@ -16,8 +16,7 @@
   <ol>
     {% for m in materiales %}
     <li class="{{ 'actual' if siguiente.ancla == m.clave }}">
-      {% if m.posterior %}<span class="nombre">{{ m.numero }}. {{ m.corto }}</span>
-      {% else %}<a class="nombre" href="#{{ m.clave }}">{{ m.numero }}. {{ m.corto }}</a>{% endif %}
+      <a class="nombre" href="#{{ m.clave }}">{{ m.numero }}. {{ m.corto }}</a>
       {{ indicador(m.situacion) }}
     </li>
     {% endfor %}
@@ -29,7 +28,7 @@
   {% else %}{{ siguiente.texto }}{% endif %}</p>
 </div>
 
-{% for m in materiales if not m.posterior %}
+{% for m in materiales %}
 {% set e = m.estado %}
 {% set base = "/cursos/" ~ curso ~ "/sesiones/" ~ sesion ~ "/materiales/" ~ m.clave %}
 <section class="material" id="{{ m.clave }}" data-estado="{{ e.estado or '' }}" data-avance="{{ (e.avance or []) | length }}" aria-labelledby="t-{{ m.clave }}">
@@ -142,16 +141,6 @@
   </form>
   {% endif %}
   {% endif %}
-</section>
-{% endfor %}
-
-{% for m in materiales if m.posterior %}
-<section class="material posterior" id="{{ m.clave }}" aria-labelledby="t-{{ m.clave }}">
-  <div class="cabeza">
-    <h2 id="t-{{ m.clave }}">{{ m.numero }}. {{ m.titulo }}</h2>
-    {{ indicador(m.situacion) }}
-  </div>
-  <p class="estado-material">{% if m.incluido %}AulaLista todavía no genera {{ m.el }}. Llegan en una etapa posterior del plan.{% else %}«Materiales de esta sesión» no la incluye.{% endif %}</p>
 </section>
 {% endfor %}
 

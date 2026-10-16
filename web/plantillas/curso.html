@@ -19,7 +19,7 @@
     <tbody>
       {% for s in sesiones %}
       {% set hechos = s.materiales | selectattr("situacion.clase", "equalto", "bien") | list | length %}
-      {% set van = s.materiales | selectattr("incluido") | rejectattr("posterior") | list | length %}
+      {% set van = s.materiales | selectattr("incluido") | list | length %}
       <tr>
         <td>{{ s.numero }}. {{ s.texto }}</td>
         <td data-etiqueta="Ficha de la sesión: "><a href="/cursos/{{ curso }}/sesiones/{{ s.numero }}/ficha">{% if s.confirmada %}Confirmada{% elif s.existe %}Sin confirmar{% else %}Llenar{% endif %}</a></td>

@@ -190,7 +190,8 @@ def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, m
     titulo = TITULOS_FICHA[tipo] + (f" {sesion}" if sesion else "")
     desactualizados = []
     if sesion is not None:
-        desactualizados = [n for n, m in almacen.cargar_estado(carpeta, sesion)["materiales"].items() if m.get("desactualizado")]
+        claves = [n for n, m in almacen.cargar_estado(carpeta, sesion)["materiales"].items() if m.get("desactualizado")]
+        desactualizados = _y([MATERIALES[n]["el"] if n in MATERIALES else n for n in claves])
         if errores is None:
             # Al volver a abrir la ficha, el motivo de que siga sin confirmar no se pierde.
             errores = flujo.problemas_de_ejercicios_guardados(ficha)
@@ -426,10 +427,12 @@ MATERIALES = {
                         "aprobado": "Laboratorio aprobado.", "generar": "Generar laboratorio"},
 }
 
-# Materiales de la sesión que llegan en una etapa posterior del PLAN.md (§4). La práctica interactiva y la guía
-# del profesor no se generan (PLAN.md §0, decisiones 34 y 35).
-POSTERIORES = {"evaluación": {"numero": 4, "titulo": "Evaluación y clave", "corto": "Evaluación y clave",
-                              "el": "la evaluación y su clave"}}
+# La práctica interactiva, la guía del profesor y la evaluación no se generan (PLAN.md §0, decisiones 34, 35 y 37).
+
+
+def _y(partes: list[str]) -> str:
+    """«la lectura», «las diapositivas» → «la lectura y las diapositivas»."""
+    return ", ".join(partes[:-1]) + " y " + partes[-1] if len(partes) > 1 else "".join(partes)
 
 
 def _forma(datos: dict, raiz: str) -> str:
@@ -503,14 +506,8 @@ def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False
             siguiente = {"texto": f"Completa lo que falta para generar {datos['el']}.", "ancla": clave, "corto": datos["corto"]}
         else:
             siguiente = {"texto": f"Genera {datos['el']}.", "ancla": clave, "corto": datos["corto"]}
-    for clave, datos in POSTERIORES.items():
-        incluido = clave in incluidos
-        materiales.append({**datos, "clave": clave, "posterior": True, "incluido": incluido, "estado": {},
-                           "situacion": {"clase": "posterior" if incluido else "neutro",
-                                         "texto": "Etapa posterior" if incluido else "No va en esta sesión"}})
     if siguiente is None:
-        siguiente = {"texto": "Los materiales que AulaLista ya genera están aprobados. "
-                              "La evaluación y su clave llegan en una etapa posterior.", "ancla": "", "corto": "Listo"}
+        siguiente = {"texto": "Los materiales de esta sesión están aprobados.", "ancla": "", "corto": "Listo"}
     return {"puede_empezar": puede_empezar, "materiales": materiales, "siguiente": siguiente}
 
 

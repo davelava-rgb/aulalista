@@ -95,7 +95,7 @@ La interfaz lleva la marca FuturaSoft (logo y paleta oficiales entregados el 202
 
 ## Colors
 
-Paleta sobria de tinta sobre papel, con un acento frío y dos colores que solo hablan de estado.
+Paleta sobria de tinta sobre papel, con el magenta de FuturaSoft como acento y dos colores que solo hablan de estado.
 
 ### Primary
 - **Magenta FuturaSoft** (`magenta`, #C537A0; de noche `magenta-noche`, #CD53AD): títulos h1 y h2, enlaces, botón principal, encabezado de las tablas de datos y borde de los recuadros de material. Es el único color que indica "se puede tocar". Contraste: 4.7:1 sobre papel; el de noche, 4.6:1 sobre papel-noche.
