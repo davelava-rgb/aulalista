@@ -32,6 +32,9 @@ def main() -> None:
     if not puerto_libre():
         print(AVISO_PUERTO_OCUPADO.format(puerto=PUERTO))
         sys.exit(1)
+    from app import config
+    from app.materiales import comun
+    comun.ordenar_cursos(config.CARPETA_CURSOS)     # cursos generados antes de la decisión 42
     threading.Timer(1.5, webbrowser.open, args=[url]).start()
     print(f"AulaLista está en {url}. Para cerrarla, pulsa Ctrl+C.")
     uvicorn.run("app.servidor:app", host=DIRECCION, port=PUERTO)

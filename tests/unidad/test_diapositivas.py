@@ -247,7 +247,9 @@ def test_genera_verifica_y_entrega(con_lectura):
     assert entrega["archivos"][0].startswith("S1_Diapositivas.pptx: las diapositivas, 16:9, 15 diapositivas")
     assert any("Medí con PowerPoint cada texto de las 15 diapositivas: ninguno se sale" in l for l in entrega["probe"])
     assert any("contra la lectura aprobada" in l for l in entrega["valide"])
-    assert rutas["entrega"].read_text(encoding="utf-8").endswith("¿Apruebas este material para pasar a la siguiente etapa?\n")
+    assert sorted(p.name for p in rutas["pptx"].parent.glob("S1_Diapositivas*")) == [    # decisión 42
+        "S1_Diapositivas.pptx", "S1_Diapositivas_Verificacion.xlsx"]
+    assert rutas["verificacion_json"].exists() and comun.TRABAJO in rutas["contenido"].parts
     assert material["lectura_fecha"] == lectura.estado(con_lectura, 1)["fecha"]
 
 

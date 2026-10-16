@@ -149,10 +149,8 @@ def test_la_entrega_tiene_los_puntos_del_spec_en_orden(sesion):
     assert secciones["valide"][-1].startswith("Costo de esta lectura: 2 llamadas, ")
     assert secciones["no_pude"] == ["Nada: la lectura no tiene ejercicios que ejecutar."]
     assert secciones["decidi"] == ["Usé una tienda como ejemplo."]
-    texto = lectura.archivos(sesion, 1)["entrega"].read_text(encoding="utf-8")
-    posiciones = [texto.index(f"## {t}") for t in TITULOS]
-    assert posiciones == sorted(posiciones)
-    assert texto.rstrip().endswith(entrega.PREGUNTA)
+    assert [s["titulo"] for s in material["entrega"]["secciones"]] == TITULOS
+    assert not list(lectura.carpeta_materiales(sesion, 1).glob("*_Entrega.md"))    # la página ya la muestra (decisión 42)
 
 
 def test_con_pendientes_la_entrega_los_lista(sesion):
@@ -181,7 +179,7 @@ def test_el_profesor_aprueba_la_lectura_desde_la_pagina(sesion):
     for titulo in TITULOS:
         assert titulo in pagina
     assert entrega.PREGUNTA in pagina and "Aprobar la lectura" in pagina and "Pedir revisor independiente" in pagina
-    assert cliente.get("/cursos/scrum/sesiones/1/descargar/S1_Lectura_Entrega.md").status_code == 200
+    assert cliente.get("/cursos/scrum/sesiones/1/descargar/S1_Lectura.docx").status_code == 200
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura/aprobar", follow_redirects=False)
     assert r.status_code == 303
     assert lectura.estado(sesion, 1)["estado"] == "aprobada"

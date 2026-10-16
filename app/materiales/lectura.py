@@ -59,13 +59,14 @@ def carpeta_materiales(carpeta_curso: Path, sesion: int) -> Path:
 
 def archivos(carpeta_curso: Path, sesion: int) -> dict[str, Path]:
     carpeta = carpeta_materiales(carpeta_curso, sesion)
+    trabajo = carpeta / comun.TRABAJO / "lectura"  # lo que usa AulaLista; en materiales/ queda solo lo del profesor
     return {
         "word": carpeta / f"S{sesion}_Lectura.docx",
         "excel": carpeta / f"S{sesion}_Lectura_Verificacion.xlsx",
-        "entrega": carpeta / f"S{sesion}_Lectura_Entrega.md",
-        "revision": carpeta / "lectura" / "revisor",
-        "contenido": carpeta / "lectura" / "contenido.json",
-        "explicaciones": carpeta / "lectura" / "explicaciones.json",
+        "verificacion_json": trabajo / "verificacion.json",
+        "revision": trabajo / "revisor",
+        "contenido": trabajo / "contenido.json",
+        "explicaciones": trabajo / "explicaciones.json",
     }
 
 
@@ -368,7 +369,8 @@ class _Trabajo:
                 configuracion = verificador.configuracion_del_material(self.carpeta_sesion, MATERIAL, limites=self.limites)
                 docx.generar_lectura(contenido, self.identidad, self.portada, self.rutas["word"])
                 self.resultado = verificador.ejecutar(configuracion, [self.rutas["word"]], self.rutas["excel"],
-                                                      self.explicaciones, self.contar_paginas)
+                                                      self.explicaciones, self.contar_paginas,
+                                                      salida_json=self.rutas["verificacion_json"])
                 if self.con_referencia:
                     self.contar_paginas(self.rutas["word"])   # sin límite, pero la entrega dice cuántas son
                 if _explicar_literales(self.resultado, self.explicaciones, self.corpus()):
@@ -434,8 +436,8 @@ def _limpiar(rutas: dict[str, Path]) -> None:
     """Borra lo que dejó la generación anterior, para que la carpeta muestre solo la lectura nueva (propuesta 6).
     Un archivo abierto en Word u OneDrive puede negar el borrado: se deja y la generación lo reescribe."""
     carpeta = rutas["contenido"].parent
-    for ruta in (rutas["word"], rutas["excel"], rutas["excel"].with_suffix(".json"), rutas["entrega"],
-                 rutas["contenido"], rutas["explicaciones"], carpeta / "pasada1.json"):
+    for ruta in (rutas["word"], rutas["excel"], rutas["verificacion_json"], rutas["contenido"],
+                 rutas["explicaciones"], carpeta / "pasada1.json"):
         try:
             ruta.unlink(missing_ok=True)
         except OSError:
@@ -499,7 +501,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
         referencia=[t.describir() for t in trabajo.tramos],
         exclusiones=trabajo.exclusiones,
         agrupacion=(final.agrupacion if final else ""),
-        archivos={"word": rutas["word"].name, "excel": rutas["excel"].name, "entrega": rutas["entrega"].name},
+        archivos={"word": rutas["word"].name, "excel": rutas["excel"].name},
         costo=tokens.total(curso, sesion=f"S{sesion}", material=CLAVE, desde_linea=inicio),
         fecha=datetime.now().isoformat(timespec="seconds"),
     )
@@ -515,10 +517,7 @@ _filas_de_revision, _filas_de_decisiones = comun.filas_de_revision, comun.filas_
 
 
 def _escribir_entrega(carpeta_curso: Path, sesion: int, material: dict) -> dict:
-    material = _actualizar(carpeta_curso, sesion, entrega=_entrega(material))
-    archivos(carpeta_curso, sesion)["entrega"].write_text(
-        entrega.a_markdown(material["entrega"], f"Entrega · {MATERIAL} · Sesión {sesion}"), encoding="utf-8")
-    return material
+    return _actualizar(carpeta_curso, sesion, entrega=_entrega(material))
 
 
 # ---------- Revisor independiente opcional (PLAN.md §0, decisión 22) ----------
@@ -532,7 +531,7 @@ async def revisar_con_revisor(carpeta_curso: Path, curso: str, sesion: int, cons
         raise NoSePuedeRevisar("El revisor independiente revisa una lectura generada y sin fallas del verificador.")
     rutas = archivos(carpeta_curso, sesion)
     contenido = Lectura.model_validate(_leer_json(rutas["contenido"]))
-    oraciones = _leer_json(rutas["excel"].with_suffix(".json"))["oraciones"]
+    oraciones = _leer_json(rutas["verificacion_json"])["oraciones"]
     inicio = tokens.lineas(curso)
     _actualizar(carpeta_curso, sesion, estado="trabajando", previo=previo)
     _avance(carpeta_curso, sesion, "Revisor independiente: una sesión nueva lee la lectura final, las fuentes y las fichas.")
@@ -578,7 +577,6 @@ def _entrega(material: dict) -> dict:
         f"{archivos_['word']}: la lectura" + (f", {paginas} páginas" if paginas else "")
         + f", con {material['bloques']} bloques.",
         f"{archivos_['excel']}: el archivo de verificación, con la hoja Hallazgos.",
-        f"{archivos_['entrega']}: esta entrega, en texto.",
     ]
     if not paginas:
         conte = "No se pudieron contar las páginas con Word."

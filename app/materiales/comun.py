@@ -6,6 +6,9 @@ para que todos sigan el mismo ciclo de validación (PLAN.md §0, decisión 22).
 """
 
 import json
+import os
+import shutil
+import stat
 from datetime import datetime
 from pathlib import Path
 
@@ -15,6 +18,53 @@ from app.validacion import pasada2, revision, verificador
 from app.validacion.pasajes import FICHA_DE_LA_SESION, FICHA_DEL_CURSO, Corpus
 
 FICHAS = (FICHA_DEL_CURSO, FICHA_DE_LA_SESION)
+
+# Subcarpeta de materiales/ con lo que usa AulaLista y no el profesor: contenido, explicaciones, imágenes, el JSON
+# del verificador, el programa del diseñador (decisión 42). En materiales/ quedan solo los archivos para el profesor.
+TRABAJO = "_trabajo"
+MATERIALES = {"Lectura": "lectura", "Diapositivas": "diapositivas", "Laboratorio": "laboratorio"}
+
+
+def ordenar_materiales(carpeta: Path) -> None:
+    """Lleva una carpeta materiales/ de la forma anterior a la de la decisión 42: mueve los archivos de trabajo a
+    _trabajo/ y borra las entregas en Markdown, que la página ya muestra. Un archivo abierto que no se deja mover
+    queda donde está."""
+    trabajo = carpeta / TRABAJO
+    mudanzas = [(carpeta / clave, trabajo / clave) for clave in MATERIALES.values()]
+    mudanzas.append((carpeta / "practica", trabajo / "laboratorio" / "practica"))
+    for origen, destino in mudanzas:
+        if not origen.is_dir():
+            continue
+        destino.mkdir(parents=True, exist_ok=True)
+        for hijo in list(origen.iterdir()):
+            if not (destino / hijo.name).exists():
+                try:
+                    shutil.move(str(hijo), str(destino / hijo.name))
+                except OSError:
+                    pass
+        try:
+            os.chmod(origen, stat.S_IWRITE)     # OneDrive marca las carpetas como de solo lectura
+            origen.rmdir()
+        except OSError:
+            pass
+    for ruta in carpeta.glob("S*_*_Verificacion.json"):
+        clave = MATERIALES.get(ruta.stem.split("_")[1])
+        if clave and not (trabajo / clave / "verificacion.json").exists():
+            (trabajo / clave).mkdir(parents=True, exist_ok=True)
+            try:
+                shutil.move(str(ruta), str(trabajo / clave / "verificacion.json"))
+            except OSError:
+                pass
+    for ruta in carpeta.glob("S*_*_Entrega.md"):
+        try:
+            ruta.unlink()
+        except OSError:
+            pass
+
+
+def ordenar_cursos(carpeta_cursos: Path) -> None:
+    for carpeta in carpeta_cursos.glob("*/sesiones/*/materiales"):
+        ordenar_materiales(carpeta)
 VUELTAS_DEL_VERIFICADOR = 3   # correcciones de fallas mecánicas antes de dejarlas abiertas (PLAN.md §0, decisión 22)
 
 # Avisos que se muestran en la hoja Hallazgos pero no obligan a corregir ni a explicar (PLAN.md §0, decisión 13).

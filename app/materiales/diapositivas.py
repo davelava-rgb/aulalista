@@ -64,14 +64,15 @@ class NoSePuedeAprobar(RuntimeError):
 
 def archivos(carpeta_curso: Path, sesion: int) -> dict[str, Path]:
     carpeta = lectura.carpeta_materiales(carpeta_curso, sesion)
+    trabajo = carpeta / comun.TRABAJO / CLAVE      # lo que usa AulaLista; en materiales/ queda solo lo del profesor
     return {
         "pptx": carpeta / f"S{sesion}_Diapositivas.pptx",
         "excel": carpeta / f"S{sesion}_Diapositivas_Verificacion.xlsx",
-        "entrega": carpeta / f"S{sesion}_Diapositivas_Entrega.md",
-        "imagenes": carpeta / CLAVE / "imagenes",
-        "revision": carpeta / CLAVE / "revisor",
-        "contenido": carpeta / CLAVE / "contenido.json",
-        "explicaciones": carpeta / CLAVE / "explicaciones.json",
+        "verificacion_json": trabajo / "verificacion.json",
+        "imagenes": trabajo / "imagenes",
+        "revision": trabajo / "revisor",
+        "contenido": trabajo / "contenido.json",
+        "explicaciones": trabajo / "explicaciones.json",
     }
 
 
@@ -677,7 +678,8 @@ class _Trabajo:
             configuracion = verificador.configuracion_del_material(self.carpeta_sesion, MATERIAL)
             self.resultado = verificador.ejecutar(
                 configuracion, [self.rutas["pptx"]], self.rutas["excel"], self.explicaciones,
-                hallazgos_extra=desbordes_como_hallazgos(self.medicion, self.contenido, self.rutas["pptx"].name))
+                hallazgos_extra=desbordes_como_hallazgos(self.medicion, self.contenido, self.rutas["pptx"].name),
+                salida_json=self.rutas["verificacion_json"])
             if explicar and comun.explicar_literales(self.resultado, self.explicaciones, self.corpus()):
                 comun.guardar_json(self.rutas["explicaciones"], self.explicaciones)
                 verificador.anotar_explicaciones(self.rutas["excel"], self.explicaciones)
@@ -951,8 +953,8 @@ def bloques_de(contenido: Diapositivas) -> list[pasada2.Bloque]:
 def _limpiar(rutas: dict[str, Path]) -> None:
     """Borra lo que dejó la generación anterior. Un archivo abierto en PowerPoint puede negar el borrado:
     se deja y la generación lo reescribe."""
-    for ruta in (rutas["pptx"], rutas["excel"], rutas["excel"].with_suffix(".json"), rutas["entrega"],
-                 rutas["contenido"], rutas["explicaciones"]):
+    for ruta in (rutas["pptx"], rutas["excel"], rutas["verificacion_json"], rutas["contenido"],
+                 rutas["explicaciones"]):
         try:
             ruta.unlink(missing_ok=True)
         except OSError:
@@ -1077,7 +1079,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, medir, disenar
         reanudada=guardado["fecha"] if guardado is not None else "",
         revision_visual=trabajo.revision_visual,
         diseno=trabajo.diseno,
-        archivos={"pptx": rutas["pptx"].name, "excel": rutas["excel"].name, "entrega": rutas["entrega"].name},
+        archivos={"pptx": rutas["pptx"].name, "excel": rutas["excel"].name},
         carpeta_imagenes=str(rutas["imagenes"].relative_to(carpeta_curso)),
         costo=tokens.total(curso, sesion=f"S{sesion}", material=CLAVE, desde_linea=inicio),
         fecha=datetime.now().isoformat(timespec="seconds"),
@@ -1101,7 +1103,7 @@ async def revisar_con_revisor(carpeta_curso: Path, curso: str, sesion: int, cons
         raise NoSePuedeRevisar("El revisor independiente revisa unas diapositivas generadas y sin fallas.")
     rutas = archivos(carpeta_curso, sesion)
     contenido = Diapositivas.model_validate(comun.leer_json(rutas["contenido"]))
-    oraciones = comun.leer_json(rutas["excel"].with_suffix(".json"))["oraciones"]
+    oraciones = comun.leer_json(rutas["verificacion_json"])["oraciones"]
     inicio = tokens.lineas(curso)
     _actualizar(carpeta_curso, sesion, estado="trabajando", previo=previo)
     _avance(carpeta_curso, sesion, "Revisor independiente: una sesión nueva lee las diapositivas, las fuentes y las fichas.")
@@ -1138,10 +1140,7 @@ async def revisar_con_revisor(carpeta_curso: Path, curso: str, sesion: int, cons
 # ---------- Entrega (SPEC §8 y SKILL.md «Formato de cada entrega») ----------
 
 def _escribir_entrega(carpeta_curso: Path, sesion: int, material: dict) -> dict:
-    material = _actualizar(carpeta_curso, sesion, entrega=_entrega(material))
-    archivos(carpeta_curso, sesion)["entrega"].write_text(
-        entrega.a_markdown(material["entrega"], f"Entrega · {MATERIAL} · Sesión {sesion}"), encoding="utf-8")
-    return material
+    return _actualizar(carpeta_curso, sesion, entrega=_entrega(material))
 
 
 def _entrega(material: dict) -> dict:
@@ -1151,7 +1150,6 @@ def _entrega(material: dict) -> dict:
         f"{archivos_['pptx']}: las diapositivas, 16:9" + (f", {total} diapositivas" if total else "")
         + ", con notas del profesor en cada una.",
         f"{archivos_['excel']}: el archivo de verificación, con la hoja Hallazgos.",
-        f"{archivos_['entrega']}: esta entrega, en texto.",
     ]
     probe = []
     if material.get("medidas"):

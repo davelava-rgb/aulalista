@@ -36,7 +36,7 @@ MATERIAL = "Laboratorio"
 CLAVE = "laboratorio"
 VUELTAS_DEL_VERIFICADOR = comun.VUELTAS_DEL_VERIFICADOR
 SECCIONES_DE_LA_SKILL = ("Reglas comunes", "Paso 3 · Vocabulario de la sesión", "Material 3 · Laboratorio y archivos de práctica")
-CARPETA_PRACTICA = "materiales/practica"            # relativa a la carpeta de la sesión, para el verificador
+CARPETA_PRACTICA = "materiales/_trabajo/laboratorio/practica"            # relativa a la carpeta de la sesión, para el verificador
 # Lo que se corrige por oraciones no toca nombres, números, lugares de las marcas ni los datos de los Excel:
 # una celda borrada descuadraría la hoja. Esos problemas van a una corrección completa.
 CAMPOS_QUE_NO_SE_CORRIGEN = comun.CAMPOS_QUE_NO_SE_CORRIGEN | {
@@ -59,19 +59,20 @@ class NoSePuedeAprobar(RuntimeError):
 
 def archivos(carpeta_curso: Path, sesion: int) -> dict[str, Path]:
     carpeta = lectura.carpeta_materiales(carpeta_curso, sesion)
+    trabajo = carpeta / comun.TRABAJO / CLAVE      # lo que usa AulaLista; en materiales/ queda solo lo del profesor
     return {
         "word": carpeta / f"S{sesion}_Laboratorio.docx",
         "zip": carpeta / f"S{sesion}_Laboratorio_Archivos.zip",
         "excel": carpeta / f"S{sesion}_Laboratorio_Verificacion.xlsx",
-        "entrega": carpeta / f"S{sesion}_Laboratorio_Entrega.md",
-        "practica": carpeta / "practica",
-        "figuras": carpeta / CLAVE / "figuras",
-        "revision": carpeta / CLAVE / "revisor",
-        "contenido": carpeta / CLAVE / "contenido.json",
-        "ejecucion": carpeta / CLAVE / "ejecucion",
-        "ejecucion_json": carpeta / CLAVE / "ejecucion.json",
+        "verificacion_json": trabajo / "verificacion.json",
+        "practica": trabajo / "practica",
+        "figuras": trabajo / "figuras",
+        "revision": trabajo / "revisor",
+        "contenido": trabajo / "contenido.json",
+        "ejecucion": trabajo / "ejecucion",
+        "ejecucion_json": trabajo / "ejecucion.json",
         "registro": carpeta / f"S{sesion}_Laboratorio_Ejecucion.md",
-        "explicaciones": carpeta / CLAVE / "explicaciones.json",
+        "explicaciones": trabajo / "explicaciones.json",
     }
 
 
@@ -567,7 +568,8 @@ class _Trabajo:
                         self.carpeta_sesion, MATERIAL, carpeta_practica=CARPETA_PRACTICA)
                     practica_ = sorted(self.rutas["practica"].iterdir())
                     self.resultado = verificador.ejecutar(configuracion, [self.rutas["word"], *practica_, self.rutas["zip"]],
-                                                          self.rutas["excel"], self.explicaciones, self.contar_paginas)
+                                                          self.rutas["excel"], self.explicaciones, self.contar_paginas,
+                                                          salida_json=self.rutas["verificacion_json"])
                     if comun.explicar_literales(self.resultado, self.explicaciones, self.corpus()):
                         comun.guardar_json(self.rutas["explicaciones"], self.explicaciones)
                         verificador.anotar_explicaciones(self.rutas["excel"], self.explicaciones)
@@ -637,15 +639,12 @@ class _Trabajo:
 
 
 def _limpiar(rutas: dict[str, Path]) -> None:
-    for clave in ("word", "zip", "excel", "entrega", "contenido", "explicaciones", "registro", "ejecucion_json"):
+    for clave in ("word", "zip", "excel", "verificacion_json", "contenido", "explicaciones", "registro",
+                  "ejecucion_json"):
         try:
             rutas[clave].unlink(missing_ok=True)
         except OSError:
             pass
-    try:
-        rutas["excel"].with_suffix(".json").unlink(missing_ok=True)
-    except OSError:
-        pass
     for clave in ("practica", "figuras", "revision", "ejecucion"):
         shutil.rmtree(rutas[clave], ignore_errors=True)
 
@@ -734,7 +733,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, co
         ejecucion=_resumen_de_ejecucion(ejecuciones),
         decisiones=[d.model_dump() for d in decisiones],
         archivos={"word": rutas["word"].name, "zip": rutas["zip"].name, "excel": rutas["excel"].name,
-                  "entrega": rutas["entrega"].name, **({"registro": rutas["registro"].name} if ejecuciones else {})},
+                  **({"registro": rutas["registro"].name} if ejecuciones else {})},
         costo=tokens.total(curso, sesion=f"S{sesion}", material=CLAVE, desde_linea=inicio),
         fecha=datetime.now().isoformat(timespec="seconds"),
     )
@@ -759,10 +758,7 @@ def _resumen_de_ejecucion(ejecuciones: list[ejecucion.Ejecucion]) -> dict:
 
 
 def _escribir_entrega(carpeta_curso: Path, sesion: int, material: dict) -> dict:
-    material = _actualizar(carpeta_curso, sesion, entrega=_entrega(material))
-    archivos(carpeta_curso, sesion)["entrega"].write_text(
-        entrega.a_markdown(material["entrega"], f"Entrega · {MATERIAL} · Sesión {sesion}"), encoding="utf-8")
-    return material
+    return _actualizar(carpeta_curso, sesion, entrega=_entrega(material))
 
 
 def _entrega(material: dict) -> dict:
@@ -775,7 +771,6 @@ def _entrega(material: dict) -> dict:
         f"{archivos_['zip']}: los {comun.cuantos(len(practica_), 'archivo')} de práctica: "
         + ", ".join(a["nombre"] for a in practica_) + ".",
         f"{archivos_['excel']}: el archivo de verificación, con la hoja Hallazgos.",
-        f"{archivos_['entrega']}: esta entrega, en texto.",
         *([f"{archivos_['registro']}: el registro de la ejecución de cada ejercicio: lo que se copió, lo que respondió "
            "la herramienta y lo que calculó Excel."] if archivos_.get("registro") else []),
     ]
@@ -852,7 +847,7 @@ async def revisar_con_revisor(carpeta_curso: Path, curso: str, sesion: int, cons
         raise NoSePuedeRevisar("El revisor independiente revisa un laboratorio generado y sin fallas del verificador.")
     rutas = archivos(carpeta_curso, sesion)
     contenido = Laboratorio.model_validate(comun.leer_json(rutas["contenido"]))
-    oraciones = comun.leer_json(rutas["excel"].with_suffix(".json"))["oraciones"]
+    oraciones = comun.leer_json(rutas["verificacion_json"])["oraciones"]
     inicio = tokens.lineas(curso)
     _actualizar(carpeta_curso, sesion, estado="trabajando", previo=previo)
     _avance(carpeta_curso, sesion, "Revisor independiente: una sesión nueva lee la guía, los archivos, las fuentes y las fichas.")

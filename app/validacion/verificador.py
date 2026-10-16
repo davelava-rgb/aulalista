@@ -54,7 +54,7 @@ def configuracion_del_material(carpeta_sesion: Path, material: str, carpeta_prac
 
 
 def ejecutar(configuracion: Path, archivos: list[Path], salida_excel: Path, explicaciones: dict | None = None,
-             contar_paginas=None, hallazgos_extra: list | None = None):
+             contar_paginas=None, hallazgos_extra: list | None = None, salida_json: Path | None = None):
     """Corre el verificador, escribe el Excel y su copia en JSON, y anota en «Cómo se resolvió»
     la explicación de cada aviso que se mantuvo. `hallazgos_extra` agrega lo que mide AulaLista con Office
     y el programa no puede medir solo (por ejemplo, un texto que se sale de su recuadro en PowerPoint)."""
@@ -62,7 +62,9 @@ def ejecutar(configuracion: Path, archivos: list[Path], salida_excel: Path, expl
     resultado = verificar.verificar(configuracion, archivos, **opciones)
     resultado.hallazgos += hallazgos_extra or []
     verificar.escribir_excel(resultado, salida_excel)
-    verificar.escribir_json(resultado, salida_excel.with_suffix(".json"))
+    salida_json = salida_json or salida_excel.with_suffix(".json")
+    salida_json.parent.mkdir(parents=True, exist_ok=True)
+    verificar.escribir_json(resultado, salida_json)
     if explicaciones:
         anotar_explicaciones(salida_excel, explicaciones)
     return resultado
