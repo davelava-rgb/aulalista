@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "_estado.html" import indicador, usd %}
+{# Páginas de un curso: el panel del curso a la izquierda y la hoja de trabajo a la derecha (PLAN.md §0, decisión 38). #}
+
+{% macro elemento(texto, url, situacion, clave, extra="") %}
+<li><a class="panel-item{{ ' ' ~ extra if extra }}" href="{{ url }}"{% if panel.actual == clave %} aria-current="page"{% endif %}>
+  <span class="panel-nombre">{{ texto }}</span>{{ indicador(situacion) if situacion }}</a></li>
+{% endmacro %}
+
+{% block cuerpo %}
+<div class="entorno">
+  <nav class="panel" id="panel" aria-label="Curso">
+    <div class="panel-curso">
+      <a href="/" class="panel-todos">Todos los cursos</a>
+      <a href="/cursos/{{ curso }}" class="panel-titulo"{% if panel.actual == "curso" %} aria-current="page"{% endif %}>{{ nombre }}</a>
+    </div>
+
+    <section class="panel-grupo panel-preparacion" aria-labelledby="panel-preparacion">
+      <h2 id="panel-preparacion">Preparación del curso</h2>
+      <ul>
+        {{ elemento("Fuentes", "/cursos/" ~ curso ~ "#fuentes", panel.fuentes, "fuentes") }}
+        {{ elemento("Ficha del curso", "/cursos/" ~ curso ~ "/ficha", panel.ficha_curso, "ficha-curso") }}
+      </ul>
+    </section>
+
+    <section class="panel-grupo" aria-labelledby="panel-sesiones">
+      <h2 id="panel-sesiones">Sesiones</h2>
+      {% if panel.sesiones %}
+      {% for s in panel.sesiones %}
+      <details class="panel-sesion{{ ' abierta' if s.abierta }}" {% if s.abierta %}open{% endif %}>
+        <summary><span class="panel-nombre">{{ s.numero }}. {{ s.texto }}</span>
+          <span class="panel-avance">{{ s.hechos }} de {{ s.van }} {{ "aprobado" if s.van == 1 else "aprobados" }}</span></summary>
+        <ul>
+          {{ elemento("Ficha de la sesión", "/cursos/" ~ curso ~ "/sesiones/" ~ s.numero ~ "/ficha", s.ficha, "ficha-" ~ s.numero) }}
+          {% for m in s.materiales %}
+          <li><a class="panel-item panel-material" href="/cursos/{{ curso }}/sesiones/{{ s.numero }}#{{ m.clave }}"{% if panel.actual == "sesion-" ~ s.numero %} aria-current="location"{% endif %}>
+            <span class="panel-nombre">{{ m.corto }}{% if m.sigue %} <span class="panel-sigue">Sigue</span>{% endif %}</span>
+            {{ indicador(m.situacion) }}</a></li>
+          {% endfor %}
+        </ul>
+      </details>
+      {% endfor %}
+      {% else %}
+      <p class="panel-vacio">Las sesiones aparecen al confirmar la ficha del curso.</p>
+      {% endif %}
+    </section>
+
+    <p class="panel-gasto">Gasto del curso <b>{{ usd(panel.gasto.costo_usd) }}</b>
+      {{ panel.gasto.llamadas }} {{ "llamada" if panel.gasto.llamadas == 1 else "llamadas" }} a Claude. Es una estimación, no la factura.</p>
+  </nav>
+  <main class="hoja">{{ self.principal() }}</main>
+</div>
+{% endblock %}

@@ -113,6 +113,7 @@ def ver_curso(request: Request, curso: str, mensaje: str = ""):
             "costo_convertir": tokens.ultima_corrida(curso, "lectura_imagen"),
             "gasto": tokens.total(curso),
             "mensaje": mensaje,
+            "panel": _panel(carpeta, curso, "curso"),
         },
     )
 
@@ -163,6 +164,7 @@ def ver_fuente(request: Request, curso: str, archivo: str):
             "archivo": archivo,
             "entrada": entrada,
             "pasajes": convertir.leer_pasajes(carpeta, archivo),
+            "panel": _panel(carpeta, curso, "fuentes"),
         },
     )
 
@@ -228,6 +230,7 @@ def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, m
         "errores": errores or [], "mensaje": mensaje, "corregibles": corregibles,
         "versiones": almacen.listar_versiones(carpeta, tipo, sesion),
         "url_restaurar": _url_ficha(curso, sesion) + "/restaurar",
+        "panel": _panel(carpeta, curso, "ficha-curso" if sesion is None else f"ficha-{sesion}"),
         "desactualizados": desactualizados,
         "completar": {d["seccion"]: {"clave": c, **d} for c, d in flujo.COMPLETAR.items()} if tipo == "curso" else {},
     })
@@ -526,6 +529,55 @@ def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False
     return {"puede_empezar": puede_empezar, "materiales": materiales, "siguiente": siguiente}
 
 
+def _estado_de_ficha(confirmada: bool, existe: bool) -> dict:
+    if confirmada:
+        return {"clase": "bien", "texto": "Confirmada"}
+    return {"clase": "espera", "texto": "Sin confirmar"} if existe else {"clase": "neutro", "texto": "Sin llenar"}
+
+
+def _estado_de_fuentes(carpeta) -> dict:
+    """Una línea para todas las fuentes: cuántas están listas o qué falta hacer con ellas."""
+    indice = convertir.leer_indice(carpeta)
+    archivos = [r.name for r in (carpeta / "fuentes").glob("*") if r.is_file()]
+    if not archivos:
+        return {"clase": "neutro", "texto": "Sin subir"}
+    sin_convertir = sum(1 for a in archivos if indice.get(a, {}).get("estado") != convertir.CONVERTIDA)
+    if sin_convertir:
+        return {"clase": "espera", "texto": f"{sin_convertir} sin convertir"}
+    if any(indice[a].get("revisar") and not indice[a].get("revisada") for a in archivos):
+        return {"clase": "espera", "texto": "Por revisar"}
+    return {"clase": "bien", "texto": "1 lista" if len(archivos) == 1 else f"{len(archivos)} listas"}
+
+
+def _panel(carpeta, curso: str, actual: str) -> dict:
+    """El panel del curso que va a la izquierda de cada página del curso (PLAN.md §0, decisión 38).
+    `actual` dice qué página se ve: «curso», «fuentes», «ficha-curso», «sesion-N» o «ficha-N»."""
+    ficha_curso = almacen.cargar(carpeta, "curso")
+    sesiones = []
+    if ficha_curso["confirmada"]:
+        for s in almacen.sesiones_del_curso(ficha_curso):
+            n = s["numero"]
+            vista = _vista_de_materiales(carpeta, curso, n)
+            incluidos = [m for m in vista["materiales"] if m["incluido"]]
+            sesiones.append({
+                "numero": n, "texto": s["texto"],
+                "abierta": actual in (f"sesion-{n}", f"ficha-{n}"),
+                "ficha": _estado_de_ficha(almacen.cargar(carpeta, "sesion", n)["confirmada"],
+                                          almacen.ruta_ficha(carpeta, "sesion", n).exists()),
+                "materiales": [{"clave": m["clave"], "corto": m["corto"], "situacion": m["situacion"],
+                                "sigue": m["clave"] == vista["siguiente"]["ancla"]} for m in incluidos],
+                "hechos": sum(1 for m in incluidos if m["situacion"]["clase"] == "bien"),
+                "van": len(incluidos),
+            })
+    return {
+        "actual": actual,
+        "fuentes": _estado_de_fuentes(carpeta),
+        "ficha_curso": _estado_de_ficha(ficha_curso["confirmada"], almacen.ruta_ficha(carpeta, "curso").exists()),
+        "sesiones": sesiones,
+        "gasto": tokens.total(curso),
+    }
+
+
 def _material(material: str) -> dict:
     if material not in MATERIALES:
         raise HTTPException(404, "Ese material no existe.")
@@ -541,6 +593,7 @@ def ver_sesion(request: Request, curso: str, sesion: int, mensaje: str = ""):
         "curso": curso, "nombre": cursos.nombre(curso), "sesion": sesion, "mensaje": mensaje,
         **vista, "gasto": tokens.total(curso),
         "costo_revisor": tokens.ultima_corrida(curso, "revisor independiente"),
+        "panel": _panel(carpeta, curso, f"sesion-{sesion}"),
     })
 
 

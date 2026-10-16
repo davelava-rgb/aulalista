@@ -151,3 +151,48 @@ def test_la_cabecera_lleva_el_logo_de_futurasoft(entorno):
     assert cliente.get("/estaticos/marca/futurasoft-logo.png").status_code == 200
     css = (servidor.RAIZ / "web" / "estaticos" / "estilo.css").read_text(encoding="utf-8")
     assert "--principal: #c537a0;" in css and "--marca: #1e0253;" in css
+
+
+# ---------- Panel del curso (PLAN.md §0, decisión 38) ----------
+
+def test_el_panel_aparece_en_todas_las_paginas_del_curso_y_no_en_el_inicio(sesion):  # noqa: F811
+    fuente = next(iter(servidor.convertir.leer_indice(sesion)))
+    for url in ("/cursos/scrum", "/cursos/scrum/ficha", "/cursos/scrum/sesiones/1/ficha", "/cursos/scrum/sesiones/1",
+                f"/cursos/scrum/fuentes/{fuente}"):
+        pagina = cliente.get(url).text
+        assert '<nav class="panel" id="panel" aria-label="Curso">' in pagina, url
+        assert '<main class="hoja">' in pagina, url
+    assert 'id="panel"' not in cliente.get("/").text
+
+
+def test_el_panel_marca_la_pagina_actual_y_abre_su_sesion(sesion):  # noqa: F811
+    pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
+    assert 'href="/cursos/scrum/sesiones/1/ficha" aria-current="page"' in pagina
+    assert '<details class="panel-sesion abierta" open>' in pagina
+    pagina = cliente.get("/cursos/scrum/ficha").text
+    assert 'href="/cursos/scrum/ficha" aria-current="page"' in pagina
+    assert '<details class="panel-sesion" >' in pagina   # la sesión que no se ve queda plegada
+
+
+def test_el_panel_muestra_el_estado_con_palabra_el_siguiente_paso_y_el_gasto(sesion):  # noqa: F811
+    _poner(sesion, "lectura", estado="con fallas")
+    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    panel = pagina.split('id="panel"')[1].split("</nav>")[0]
+    assert 'Lectura <span class="panel-sigue">Sigue</span>' in panel
+    assert '<span class="indicador error"><svg' in panel and "Con fallas</span>" in panel
+    assert "0 de 3 aprobados" in panel
+    assert "Gasto del curso <b>" in panel and "Es una estimación, no la factura." in panel
+
+
+def test_el_estado_de_las_fuentes_dice_lo_que_falta(sesion, tmp_path):  # noqa: F811
+    assert servidor._estado_de_fuentes(sesion)["clase"] == "bien"
+    vacia = tmp_path / "vacio"
+    (vacia / "fuentes").mkdir(parents=True)
+    assert servidor._estado_de_fuentes(vacia) == {"clase": "neutro", "texto": "Sin subir"}
+    (vacia / "fuentes" / "guia.pdf").write_bytes(b"%PDF")
+    assert servidor._estado_de_fuentes(vacia) == {"clase": "espera", "texto": "1 sin convertir"}
+
+
+def test_el_borde_del_panel_tiene_version_de_noche(entorno):
+    css = (servidor.RAIZ / "web" / "estaticos" / "estilo.css").read_text(encoding="utf-8")
+    assert css.count("--borde: #") == 3   # claro, oscuro según Windows y oscuro elegido

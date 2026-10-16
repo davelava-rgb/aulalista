@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "_entorno.html" %}
 {% from "_estado.html" import indicador, costo, usd %}
 
 {% block titulo %}Sesión {{ sesion }} · AulaLista{% endblock %}
@@ -176,6 +176,8 @@
       });
       const franja = document.getElementById("franja"), franjaNueva = nueva.getElementById("franja");
       if (franja && franjaNueva && !franja.contains(document.activeElement)) franja.replaceWith(franjaNueva);
+      const panel = document.getElementById("panel"), panelNuevo = nueva.getElementById("panel");
+      if (panel && panelNuevo && !panel.contains(document.activeElement)) panel.replaceWith(panelNuevo);
       if (trabajando()) setTimeout(actualizar, 5000);
     }
     setTimeout(actualizar, 5000);

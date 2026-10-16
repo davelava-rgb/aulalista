@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "_entorno.html" %}
 {% from "_estado.html" import indicador, costo, usd %}
 
 {% block titulo %}{{ nombre }} · AulaLista{% endblock %}
@@ -43,7 +43,7 @@
 <p class="nota">Las fichas de las sesiones se llenan después de confirmar la ficha del curso.</p>
 {% endif %}
 
-<h2>Fuentes del curso</h2>
+<h2 id="fuentes">Fuentes del curso</h2>
 <p>Sube sílabos, guías, libros, manuales, normas, programas y materiales anteriores. Formatos: PDF, Word, PowerPoint (.pptx), Excel (.xlsx) e imágenes.</p>
 
 <form method="post" action="/cursos/{{ curso }}/fuentes" enctype="multipart/form-data" class="fila">

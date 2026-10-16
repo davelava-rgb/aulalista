@@ -3,6 +3,7 @@
   --texto: #1f2933;
   --principal: #c537a0;
   --suave: #f2f4f5;
+  --borde: #d5dade;
   --bien: #1e6b3a;
   --error: #a3261f;
   --marca: #1e0253;
@@ -18,6 +19,7 @@
     --texto: #e4e7ea;
     --principal: #cd53ad;
     --suave: #1f2529;
+    --borde: #333b41;
     --bien: #7fd19b;
     --error: #f08c84;
     color-scheme: dark;
@@ -29,6 +31,7 @@
   --texto: #e4e7ea;
   --principal: #cd53ad;
   --suave: #1f2529;
+  --borde: #333b41;
   --bien: #7fd19b;
   --error: #f08c84;
   color-scheme: dark;
@@ -300,4 +303,52 @@ html { scroll-padding-bottom: 6rem; }
 @media (max-width: 40rem) {
   .acciones { position: static; }
   html { scroll-padding-bottom: 0; }
+}
+
+/* Entorno del curso: panel a la izquierda y hoja de trabajo a la derecha (PLAN.md §0, decisión 38). */
+.entorno { display: grid; grid-template-columns: 18.5rem minmax(0, 1fr); align-items: start; }
+main.hoja { max-width: 50rem; margin: 0; padding: 2rem 2.5rem 4rem; }
+.panel { position: sticky; top: 0; max-height: 100vh; overflow-y: auto; min-height: calc(100vh - 4.5rem); padding: 1.25rem 0 1rem; background: var(--suave); border-right: 1px solid var(--borde); }
+.panel ul { list-style: none; margin: 0; padding: 0; }
+.panel-curso { padding: 0 1.25rem 1rem; }
+.panel-todos { font-size: 0.8125rem; text-decoration: none; }
+.panel-titulo { display: block; margin-top: 0.25rem; color: var(--texto); font-size: 1.125rem; font-weight: bold; line-height: 1.3;
+  text-decoration: none; overflow-wrap: anywhere; }
+.panel-titulo[aria-current] { color: var(--principal); }
+.panel-grupo { padding: 0.75rem 0 0.25rem; border-top: 1px solid var(--borde); }
+.panel-grupo > h2 { margin: 0 1.25rem 0.25rem; color: var(--texto); font-size: 0.8125rem; font-weight: bold; opacity: 0.75; }
+.panel-item { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; min-height: 44px;
+  padding: 0.25rem 1.25rem; color: var(--texto); text-decoration: none; font-size: 0.9375rem; }
+.panel-item:hover { background: var(--fondo); }
+.panel-item .indicador { flex: none; font-size: 0.8125rem; font-weight: normal; }
+.panel-item .panel-nombre { flex: 1; min-width: 0; }
+.panel-item[aria-current] { background: var(--fondo); font-weight: bold; }
+.panel-item[aria-current]::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--principal); }
+.panel-item[aria-current="location"]::before { opacity: 0.5; }
+.panel-sesion > summary { display: block;
+  min-height: 44px; padding: 0.5rem 1.25rem; cursor: pointer; font-size: 0.9375rem; font-weight: bold; list-style: none; }
+.panel-sesion > summary::-webkit-details-marker { display: none; }
+.panel-sesion > summary::before { content: "▸"; margin-right: 0.35rem; font-weight: normal; }
+.panel-sesion[open] > summary::before { content: "▾"; }
+.panel-avance { display: block; margin-left: 1rem; font-size: 0.8125rem; font-weight: normal; opacity: 0.8; }
+.panel-sesion .panel-item { padding-left: 2rem; }
+.panel-sigue { display: inline-block; padding: 0 0.45rem; border-radius: 999px; background: var(--principal); color: var(--fondo);
+  font-size: 0.75rem; font-weight: bold; line-height: 1.5; vertical-align: 0.05em; }
+.panel-vacio { margin: 0.25rem 1.25rem; font-size: 0.8125rem; opacity: 0.8; }
+.panel-gasto { margin: 0.75rem 0 0; padding: 1rem 1.25rem 0; border-top: 1px solid var(--borde); font-size: 0.8125rem; opacity: 0.85; }
+.panel-gasto b { display: block; font-size: 1rem; }
+.panel a:focus-visible, .panel summary:focus-visible { outline: 3px solid var(--principal); outline-offset: -3px; }
+
+/* Bajo 52rem el panel pasa arriba: solo el curso y la sesión abierta, como una franja que se desliza de lado. */
+@media (max-width: 52rem) {
+  .entorno { grid-template-columns: 1fr; }
+  .panel { position: static; max-height: none; min-height: 0; padding: 0.75rem 0 0; border-right: 0; border-bottom: 1px solid var(--borde); }
+  .panel-curso { padding-bottom: 0.5rem; }
+  .panel-preparacion, .panel-gasto, .panel-grupo > h2, .panel-sesion:not(.abierta) { display: none; }
+  .panel-grupo { border-top: 0; padding: 0; }
+  .panel-sesion > summary { display: none; }
+  .panel-sesion ul { display: flex; overflow-x: auto; }
+  .panel-sesion .panel-item { flex: none; padding: 0.25rem 1rem; white-space: nowrap; }
+  .panel-item[aria-current]::before { top: auto; right: 0; width: auto; height: 3px; }
+  main.hoja { padding: 1.5rem 1rem 3rem; }
 }
