@@ -128,14 +128,29 @@ def test_el_boton_generar_dice_lo_que_gasto_la_ultima_corrida(sesion):  # noqa: 
     assert "Gasta tokens (la unidad con que se paga el uso de Claude), como la corrida de arriba." in pagina
 
 
-def test_la_pagina_del_curso_es_la_preparacion_y_el_avance_va_en_el_panel(sesion):  # noqa: F811
+def test_la_pagina_del_curso_es_un_tablero_con_lo_que_sigue_las_sesiones_y_la_preparacion(sesion):  # noqa: F811
     _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00")
-    pagina = cliente.get("/cursos/scrum").text
-    hoja = pagina.split('<main class="hoja">')[1]
-    assert "Preparación del curso" in hoja and 'id="fuentes"' in hoja
+    hoja = cliente.get("/cursos/scrum").text.split('<main class="hoja">')[1]
+    assert '<p class="sigue-etiqueta" id="t-sigue">Lo que sigue</p>' in hoja
+    assert '<p class="sigue-paso">Sesión 1: completa lo que falta para generar las diapositivas.</p>' in hoja
+    assert '<p class="sigue-motivo">Falta información para generarlas. La página del material dice qué.</p>' in hoja
+    assert "Faltan las diapositivas y el laboratorio." in hoja
+    assert '<a class="boton" href="/cursos/scrum/sesiones/1/materiales/diapositivas">Ir a las diapositivas</a>' in hoja
+    assert '<a class="ficha-material bien" href="/cursos/scrum/sesiones/1/materiales/lectura">' in hoja
+    assert "Aprobada el 15 de octubre" in hoja
+    assert '<a class="ficha-material vacia" href="/cursos/scrum/sesiones/1/materiales/laboratorio">' in hoja
+    # Preparación lista: va plegada, al final, y sin el botón de convertir porque no hay nada sin convertir.
+    assert '<details class="prep" id="fuentes" >' in hoja and "<b>Preparación lista.</b>" in hoja
+    assert hoja.index("sesiones-tablero") < hoja.index('class="prep"')
+    assert "Convertir fuentes a texto" not in hoja
     assert '<span class="indicador bien"><svg' in hoja and "Confirmada</span>" in hoja   # estado de la ficha del curso
-    assert "table class=\"datos sesiones\"" not in pagina and "Abrir sesión" not in pagina
-    assert "1 de 3 aprobados" in pagina.split('id="panel"')[1].split("</nav>")[0]
+
+
+def test_sin_preparacion_lista_la_preparacion_va_abierta_y_arriba(entorno):
+    cliente.post("/cursos", data={"nombre": "Curso vacío"})
+    hoja = cliente.get("/cursos/curso-vacio").text.split('<main class="hoja">')[1]
+    assert '<p class="sigue-paso">Sube las fuentes del curso.</p>' in hoja
+    assert '<details class="prep" id="fuentes" open>' in hoja and "sesiones-tablero" not in hoja
 
 
 def test_la_entrega_resume_en_una_linea_muestra_las_decisiones_y_pliega_los_detalles(sesion):  # noqa: F811

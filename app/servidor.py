@@ -644,7 +644,9 @@ def _que_sigue(curso: str, panel: dict) -> dict | None:
                 texto = texto.rstrip(".") + " de nuevo."
             return {"texto": f"Sesión {s['numero']}: {texto[:1].lower()}{texto[1:]}",
                     "url": f"{base}/sesiones/{s['numero']}/materiales/{m['clave']}",
-                    "boton": f"Ir a {m['el']}", "motivo": _motivo(m), "material": m["clave"], "sesion": s["numero"]}
+                    "boton": f"Ir a {m['el']}", "material": m["clave"], "sesion": s["numero"],
+                    "motivo": (f"Falta información para generar{'las' if m['plural'] else ('lo' if m['el'].startswith('el ') else 'la')}. "
+                               "La página del material dice qué.") if texto.startswith("Completa") else _motivo(m)}
     return None
 
 
@@ -664,7 +666,8 @@ def _frase_de_sesion(s: dict) -> str:
     elif problemas:
         frase += f" {'Un material tiene' if len(problemas) == 1 else f'{len(problemas)} materiales tienen'} problemas."
     if faltan:
-        frase += " Falta " + " y ".join(m["el"] for m in faltan) + "."
+        verbo = "Falta" if len(faltan) == 1 and not faltan[0]["plural"] else "Faltan"
+        frase += f" {verbo} " + " y ".join(m["el"] for m in faltan) + "."
     return frase
 
 

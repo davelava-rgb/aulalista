@@ -6,6 +6,10 @@
   --borde: #d5dade;
   --bien: #1e6b3a;
   --error: #a3261f;
+  --principal-suave: #f8e6f3;
+  --principal-texto: #9c2a7f;
+  --bien-suave: #e6f2ea;
+  --error-suave: #fbeceb;
   --marca: #1e0253;
   --marca-texto: #e9e9e9;
   color-scheme: light;
@@ -22,6 +26,10 @@
     --borde: #333b41;
     --bien: #7fd19b;
     --error: #f08c84;
+    --principal-suave: #3a1d33;
+    --principal-texto: #e07cc4;
+    --bien-suave: #1b3324;
+    --error-suave: #3d1f1d;
     color-scheme: dark;
   }
 }
@@ -34,6 +42,10 @@
   --borde: #333b41;
   --bien: #7fd19b;
   --error: #f08c84;
+  --principal-suave: #3a1d33;
+  --principal-texto: #e07cc4;
+  --bien-suave: #1b3324;
+  --error-suave: #3d1f1d;
   color-scheme: dark;
 }
 
@@ -399,3 +411,65 @@ main.hoja .material .cabeza h1 { margin: 0; }
 .curso-problema { margin: 0 0 0.35rem; color: var(--error); font-size: 0.9375rem; }
 .curso-sigue { margin: 0.5rem 0 0; }
 .listo-todo { color: var(--bien); font-weight: bold; }
+
+/* Tablero del curso (decisión 44). */
+.sprite { position: absolute; width: 0; height: 0; }
+.tablero-resumen { margin: -0.5rem 0 0; opacity: 0.8; }
+
+/* Lo memorable: el siguiente paso, con su motivo y su botón. */
+.sigue-caja { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 1rem 1.25rem;
+  margin: 1.5rem 0 2rem; padding: 1.25rem 1.5rem; border-left: 6px solid var(--principal); border-radius: 10px; background: var(--principal-suave); }
+.sigue-icono { display: grid; place-items: center; width: 3rem; height: 3rem; border-radius: 50%; background: var(--fondo); color: var(--principal-texto); }
+.sigue-caja p { margin: 0; max-width: none; }
+.sigue-etiqueta { font-size: 0.8125rem; font-weight: bold; color: var(--principal-texto); }
+.sigue-paso { font-size: 1.25rem; font-weight: bold; line-height: 1.3; }
+.sigue-caja .sigue-motivo { margin-top: 0.25rem; font-size: 0.9375rem; opacity: 0.85; }
+.sigue-caja .boton { display: inline-flex; align-items: center; min-height: 44px; padding: 0 1.25rem; border-radius: 6px;
+  background: var(--principal); color: var(--fondo); text-decoration: none; white-space: nowrap; }
+.sigue-caja .boton:focus-visible { outline: 3px solid var(--texto); outline-offset: 2px; }
+.listo-todo-caja { border-left-color: var(--bien); background: var(--bien-suave); }
+.listo-todo-caja .sigue-icono { color: var(--bien); }
+
+/* Sesiones: una fila por sesión; sus materiales son fichas que cambian de forma según el estado. */
+.sesiones-tablero { margin: 0; padding: 0; list-style: none; }
+.sesion-fila { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr); gap: 0 1rem; max-width: none; padding: 1.25rem 0; border-top: 1px solid var(--borde); }
+.sesion-num { display: grid; place-items: center; width: 2.5rem; height: 2.5rem; border-radius: 50%; background: var(--suave); font-weight: bold; font-size: 1.125rem; }
+.sesion-fila h2 { margin: 0.35rem 0 0.15rem; font-size: 1.125rem; }
+.sesion-frase { margin: 0 0 0.75rem; font-size: 0.875rem; }
+.sesion-frase a { margin-left: 0.25rem; }
+.fichas-material { display: grid; grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr)); gap: 0.75rem; }
+.ficha-material { display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem 0.875rem; border: 1px solid var(--borde);
+  border-radius: 8px; background: var(--fondo); color: var(--texto); text-decoration: none; }
+.ficha-material:hover { border-color: var(--principal); }
+.ficha-material:focus-visible { outline: 3px solid var(--principal); outline-offset: 2px; }
+.ficha-ico { display: grid; flex: none; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 8px; background: var(--suave); }
+.ficha-texto b, .ficha-texto span { display: block; }
+.ficha-texto span { font-size: 0.8125rem; }
+.ficha-texto .ficha-estado { margin-top: 0.2rem; font-weight: bold; }
+.ficha-material.bien .ficha-ico { background: var(--bien-suave); color: var(--bien); }
+.ficha-material.bien .ficha-estado { color: var(--bien); }
+.ficha-material.error { border-color: var(--error); background: var(--error-suave); }
+.ficha-material.error .ficha-ico { background: var(--fondo); color: var(--error); }
+.ficha-material.error .ficha-estado { color: var(--error); }
+.ficha-material.vacia { border-style: dashed; background: var(--suave); }
+.ficha-material.vacia .ficha-estado { color: var(--principal-texto); }
+
+/* Preparación: una línea plegada cuando está lista; abierta y arriba si no. */
+.prep { margin: 2rem 0 0; border: 1px solid var(--borde); border-radius: 8px; }
+.prep > summary { display: flex; align-items: center; gap: 0.6rem; min-height: 52px; padding: 0.5rem 1rem; cursor: pointer; list-style: none; max-width: none; }
+.prep > summary::-webkit-details-marker { display: none; }
+.prep > summary em { margin-left: auto; font-style: normal; font-size: 0.8125rem; color: var(--principal-texto); white-space: nowrap; }
+.prep-ok { flex: none; color: var(--bien); }
+.prep-cuerpo { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 1rem 2rem; padding: 0 1rem 1rem; }
+.prep-cuerpo h2 { margin-top: 0.5rem; font-size: 1rem; }
+.fuentes { margin: 0.5rem 0; padding: 0; list-style: none; }
+.fuentes li { display: flex; flex-direction: column; gap: 0.1rem; max-width: none; padding: 0.5rem 0; border-bottom: 1px solid var(--borde); }
+.fuente-nombre { overflow-wrap: anywhere; }
+.fuente-estado { font-size: 0.875rem; }
+.fuente-estado .nota { display: block; }
+
+@media (max-width: 40rem) {
+  .sigue-caja { grid-template-columns: minmax(0, 1fr); padding: 1rem 1.25rem; }
+  .sigue-icono { display: none; }
+  .prep-cuerpo { grid-template-columns: minmax(0, 1fr); }
+}
