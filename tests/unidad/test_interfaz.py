@@ -131,3 +131,11 @@ def test_todas_las_paginas_tienen_el_alternador_de_modo_claro_u_oscuro(entorno):
     assert 'id="alternar-tema"' in pagina and '>Cambiar a modo oscuro</button>' in pagina
     css = (servidor.RAIZ / "web" / "estaticos" / "estilo.css").read_text(encoding="utf-8")
     assert ':root[data-tema="oscuro"]' in css and ':root:not([data-tema="claro"])' in css
+
+
+def test_la_cabecera_lleva_el_logo_de_futurasoft(entorno):
+    pagina = cliente.get("/").text
+    assert 'src="/estaticos/marca/futurasoft-logo.png"' in pagina and 'alt="FuturaSoft' in pagina
+    assert cliente.get("/estaticos/marca/futurasoft-logo.png").status_code == 200
+    css = (servidor.RAIZ / "web" / "estaticos" / "estilo.css").read_text(encoding="utf-8")
+    assert "--principal: #c537a0;" in css and "--marca: #1e0253;" in css

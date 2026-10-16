@@ -41,14 +41,14 @@ Toda afirmación sobre una fuente sale de un pasaje copiado de una fuente del cu
 ## Brand Commitments
 
 - La interfaz lleva la marca FuturaSoft (confirmado el 2026-10-15).
-- El logo y los colores oficiales de FuturaSoft no están en el repositorio. Falta definir: el profesor debe entregarlos. No se inventan.
+- Logo y colores oficiales de FuturaSoft entregados por el profesor el 2026-10-15, en `web/estaticos/marca/`: magenta #C537A0 para acciones y títulos; morado #1E0253 solo en la cabecera con el logo.
 - Lenguaje claro en toda la interfaz: una idea por oración, sin jerga, cada término técnico definido la primera vez. Sin emojis ni lenguaje publicitario.
 
 ## Evidence on Hand
 
 - Excel modelo de verificación: `S1_Laboratorio_Verificacion.xlsx`.
 - Curso real de prueba: `cursos/gobernanza-de-datos/` (no se sube al repositorio).
-- Faltan: logo y paleta de FuturaSoft.
+- Logo y paleta de FuturaSoft: `web/estaticos/marca/`.
 
 ## Product Principles
 
