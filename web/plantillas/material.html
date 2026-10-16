@@ -126,10 +126,16 @@
     {% if m.gasto_corrida %}
     <p class="nota">Desde que pulsaste Generar: {{ m.gasto_corrida.llamadas }} {{ "llamada" if m.gasto_corrida.llamadas == 1 else "llamadas" }}, {{ usd(m.gasto_corrida.costo_usd) }} estimados.{% if e.revisor %} Incluye el revisor independiente.{% endif %}</p>
     {% endif %}
+    {% if m.reanudable %}
+    <form method="post" action="{{ base }}/reanudar" class="accion">
+      <button type="submit" aria-describedby="reanudar-{{ m.clave }}">Reanudar desde lo guardado</button>
+      <span class="nota" id="reanudar-{{ m.clave }}">Usa el texto ya redactado y corregido de la corrida anterior: no repite la redacción y gasta menos. Tarda unos minutos.</span>
+    </form>
+    {% endif %}
     {% set bloqueado = not puede_empezar or m.faltan.ficha or m.faltan.otros or e.estado == "trabajando" %}
     <form method="post" action="{{ base }}" class="accion"
           {% if e.estado == "aprobada" %}data-confirmar="{{ m.el | capitalize }} ya {{ 'están' if m.plural else 'está' }} {{ forma(m, 'aprobad') }}. Si {{ m.lo }} generas de nuevo, AulaLista {{ m.lo }} reemplaza, gasta tokens y tendrás que aprobar{{ m.lo }} otra vez. ¿Generar de nuevo?"{% endif %}>
-      <button type="submit" {% if bloqueado %}disabled aria-describedby="motivo-{{ m.clave }}"{% endif %}{% if generado or aprobable %} class="secundario"{% endif %}>
+      <button type="submit" {% if bloqueado %}disabled aria-describedby="motivo-{{ m.clave }}"{% endif %}{% if generado or aprobable or m.reanudable %} class="secundario"{% endif %}>
         {{ 'Generar de nuevo' if e.estado else m.generar }}
       </button>
       <span class="nota" id="motivo-{{ m.clave }}">
