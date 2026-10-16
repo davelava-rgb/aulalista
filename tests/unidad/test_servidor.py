@@ -35,3 +35,14 @@ def test_probar_conexion_devuelve_respuesta_y_gasto(entorno, monkeypatch):
 def test_el_servidor_solo_escucha_en_esta_computadora():
     from app import __main__ as inicio
     assert inicio.DIRECCION == "127.0.0.1"
+
+
+def test_con_el_puerto_ocupado_avisa_en_vez_de_abrir_la_version_vieja():
+    import socket
+    from app import __main__ as inicio
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as ocupado:
+        ocupado.bind((inicio.DIRECCION, 0))
+        ocupado.listen()
+        puerto = ocupado.getsockname()[1]
+        assert inicio.puerto_libre(inicio.DIRECCION, puerto) is False
+    assert inicio.puerto_libre(inicio.DIRECCION, puerto) is True
