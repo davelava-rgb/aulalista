@@ -97,8 +97,18 @@ tope_usd = 0.30
 max_turns = 1
 esfuerzo = "medium"
 
-# Agente diseñador: escribe el programa pptxgenjs de las diapositivas y lo corrige (decisión 32).
+# Agente diseñador: escribe el programa pptxgenjs de las diapositivas (decisión 32). Esfuerzo medio: con el
+# esfuerzo por defecto, dos tercios de lo que escribía era razonamiento (decisión 41).
 [diseno]
 modelo = "claude-opus-5-5"
 tope_usd = 4.00
 max_turns = 3
+esfuerzo = "medium"
+
+# Arreglos del diseñador: corrige solo las diapositivas que nombran los problemas. Es una corrección, así que va
+# con Sonnet, como las demás correcciones (decisión 41).
+[arreglo_diseno]
+modelo = "claude-sonnet-5-5"
+tope_usd = 1.00
+max_turns = 3
+esfuerzo = "medium"

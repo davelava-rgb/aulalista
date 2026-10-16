@@ -1,6 +1,7 @@
 """Único punto de contacto con el Claude Agent SDK (CLAUDE.md)."""
 
 import base64
+from pathlib import Path
 from collections.abc import AsyncIterable, AsyncIterator, Callable
 
 from claude_agent_sdk import (
@@ -166,9 +167,13 @@ async def consultar(
     cwd=None,
     herramientas: tuple[str, ...] = (),
     servidores: dict | None = None,
+    sistema: Path | None = None,
     consulta: Consulta = query,
 ) -> dict:
     """Pedido con respuesta en JSON validado contra `esquema`.
+
+    Con `sistema`, el mensaje de sistema se lee de ese archivo. Lo que va ahí se guarda en caché y las llamadas
+    siguientes con el mismo archivo lo pagan mucho más barato.
 
     Con `herramientas`, el agente solo puede usar esas (por ejemplo Read y Grep, o una
     herramienta propia «mcp__...» de `servidores`) y todo lo demás queda denegado sin preguntar.
@@ -181,6 +186,8 @@ async def consultar(
         extra["mcp_servers"] = servidores
     if cwd is not None:
         extra["cwd"] = str(cwd)
+    if sistema is not None:
+        extra["system_prompt"] = {"type": "file", "path": str(sistema)}
     opciones = opciones_base(tarea, leer_clave(), **extra)
     _, resultado = await ejecutar(pedido, opciones, consulta)
     tokens.registrar(resultado, curso=curso, sesion=sesion, material=material, etapa=etapa)

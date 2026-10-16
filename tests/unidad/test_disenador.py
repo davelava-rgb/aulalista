@@ -194,7 +194,46 @@ def test_un_diseno_al_que_le_faltan_diapositivas_vuelve_como_problema():
 
 def test_el_arreglo_muestra_el_programa_por_partes_y_pide_solo_lo_que_cambia(contenido):
     partes, _ = disenador.fusionar(None, respuesta_por_partes(3, comun="const a = 1;"), 3)
-    pedido = disenador.pedido_de_arreglo({"colores": {}}, partes, ["FALLA · diseño · diapositiva 2: letra de 9 puntos."])
+    pedido = disenador.pedido_de_arreglo(partes, ["FALLA · diseño · diapositiva 2: letra de 9 puntos."])
     assert "// comun\nconst a = 1;" in pedido and "// diapositiva 2\nawait dibujar(2);" in pedido
     assert "devuelve SOLO las diapositivas que cambias" in pedido
     assert "- FALLA · diseño · diapositiva 2: letra de 9 puntos." in pedido
+
+
+# ---------- Etapa A de la optimización (decisión 41) ----------
+
+def test_la_guia_y_los_datos_van_en_el_mensaje_de_sistema_y_no_en_los_pedidos(tmp_path, contenido):
+    """Lo que no cambia entre el diseño y sus arreglos va en un archivo de sistema, que el SDK guarda en caché."""
+    datos = disenador.datos(contenido, IDENTIDAD, PORTADA, tmp_path)
+    ruta = disenador.escribir_sistema(datos, tmp_path / "diseno")
+    sistema = ruta.read_text(encoding="utf-8")
+    assert sistema.startswith("ERES EL DISEÑADOR") and contenido.cierre.frase in sistema
+    partes, _ = disenador.fusionar(None, respuesta_por_partes(3), 3)
+    for pedido in (disenador.pedido_de_diseno(3), disenador.pedido_de_arreglo(partes, ["un problema"])):
+        assert "ERES EL DISEÑADOR" not in pedido and contenido.cierre.frase not in pedido
+
+
+def test_letra_chica_colores_ajenos_y_notas_se_arreglan_sin_ia(tmp_path, contenido):
+    malo = (DISENO
+            .replace('texto(s, h.portada.sesion, 0.5, 2.6, 6, 0.6, { color: C.blanco });',
+                     'texto(s, h.portada.sesion, 0.5, 2.6, 6, 0.6, { color: "00FF00", fontSize: 9 });')
+            .replace("notas(s, c.cierre.notas);", 's.addNotes("Otra nota.");'))
+    corrida, salida = correr(tmp_path, contenido, malo)
+    assert corrida.ok, corrida.error
+    assert disenador.revisar_pptx(salida, contenido, PORTADA, IDENTIDAD) != []
+    ajustes = " ".join(disenador.ajustar_pptx(salida, contenido, IDENTIDAD))
+    assert "subí a 12 puntos 1 trozos" in ajustes
+    assert "00FF00 por" in ajustes
+    assert f"notas de las diapositivas {contenido.total}" in ajustes
+    assert disenador.revisar_pptx(salida, contenido, PORTADA, IDENTIDAD) == []
+    assert disenador.ajustar_pptx(salida, contenido, IDENTIDAD) == []     # un PowerPoint correcto no se toca
+
+
+def test_el_texto_ajeno_no_se_arregla_sin_ia(tmp_path, contenido):
+    """Solo se arregla sin IA lo que tiene una sola respuesta correcta. Un texto ajeno vuelve al diseñador."""
+    malo = DISENO.replace('texto(s, h.portada.sesion, 0.5, 2.6, 6, 0.6, { color: C.blanco });',
+                          'texto(s, "Scrum nació en Japón en 1986 y lo usan todas las empresas.", 0.5, 2.6, 6, 0.6);')
+    corrida, salida = correr(tmp_path, contenido, malo)
+    assert corrida.ok, corrida.error
+    disenador.ajustar_pptx(salida, contenido, IDENTIDAD)
+    assert "no está tal cual" in " ".join(disenador.revisar_pptx(salida, contenido, PORTADA, IDENTIDAD))

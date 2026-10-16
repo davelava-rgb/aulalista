@@ -4,7 +4,8 @@ El redactor escribe el contenido y la validación lo aprueba. Después, el dise�
 pptxgenjs que dibuja ese contenido, con íconos y la identidad visual de la ficha. AulaLista:
 1. revisa el programa antes de correrlo: sin require, fs, red ni procesos;
 2. lo corre con Node con permisos limitados (app/disenador/ejecutar.js);
-3. comprueba el PowerPoint: cantidad de diapositivas, texto que sale tal cual del contenido aprobado,
+3. arregla sin IA la letra chica, los colores ajenos y las notas (decisión 41);
+4. comprueba el PowerPoint: cantidad de diapositivas, texto que sale tal cual del contenido aprobado,
    letra mínima, colores de la ficha y notas en todas.
 La medición con PowerPoint, el verificador y la revisión visual corren después, en diapositivas.py.
 """
@@ -18,6 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from pptx import Presentation
+from pptx.oxml.ns import qn
 from pptx.util import Pt
 
 from app.config import RAIZ
@@ -151,26 +153,35 @@ EL DISEÑO
 """
 
 
-def _guia_y_datos(datos_: dict) -> list[str]:
-    return [
+def sistema(datos_: dict) -> str:
+    """La guía y los datos: lo que no cambia entre el diseño y sus arreglos. Va en el mensaje de sistema para que
+    el SDK lo guarde en caché y los arreglos no lo paguen completo otra vez (etapa A de la optimización)."""
+    return "\n".join([
         GUIA.replace("{etiqueta}", str(PALABRAS_DE_UNA_ETIQUETA)).replace("{minimo}", str(LETRA_MINIMA)),
         "DATOS QUE RECIBE EL PROGRAMA EN «h» (además de h.pres y h.icono):",
         json.dumps(datos_, ensure_ascii=False),
-    ]
+    ])
 
 
-def pedido_de_diseno(datos_: dict, total: int) -> str:
+def escribir_sistema(datos_: dict, carpeta: Path) -> Path:
+    """El mensaje de sistema va en un archivo: en Windows, una línea de comandos no admite un texto tan largo."""
+    carpeta.mkdir(parents=True, exist_ok=True)
+    ruta = carpeta / "diseno_sistema.txt"
+    ruta.write_text(sistema(datos_), encoding="utf-8")
+    return ruta
+
+
+def pedido_de_diseno(total: int) -> str:
     return "\n".join([
-        *_guia_y_datos(datos_),
-        "",
+        "Diseña la presentación según la guía y los datos de tus instrucciones.",
         f"Devuelve «comun» y las {total} diapositivas, de la 1 a la {total}.",
         "En «notas», resume en una o dos frases las decisiones de diseño.",
     ])
 
 
-def pedido_de_arreglo(datos_: dict, partes: "Partes", problemas: list[str]) -> str:
+def pedido_de_arreglo(partes: "Partes", problemas: list[str]) -> str:
     return "\n".join([
-        *_guia_y_datos(datos_),
+        "Corrige el programa según la guía y los datos de tus instrucciones.",
         "",
         "PROGRAMA ACTUAL, POR PARTES:",
         "// comun", partes.comun,
@@ -318,6 +329,52 @@ def _parrafos(figura):
         for fila in figura.table.rows:
             for celda in fila.cells:
                 yield from celda.text_frame.paragraphs
+
+
+def _distancia(a: str, b: str) -> int:
+    return sum((int(a[i:i + 2], 16) - int(b[i:i + 2], 16)) ** 2 for i in (0, 2, 4))
+
+
+def _en_sombra(nodo) -> bool:
+    return any(ancestro.tag == qn("a:effectLst") for ancestro in nodo.iterancestors())
+
+
+def ajustar_pptx(ruta: Path, contenido: Diapositivas, identidad: Identidad) -> list[str]:
+    """Arreglos sin IA ni costo, antes de los controles: lo que tiene una sola respuesta correcta no vuelve al
+    diseñador. La letra menor que el mínimo sube al mínimo; un color que no es de la ficha pasa al color de la ficha
+    más parecido; las notas que no son las del contenido se copian del contenido. Devuelve lo que ajustó."""
+    presentacion = Presentation(ruta)
+    permitidos = sorted(identidad.colores_permitidos())
+    notas_esperadas = _notas_del_contenido(contenido)
+    letras, colores, notas = 0, {}, []
+    for numero, diapositiva in enumerate(presentacion.slides, start=1):
+        for figura in _figuras(diapositiva.shapes):
+            for parrafo in _parrafos(figura):
+                for corrida in parrafo.runs:
+                    if corrida.text.strip() and corrida.font.size is not None and corrida.font.size < Pt(LETRA_MINIMA):
+                        corrida.font.size = Pt(LETRA_MINIMA)
+                        letras += 1
+        for nodo in diapositiva._element.iter(qn("a:srgbClr")):
+            valor = (nodo.get("val") or "").upper()
+            if re.fullmatch(r"[0-9A-F]{6}", valor) and valor not in permitidos and not _en_sombra(nodo):
+                colores[valor] = min(permitidos, key=lambda c: _distancia(valor, c))
+                nodo.set("val", colores[valor])
+        if numero <= len(notas_esperadas):
+            actual = diapositiva.notes_slide.notes_text_frame.text if diapositiva.has_notes_slide else ""
+            if _normal(actual) != _normal(notas_esperadas[numero - 1]):
+                diapositiva.notes_slide.notes_text_frame.text = notas_esperadas[numero - 1]
+                notas.append(numero)
+    ajustes = []
+    if letras:
+        ajustes.append(f"subí a {LETRA_MINIMA} puntos {letras} trozos de texto con letra más chica")
+    if colores:
+        ajustes.append("cambié colores que no son de la ficha por el más parecido de la ficha: "
+                       + ", ".join(f"{a} por {b}" for a, b in sorted(colores.items())))
+    if notas:
+        ajustes.append(f"copié del contenido las notas de las diapositivas {', '.join(map(str, notas))}")
+    if ajustes:
+        presentacion.save(ruta)
+    return ajustes
 
 
 def revisar_pptx(ruta: Path, contenido: Diapositivas, portada: Portada, identidad: Identidad) -> list[str]:

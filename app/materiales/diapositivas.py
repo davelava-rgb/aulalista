@@ -733,6 +733,10 @@ class _Trabajo:
             return [f"FALLA · diseño · el programa no corrió: {corrida.error}"]
         self.diseno["iconos"] = len(corrida.iconos)
         self.ajustes = []
+        ajustes = disenador.ajustar_pptx(self.rutas["pptx"], self.contenido, self.identidad)
+        if ajustes:
+            self.diseno["ajustes_sin_ia"] = self.diseno.get("ajustes_sin_ia", 0) + len(ajustes)
+            self.avance(f"Diseño, ajuste sin IA: {'; '.join(ajustes)}.")
         problemas = disenador.revisar_pptx(self.rutas["pptx"], self.contenido, self.portada, self.identidad)
         if problemas:
             return problemas
@@ -750,17 +754,19 @@ class _Trabajo:
         shutil.copyfile(self.rutas["pptx"], base)
         ajustes_base, ajustes_bueno = list(self.ajustes), []    # los ajustes viajan con su PowerPoint (decisión 39)
         datos_ = disenador.datos(self.contenido, self.identidad, self.portada, carpeta)
-        comun_ = {"curso": self.curso, "sesion": f"S{self.sesion}", "material": CLAVE, "consulta": self.consulta}
+        comun_ = {"curso": self.curso, "sesion": f"S{self.sesion}", "material": CLAVE, "consulta": self.consulta,
+                  "sistema": disenador.escribir_sistema(datos_, carpeta)}
         self.avance("Diseño: el agente diseñador escribe la presentación con íconos y la identidad de la ficha.")
         total = self.contenido.total
-        respuesta = await agente.consultar(disenador.pedido_de_diseno(datos_, total), tarea="diseno",
+        respuesta = await agente.consultar(disenador.pedido_de_diseno(total), tarea="diseno",
                                            esquema=disenador.ESQUEMA_DISENO, etapa="diseño", **comun_)
         partes, faltan = disenador.fusionar(None, respuesta, total)
         bueno, visual_hecha, problemas = None, False, []
-        self.diseno = {"arreglos": 0, "notas": respuesta.get("notas", "")}
+        self.diseno = {"arreglos": 0, "notas": respuesta.get("notas", ""), "rondas": []}
         for intento in range(ARREGLOS_DE_DISENO + 1):
             codigo = disenador.armar(partes)
             problemas = faltan or await self.probar_diseno(codigo, datos_, carpeta)
+            self._registrar_ronda("diseño" if intento == 0 else f"arreglo {intento}", problemas)
             if not problemas:
                 bueno = carpeta / "aprobado.pptx"
                 shutil.copyfile(self.rutas["pptx"], bueno)
@@ -770,13 +776,14 @@ class _Trabajo:
                     break
                 visual_hecha = True
                 problemas = await revision_visual(self)
+                self._registrar_ronda("revisión visual", problemas)
                 if not problemas:
                     break
             if intento == ARREGLOS_DE_DISENO:
                 break
             self.diseno["arreglos"] += 1
             self.avance(f"Diseño: el diseñador corrige {comun.cuantos(len(problemas), 'problema')}.")
-            respuesta = await agente.consultar(disenador.pedido_de_arreglo(datos_, partes, problemas), tarea="diseno",
+            respuesta = await agente.consultar(disenador.pedido_de_arreglo(partes, problemas), tarea="arreglo_diseno",
                                                esquema=disenador.ESQUEMA_DISENO, etapa=f"diseño, arreglo {intento + 1}",
                                                **comun_)
             partes, faltan = disenador.fusionar(partes, respuesta, total)
@@ -792,6 +799,13 @@ class _Trabajo:
                 self.ajustes = ajustes_bueno
         if bueno is None or problemas:
             await self.probar_diseno_final()
+
+    def _registrar_ronda(self, ronda: str, problemas: list[str]) -> None:
+        """Guarda los problemas de cada ronda del diseño, para saber cuáles se repiten y cuánto cuestan."""
+        self.diseno["rondas"].append({"ronda": ronda, "problemas": problemas})
+        carpeta = self.rutas["contenido"].parent / "diseno"
+        (carpeta / "rondas.json").write_text(json.dumps(self.diseno["rondas"], ensure_ascii=False, indent=1),
+                                             encoding="utf-8")
 
     async def probar_diseno_final(self) -> None:
         """Mide y verifica de nuevo el PowerPoint que se entrega (el base o el último diseño sin fallas)."""

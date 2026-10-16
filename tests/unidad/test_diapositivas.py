@@ -5,6 +5,7 @@ import copy
 import re
 import shutil
 import zipfile
+from pathlib import Path
 from urllib.parse import unquote
 
 import openpyxl
@@ -578,7 +579,13 @@ def test_con_el_contenido_aprobado_el_disenador_dibuja_y_la_revision_visual_pide
     assert material["estado"] == "verificada", material.get("problemas")
     assert material["diseno"]["estado"] == "diseñada" and material["diseno"]["arreglos"] == 1
     assert consulta.llamadas[2]["options"].output_format["schema"] == disenador_esquema()
-    assert "module.exports = async (h)" in consulta.llamadas[2]["prompt"]
+    sistema = consulta.llamadas[2]["options"].system_prompt
+    assert "module.exports = async (h)" in Path(sistema["path"]).read_text(encoding="utf-8")
+    assert consulta.llamadas[4]["options"].system_prompt == sistema           # el mismo archivo: se lee de caché
+    assert consulta.llamadas[2]["options"].model == "claude-opus-5-5"
+    assert consulta.llamadas[4]["options"].model == "claude-sonnet-5-5"       # el arreglo es una corrección
+    rondas = [r["ronda"] for r in material["diseno"]["rondas"]]
+    assert rondas == ["diseño", "revisión visual", "arreglo 1"]
     arreglo = consulta.llamadas[4]["prompt"]
     assert "DISEÑO · diapositiva 4 («Qué valora más»): Una tabla con mucho texto. Propuesta: Pasar a tarjetas." in arreglo
     assert "La portada." not in arreglo and "PROGRAMA ACTUAL, POR PARTES:" in arreglo
