@@ -18,6 +18,14 @@ colors:
   borde-noche: "#333b41"
   verde-aprobado-noche: "#7fd19b"
   rojo-correccion-noche: "#f08c84"
+  magenta-suave: "#f8e6f3"
+  magenta-texto: "#9c2a7f"
+  verde-suave: "#e6f2ea"
+  rojo-suave: "#fbeceb"
+  magenta-suave-noche: "#3a1d33"
+  magenta-texto-noche: "#e07cc4"
+  verde-suave-noche: "#1b3324"
+  rojo-suave-noche: "#3d1f1d"
 typography:
   headline:
     fontFamily: "Arial, sans-serif"
@@ -104,6 +112,8 @@ Paleta sobria de tinta sobre papel, con el magenta de FuturaSoft como acento y d
 
 ### Primary
 - **Magenta FuturaSoft** (`magenta`, #C537A0; de noche `magenta-noche`, #CD53AD): enlaces, botón principal, encabezado de las tablas de datos, el paso actual del recorrido y la marca del elemento actual en el panel. Es el único color que indica "se puede tocar" o "estás aquí". Los títulos no van en magenta. Contraste: 4.7:1 sobre papel; el de noche, 4.6:1 sobre papel-noche.
+- **Magenta suave** (`magenta-suave`; de noche `magenta-suave-noche`): solo el fondo de la caja «Lo que sigue» del tablero.
+- **Magenta para texto** (`magenta-texto`; de noche `magenta-texto-noche`): el texto magenta sobre un fondo de color (magenta suave o niebla), donde el magenta normal no llega a 4.5:1.
 
 ### Marca
 - **Morado FuturaSoft** (`morado-marca`, #1E0253) con **gris de marca** (`gris-marca`, #E9E9E9): solo la cabecera con el logo, igual en los dos modos. Nunca en botones ni estados.
@@ -117,6 +127,7 @@ Paleta sobria de tinta sobre papel, con el magenta de FuturaSoft como acento y d
 
 ### Estados
 - **Verde aprobado** (`verde-aprobado`): solo para "confirmada" y resultados correctos.
+- **Verde suave y rojo suave** (`verde-suave`, `rojo-suave`; con su versión de noche): fondos de las fichas de material del tablero según su estado. Siempre con la palabra del estado encima.
 - **Rojo corrección** (`rojo-correccion`): solo para fallas, "Falta definir", conflictos entre versiones y fichas pendientes.
 
 ### Named Rules
@@ -182,7 +193,8 @@ Esquinas suavemente redondeadas de 6px en botones, campos, mensajes y recuadros.
 - **Error:** el borde pasa a rojo corrección cuando el campo está en "Falta definir" o en conflicto.
 
 ### Navigation
-- **Panel del curso:** fijo a la izquierda en todas las páginas de un curso. Arriba, "Todos los cursos" y el nombre del curso. Luego, "Preparación del curso" (fuentes y ficha del curso) y "Sesiones": cada sesión con su ficha y sus materiales, cada uno con su indicador de estado (icono y palabra). El elemento actual lleva fondo papel, negrita y una barra magenta de 4px a la izquierda. El material del siguiente paso lleva la píldora "Sigue". Las sesiones que no se están viendo van plegadas, con su avance ("1 de 3 aprobados"). Al pie, el gasto del curso, una sola vez.
+- **Panel del curso:** fijo a la izquierda en todas las páginas de un curso, solo con las sesiones (`PLAN.md` §0, decisión 44). Arriba, "Todos los cursos" y el nombre del curso, que lleva al tablero. Luego, cada sesión: su número, el título en una línea y sus materiales como puntos de color con su nombre (verde aprobado, rojo con problema, borde fino pendiente); el siguiente paso lleva un anillo magenta y su nombre en magenta para texto. La ficha de la sesión va como enlace dentro de la sesión abierta. El elemento actual lleva fondo papel, negrita y una barra magenta de 4px a la izquierda. Al pie, el gasto del curso, una sola vez.
+- **Tablero del curso:** la página del curso. Arriba, la caja «Lo que sigue»: fondo magenta suave, borde izquierdo magenta de 6px, esquinas de 10px, un ícono en círculo, la etiqueta en magenta para texto, el paso en 1.25rem negrita, su motivo en una línea y el botón principal. Debajo, una fila por sesión con su número en un círculo niebla de 2.5rem (las sesiones son una secuencia), su título, una frase de avance y sus materiales como fichas: ícono de 2.25rem, nombre, fecha y estado en palabras. Aprobada: ícono sobre verde suave. Desactualizada o con fallas: borde y fondo rojo suave. Sin generar: borde punteado sobre niebla y la acción en magenta para texto. Al final, la preparación plegada en una línea con ✓ verde; si no está lista, va abierta y arriba.
 - **Ubicación:** no hay ruta de enlaces. Dentro de un curso, el panel dice dónde estás y una línea pequeña sobre el título lo repite en palabras ("Sesión 1 · Material 2 de 3", "Preparación del curso"). No hay pestañas.
 - **Siguiente paso:** una línea con enlace en la página de un material, solo si el siguiente paso está en otra página. Si es el mismo material, lo dicen el recorrido y el botón.
 - **Notas de costo:** una línea corta junto al botón que gasta. El total del curso va una sola vez, al pie del panel.

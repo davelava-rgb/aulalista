@@ -323,3 +323,44 @@ def test_el_inicio_de_un_curso_nuevo_enlaza_las_fuentes(entorno):
     pagina = cliente.get("/").text
     assert '<a href="/cursos/curso-vacio#fuentes">Sube las fuentes del curso.</a>' in pagina
     assert "Las sesiones aparecen al confirmar la ficha del curso." in pagina
+
+
+
+# ---------- Tablero del curso (PLAN.md §0, decisión 44) ----------
+
+def _m(clave="laboratorio", estado="", desactualizado=False, aprobada=""):
+    datos = servidor.MATERIALES[clave]
+    return {"clave": clave, "corto": datos["corto"], "el": datos["el"], "plural": datos["plural"], "estado": estado,
+            "desactualizado": desactualizado, "aprobada": aprobada,
+            "situacion": {"clase": "bien" if estado == "aprobada" and not desactualizado else
+                          "error" if desactualizado or estado in ("con fallas", "error") else "neutro", "texto": ""}}
+
+
+def test_el_motivo_de_lo_que_sigue_concuerda_y_dice_por_que():
+    assert servidor._motivo(_m("laboratorio", "aprobada", True)) == "La ficha cambió después de generarlo: ya no la sigue."
+    assert servidor._motivo(_m("diapositivas", "aprobada", True)) == "La ficha cambió después de generarlas: ya no la siguen."
+    assert servidor._motivo(_m("lectura", "con fallas")) == "Tiene fallas del verificador y no se puede aprobar así."
+    assert servidor._motivo(_m("lectura")) == "Todavía no se generó."
+    assert servidor._fecha("2026-10-12T09:00:00") == "12 de octubre" and servidor._fecha("") == ""
+
+
+def test_la_frase_de_cada_sesion_resume_su_avance():
+    sesion = {"puede_empezar": True, "hechos": 1, "van": 3,
+              "materiales": [_m("lectura", "aprobada", True), _m("diapositivas", "aprobada", True), _m("laboratorio", "aprobada")]}
+    assert servidor._frase_de_sesion(sesion) == "1 de 3 aprobados. La ficha cambió: 2 materiales quedaron desactualizados."
+    sesion = {"puede_empezar": True, "hechos": 1, "van": 2, "materiales": [_m("diapositivas", "aprobada"), _m("laboratorio")]}
+    assert servidor._frase_de_sesion(sesion) == "1 de 2 aprobados. Falta el laboratorio."
+    assert servidor._frase_de_sesion({**sesion, "hechos": 2}) == "Lista: todos sus materiales están aprobados."
+    assert servidor._frase_de_sesion({**sesion, "puede_empezar": False}) == "Falta confirmar su ficha."
+
+
+def test_el_tablero_trae_lo_que_sigue_con_motivo_boton_y_costo(sesion):  # noqa: F811
+    _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00", desactualizado=True)
+    _registro(sesion, ("redacción", "S1", 0.5))
+    panel = servidor._panel(sesion, "scrum", "curso")
+    tablero = servidor._tablero(sesion, "scrum", panel)
+    sigue = tablero["sigue"]
+    assert sigue["texto"] == "Sesión 1: genera la lectura de nuevo."
+    assert sigue["boton"] == "Ir a la lectura" and sigue["url"] == "/cursos/scrum/sesiones/1/materiales/lectura"
+    assert sigue["motivo"] == "La ficha cambió después de generarla: ya no la sigue."
+    assert tablero["preparacion_lista"] and tablero["sesiones"][0]["materiales"][0]["fecha"] == "15 de octubre"

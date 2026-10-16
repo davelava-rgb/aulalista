@@ -119,7 +119,8 @@ def ver_curso(request: Request, curso: str, mensaje: str = ""):
             "pendientes": sum(1 for f in fuentes if f["estado"] != convertir.CONVERTIDA),
             "costo_convertir": tokens.ultima_corrida(curso, "lectura_imagen"),
             "mensaje": mensaje,
-            "panel": _panel(carpeta, curso, "curso"),
+            "panel": (panel := _panel(carpeta, curso, "curso")),
+            "tablero": _tablero(carpeta, curso, panel),
         },
     )
 
@@ -572,7 +573,10 @@ def _panel(carpeta, curso: str, actual: str) -> dict:
                 "abierta": actual in [f"ficha-{n}"] + [f"{c}-{n}" for c in MATERIALES],
                 "ficha": _estado_de_ficha(almacen.cargar(carpeta, "sesion", n)["confirmada"],
                                           almacen.ruta_ficha(carpeta, "sesion", n).exists()),
-                "materiales": [{"clave": m["clave"], "corto": m["corto"], "situacion": m["situacion"],
+                "materiales": [{"clave": m["clave"], "corto": m["corto"], "el": m["el"], "plural": m["plural"],
+                                "situacion": m["situacion"], "estado": m["estado"].get("estado") or "",
+                                "desactualizado": bool(m["estado"].get("desactualizado")),
+                                "aprobada": (m["estado"].get("aprobada") or "")[:10],
                                 "sigue": m["clave"] == vista["siguiente"]["ancla"]} for m in incluidos],
                 "hechos": sum(1 for m in incluidos if m["situacion"]["clase"] == "bien"),
                 "van": len(incluidos),
@@ -587,26 +591,97 @@ def _panel(carpeta, curso: str, actual: str) -> dict:
     }
 
 
+MESES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre",
+         "noviembre", "diciembre")
+
+
+def _fecha(iso: str) -> str:
+    """«2026-10-12» → «12 de octubre»."""
+    return f"{int(iso[8:10])} de {MESES[int(iso[5:7]) - 1]}" if len(iso) >= 10 else ""
+
+
+def _motivo(m: dict) -> str:
+    """Por qué un material es el paso que sigue, en una oración."""
+    los = "las" if m["plural"] else ("lo" if m["el"].startswith("el ") else "la")
+    sigue = "siguen" if m["plural"] else "sigue"
+    if m["desactualizado"]:
+        return f"La ficha cambió después de generar{los}: ya no la {sigue}."
+    return {"trabajando": "AulaLista trabaja en esto ahora. La página se actualiza sola.",
+            "verificada": "Está listo: revisa la entrega y decide si lo apruebas.",
+            "con pendientes": "Está listo, con decisiones pendientes: revísalas y decide si lo apruebas.",
+            "con fallas": "Tiene fallas del verificador y no se puede aprobar así.",
+            "error": "Se detuvo por un error antes de terminar.",
+            "detenida": "Lo detuviste antes de terminar.",
+            }.get(m["estado"], "Todavía no se generó.")
+
+
 def _que_sigue(curso: str, panel: dict) -> dict | None:
     """El primer paso pendiente del curso, en el orden del trabajo: fuentes, ficha del curso y, sesión por sesión,
-    su ficha y sus materiales. None si todo está aprobado. Es lo que la página de inicio enlaza."""
+    su ficha y sus materiales. None si todo está aprobado. Lo enlazan la página de inicio y el tablero, que además
+    muestra su motivo y el texto del botón (PLAN.md §0, decisión 44)."""
     base = f"/cursos/{curso}"
     fuentes = panel["fuentes"]["texto"]
     if fuentes == "Sin subir":
-        return {"texto": "Sube las fuentes del curso.", "url": base + "#fuentes"}
+        return {"texto": "Sube las fuentes del curso.", "url": base + "#fuentes", "boton": "Ir a las fuentes",
+                "motivo": "AulaLista saca de las fuentes todo lo que dicen los materiales."}
     if fuentes.endswith("sin convertir"):
-        return {"texto": "Convierte las fuentes a texto.", "url": base + "#fuentes"}
+        return {"texto": "Convierte las fuentes a texto.", "url": base + "#fuentes", "boton": "Ir a las fuentes",
+                "motivo": f"Hay {fuentes}. AulaLista solo lee fuentes convertidas."}
     if fuentes == "Por revisar":
-        return {"texto": "Revisa el texto que la IA leyó de las imágenes.", "url": base + "#fuentes"}
+        return {"texto": "Revisa el texto que la IA leyó de las imágenes.", "url": base + "#fuentes",
+                "boton": "Ir a las fuentes", "motivo": "Antes de usarlo, compáralo con el original."}
     if panel["ficha_curso"]["clase"] != "bien":
-        return {"texto": "Confirma la ficha del curso.", "url": base + "/ficha"}
+        return {"texto": "Confirma la ficha del curso.", "url": base + "/ficha", "boton": "Ir a la ficha del curso",
+                "motivo": "Las sesiones aparecen al confirmarla."}
     for s in panel["sesiones"]:
         if not s["puede_empezar"]:
-            return {"texto": f"Sesión {s['numero']}: confirma su ficha.", "url": f"{base}/sesiones/{s['numero']}/ficha"}
+            return {"texto": f"Sesión {s['numero']}: confirma su ficha.", "url": f"{base}/sesiones/{s['numero']}/ficha",
+                    "boton": "Ir a la ficha de la sesión", "motivo": "Ningún material de la sesión empieza sin ella."}
         if s["siguiente"]["ancla"]:
-            return {"texto": f"Sesión {s['numero']}: {s['siguiente']['texto'][:1].lower()}{s['siguiente']['texto'][1:]}",
-                    "url": f"{base}/sesiones/{s['numero']}/materiales/{s['siguiente']['ancla']}"}
+            m = next(x for x in s["materiales"] if x["clave"] == s["siguiente"]["ancla"])
+            texto = s["siguiente"]["texto"]
+            if m["desactualizado"] and m["estado"] in ("aprobada", "verificada", "con pendientes"):
+                texto = texto.rstrip(".") + " de nuevo."
+            return {"texto": f"Sesión {s['numero']}: {texto[:1].lower()}{texto[1:]}",
+                    "url": f"{base}/sesiones/{s['numero']}/materiales/{m['clave']}",
+                    "boton": f"Ir a {m['el']}", "motivo": _motivo(m), "material": m["clave"], "sesion": s["numero"]}
     return None
+
+
+def _frase_de_sesion(s: dict) -> str:
+    """El avance de una sesión en una oración, para su fila del tablero."""
+    problemas = [m for m in s["materiales"] if m["situacion"]["clase"] == "error"]
+    faltan = [m for m in s["materiales"] if m["situacion"]["clase"] == "neutro"]
+    if not s["puede_empezar"]:
+        return "Falta confirmar su ficha."
+    if s["hechos"] == s["van"]:
+        return "Lista: " + ("su material está aprobado." if s["van"] == 1 else "todos sus materiales están aprobados.")
+    frase = f"{s['hechos']} de {s['van']} {'aprobado' if s['van'] == 1 else 'aprobados'}."
+    desactualizados = [m for m in problemas if m["desactualizado"]]
+    if desactualizados:
+        n = len(desactualizados)
+        frase += f" La ficha cambió: {'un material quedó desactualizado' if n == 1 else f'{n} materiales quedaron desactualizados'}."
+    elif problemas:
+        frase += f" {'Un material tiene' if len(problemas) == 1 else f'{len(problemas)} materiales tienen'} problemas."
+    if faltan:
+        frase += " Falta " + " y ".join(m["el"] for m in faltan) + "."
+    return frase
+
+
+def _tablero(carpeta, curso: str, panel: dict) -> dict:
+    """Lo que muestra el tablero del curso (decisión 44): lo que sigue con su costo, una fila por sesión y la
+    preparación, que va plegada si está lista."""
+    sigue = _que_sigue(curso, panel)
+    if sigue and sigue.get("material"):
+        gasto = MATERIALES[sigue["material"]]["modulo"].gasto_de_la_corrida(carpeta, curso, sigue["sesion"])
+        if gasto and gasto["llamadas"]:
+            sigue["costo"] = f"La última corrida gastó {gasto['costo_usd']:.2f} USD estimados."
+    sesiones = [{**s, "frase": _frase_de_sesion(s),
+                 "materiales": [{**m, "fecha": _fecha(m["aprobada"])} for m in s["materiales"]]}
+                for s in panel["sesiones"]]
+    lista = panel["fuentes"]["clase"] == "bien" and panel["ficha_curso"]["clase"] == "bien"
+    return {"sigue": sigue, "sesiones": sesiones, "preparacion_lista": lista,
+            "materiales": sum(s["van"] for s in sesiones), "aprobados": sum(s["hechos"] for s in sesiones)}
 
 
 def _material(material: str) -> dict:
