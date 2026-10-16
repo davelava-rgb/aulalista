@@ -1,5 +1,6 @@
 {% extends "_entorno.html" %}
-{% from "_estado.html" import indicador, costo, usd %}
+{% from "_estado.html" import indicador, costo, usd, gasta %}
+{% set terminos = namespace(tokens=false) %}
 
 {% block titulo %}{{ m.titulo }}, sesión {{ sesion }} | AulaLista{% endblock %}
 
@@ -33,17 +34,20 @@
   {% if not m.incluido %}
   <p class="estado-material">«Materiales de esta sesión», en la <a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">ficha de la sesión</a>, no {{ "incluyen" if m.plural else "incluye" }} {{ m.el }}.</p>
   {% else %}
+  {% if e.estado in ("trabajando", "con pendientes", "error", "detenida") or e.desactualizado %}
   <p class="estado-material">
     {% if e.estado == "trabajando" %}AulaLista trabaja en {{ m.el }}. Esta página se actualiza sola.
-    {% elif e.estado == "aprobada" %}{{ forma(m, "Aprobad") }} por ti el {{ e.aprobada[:10] }}.
-    {% elif e.estado == "verificada" %}{{ forma(m, "Verificad") }}, sin errores abiertos.
+    {# Aprobada, verificada y con fallas no llevan frase: el indicador y el recorrido ya lo dicen. #}
     {% elif e.estado == "con pendientes" %}{{ "Listas" if m.plural else forma(m, "List") }}, con pendientes. Míralos abajo y decide: puedes aprobar{{ m.lo }} igual.
-    {% elif e.estado == "con fallas" %}Con fallas del verificador. No se {{ "pueden" if m.plural else "puede" }} aprobar así.
-    {% elif e.estado == "error" %}Se {{ "detuvieron" if m.plural else "detuvo" }} por un error: {{ e.error }}
+    {% elif e.estado == "error" %}Se {{ "detuvieron" if m.plural else "detuvo" }} por un error antes de terminar. Prueba otra vez con los botones de abajo. Si se repite, copia el detalle y envíalo.
     {% elif e.estado == "detenida" %}{{ forma(m, "Detenid") }} por ti. Puedes generar{{ m.lo }} de nuevo.
     {% endif %}
     {% if e.desactualizado %}<strong class="alerta">{{ forma(m, "Desactualizad") }}: {{ "la lectura o las fichas cambiaron" if m.plural else "las fichas cambiaron" }}. Genéra{{ m.lo }} de nuevo para que {{ "sigan" if m.plural else "siga" }} a las fichas.</strong>{% endif %}
   </p>
+  {% endif %}
+  {% if e.estado == "error" and e.error %}
+  <details class="detalle"><summary>Detalle del error</summary><p><code>{{ e.error }}</code></p></details>
+  {% endif %}
 
   {% set por_decidir = e.estado in ("verificada", "con pendientes", "con fallas") %}
   {% if e.entrega and e.estado != "trabajando" %}
@@ -110,7 +114,7 @@
       <button type="submit">Aprobar {{ m.el }}</button>
     </form>
     {% elif e.estado == "con fallas" %}
-    <p><strong>No se {{ "pueden" if m.plural else "puede" }} aprobar: {{ "tienen" if m.plural else "tiene" }} fallas del verificador.</strong> Para aprobar{{ m.lo }}, genéra{{ m.lo }} de nuevo. Si una falla viene de un dato de las fichas, corrígelo antes.</p>
+    <p><strong>No se {{ "pueden" if m.plural else "puede" }} aprobar: {{ "tienen" if m.plural else "tiene" }} fallas del verificador</strong>, el programa que revisa cada material sin IA. Para aprobar{{ m.lo }}, genéra{{ m.lo }} de nuevo. Si una falla viene de un dato de las fichas, corrígelo antes.</p>
     {% endif %}
 
     {# La lista «antes de generar» solo va cuando aún no hay nada generado que revisar. #}
@@ -142,8 +146,8 @@
         {% if not puede_empezar %}Espera a que las dos fichas estén confirmadas.
         {% elif m.faltan.ficha or m.faltan.otros %}Espera a que se complete lo de arriba.
         {% elif e.estado == "trabajando" %}Ya está en curso.
-        {% elif m.gasto_corrida and m.costo_ref and m.costo_ref.sesion == sesion %}Gasta tokens, como la corrida de arriba. Tarda unos minutos.
-        {% else %}Gasta tokens. {{ costo(m.costo_ref, "La última corrida" ~ ("" if not m.costo_ref or m.costo_ref.sesion == sesion else " (sesión " ~ m.costo_ref.sesion ~ ")")) }} Tarda unos minutos.{% endif %}
+        {% elif m.gasto_corrida and m.costo_ref and m.costo_ref.sesion == sesion %}{{ gasta(terminos) }}, como la corrida de arriba. Tarda unos minutos.
+        {% else %}{{ gasta(terminos) }}. {{ costo(m.costo_ref, "La última corrida" ~ ("" if not m.costo_ref or m.costo_ref.sesion == sesion else " (sesión " ~ m.costo_ref.sesion ~ ")")) }} Tarda unos minutos.{% endif %}
       </span>
     </form>
     {% if generado %}

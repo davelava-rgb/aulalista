@@ -34,6 +34,13 @@ def _ir_al_curso(curso: str, mensaje: str = "") -> RedirectResponse:
     return RedirectResponse(destino, status_code=303)
 
 
+def _nombre(curso: str) -> str:
+    """El nombre del curso que se ve en la interfaz: el de la ficha del curso, que es el que llevan los materiales
+    (vocabulario único). Sin ficha, el que se escribió al crearlo."""
+    valor = (almacen.cargar(_carpeta(curso), "curso")["campos"].get("curso.nombre") or {}).get("valor", "").strip()
+    return valor or cursos.nombre(curso)
+
+
 def lector_de_imagenes(curso: str) -> convertir.LectorImagen:
     async def leer(imagen: bytes, tipo: str, etiqueta: str) -> list[str]:
         return await agente.leer_imagen(imagen, tipo, curso=curso, etiqueta=etiqueta)
@@ -44,7 +51,7 @@ def lector_de_imagenes(curso: str) -> convertir.LectorImagen:
 
 @app.get("/")
 def inicio(request: Request, mensaje: str = ""):
-    lista = [{**c, "gasto": tokens.total(c["curso"])} for c in cursos.listar()]
+    lista = [{**c, "nombre": _nombre(c["curso"]), "gasto": tokens.total(c["curso"])} for c in cursos.listar()]
     sistema = tokens.total(tokens.CURSO_SISTEMA)
     total = {"llamadas": sistema["llamadas"] + sum(c["gasto"]["llamadas"] for c in lista),
              "costo_usd": sistema["costo_usd"] + sum(c["gasto"]["costo_usd"] for c in lista)}
@@ -95,8 +102,7 @@ def ver_curso(request: Request, curso: str, mensaje: str = ""):
         "curso.html",
         {
             "curso": curso,
-            "nombre": cursos.nombre(curso),
-            "nombre_en_la_ficha": (ficha_curso["campos"].get("curso.nombre") or {}).get("valor", "").strip(),
+            "nombre": _nombre(curso),
             "ficha_curso": ficha_curso,
             "ficha_curso_existe": almacen.ruta_ficha(carpeta, "curso").exists(),
             "fuentes": fuentes,
@@ -150,7 +156,7 @@ def ver_fuente(request: Request, curso: str, archivo: str):
         "fuente.html",
         {
             "curso": curso,
-            "nombre": cursos.nombre(curso),
+            "nombre": _nombre(curso),
             "archivo": archivo,
             "entrada": entrada,
             "pasajes": convertir.leer_pasajes(carpeta, archivo),
@@ -211,7 +217,7 @@ def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, m
               "corregir": tokens.ultima_corrida(curso, "corrección de ejercicios"),
               **{f"completar.{c}": tokens.ultima_corrida(curso, f"completar ficha: {c}") for c in flujo.COMPLETAR}}
     return plantillas.TemplateResponse(request, "ficha.html", {
-        "curso": curso, "nombre": cursos.nombre(curso), "titulo": titulo, "sesion": sesion, "ficha": ficha,
+        "curso": curso, "nombre": _nombre(curso), "titulo": titulo, "sesion": sesion, "ficha": ficha,
         "propuesta": flujo.estado_propuesta(carpeta, tipo, sesion),
         "hay_propuestos": any((d or {}).get("estado") == almacen.PROPUESTO for d in ficha["campos"].values()),
         "secciones": secciones, "generados": generados, "generados_texto": _y(generados), "costos": costos,
@@ -641,7 +647,7 @@ def ver_material(request: Request, curso: str, sesion: int, material: str, mensa
     vista = _vista_de_materiales(carpeta, curso, sesion, detalle=True)
     m = next(x for x in vista["materiales"] if x["clave"] == material)
     return plantillas.TemplateResponse(request, "material.html", {
-        "curso": curso, "nombre": cursos.nombre(curso), "sesion": sesion, "mensaje": mensaje,
+        "curso": curso, "nombre": _nombre(curso), "sesion": sesion, "mensaje": mensaje,
         "m": m, "recorrido": _recorrido(m, m["estado"]), "total": len(vista["materiales"]),
         "listos": _listos(carpeta, sesion, m, vista["puede_empezar"]),
         "puede_empezar": vista["puede_empezar"], "siguiente": vista["siguiente"],

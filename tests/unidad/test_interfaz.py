@@ -92,7 +92,7 @@ def test_el_recorrido_se_ve_en_la_pagina_con_su_estado_en_palabras(sesion):  # n
 def test_el_laboratorio_concuerda_en_masculino(sesion):  # noqa: F811
     _poner(sesion, "laboratorio", estado="aprobada", aprobada="2026-10-15T10:00:00")
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/laboratorio").text
-    assert "Aprobado por ti el 2026-10-15" in pagina and "Aprobada por ti" not in pagina
+    assert "Aprobado</span>" in pagina and "El 2026-10-15" in pagina
     assert "AulaLista lo reemplaza" in pagina
 
 
@@ -125,7 +125,7 @@ def test_el_boton_generar_dice_lo_que_gasto_la_ultima_corrida(sesion):  # noqa: 
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     # El costo se dice una sola vez: en «Desde que pulsaste Generar» y el botón remite a esa línea.
     assert "Desde que pulsaste Generar: 1 llamada, 0.42 USD estimados." in pagina
-    assert "Gasta tokens, como la corrida de arriba." in pagina
+    assert "Gasta tokens (la unidad con que se paga el uso de Claude), como la corrida de arriba." in pagina
 
 
 def test_la_pagina_del_curso_es_la_preparacion_y_el_avance_va_en_el_panel(sesion):  # noqa: F811
@@ -286,3 +286,16 @@ def test_una_falla_no_se_presenta_como_decision_ni_con_la_lista_de_generar(sesio
     assert "FALLA" in impide and "Afirmación sin fuente" not in impide
     assert "Decisiones pendientes: decide si la aceptas</h3>" in pagina
     assert "Todo está listo para generar" not in pagina and "resolverlas en las fichas" not in pagina
+
+
+def test_el_curso_se_llama_igual_en_todas_partes_y_los_terminos_se_definen(sesion):  # noqa: F811
+    nombre = servidor._nombre("scrum")
+    assert nombre != "Scrum"                                    # el de la ficha, no el que se escribió al crearlo
+    for url in ("/", "/cursos/scrum", "/cursos/scrum/sesiones/1/materiales/lectura"):
+        assert nombre in cliente.get(url).text, url
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    assert pagina.count("(la unidad con que se paga el uso de Claude)") == 1   # se define una sola vez por página
+    _poner(sesion, "lectura", estado="error", error="Traceback: algo falló")
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    assert "Se detuvo por un error antes de terminar." in pagina
+    assert "<summary>Detalle del error</summary><p><code>Traceback: algo falló</code>" in pagina

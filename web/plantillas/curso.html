@@ -1,13 +1,12 @@
 {% extends "_entorno.html" %}
-{% from "_estado.html" import indicador, costo, usd %}
+{% from "_estado.html" import indicador, costo, usd, gasta %}
+{% set terminos = namespace(tokens=false) %}
 
 {% block titulo %}{{ nombre }} | AulaLista{% endblock %}
 
 {% block contenido %}
 <p class="donde">Preparación del curso</p>
 <h1>{{ nombre }}</h1>
-{% if nombre_en_la_ficha and nombre_en_la_ficha != nombre %}<p class="nota">En los materiales se llama «{{ nombre_en_la_ficha }}», como dice la ficha del curso.</p>
-{% endif %}
 <p>Prepara el curso en dos pasos: sube y convierte las fuentes, y confirma la ficha del curso. Después, las sesiones aparecen en el panel de la izquierda.</p>
 
 <h2 id="fuentes">1. Fuentes del curso</h2>
@@ -47,7 +46,7 @@
 
 <form method="post" action="/cursos/{{ curso }}/convertir" id="form-convertir" class="accion">
   <button type="submit" id="convertir">Convertir fuentes a texto</button>
-  <span class="nota">{{ pendientes }} sin convertir. Solo se convierte lo nuevo o reemplazado. Las imágenes y las páginas escaneadas las lee Claude y gastan tokens. {{ costo(costo_convertir, "La última lectura de imágenes") }}</span>
+  <span class="nota">{{ pendientes }} sin convertir. Solo se convierte lo nuevo o reemplazado. Las imágenes y las páginas escaneadas las lee Claude y {{ gasta(terminos, "gastan") }}. {{ costo(costo_convertir, "La última lectura de imágenes") }}</span>
 </form>
 {% endif %}
 

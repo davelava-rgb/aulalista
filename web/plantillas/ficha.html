@@ -1,5 +1,6 @@
 {% extends "_entorno.html" %}
-{% from "_estado.html" import costo, icono %}
+{% from "_estado.html" import costo, icono, gasta %}
+{% set terminos = namespace(tokens=false) %}
 
 {% block titulo %}{{ titulo }} | AulaLista{% endblock %}
 
@@ -135,7 +136,7 @@
     <button type="submit" form="form-ficha" name="accion" value="corregir_ejercicios"
             {% if propuesta.estado == "trabajando" %}disabled{% endif %}>Corregir los ejercicios</button>
     <p class="ayuda">AulaLista corrige los ejercicios marcados, los revisa de nuevo y, si cumplen, confirma la ficha.
-      Lo cambiado queda marcado «Propuesto». Gasta tokens. {{ costo(costos.corregir) }}</p>
+      Lo cambiado queda marcado «Propuesto». {{ gasta(terminos) }}. {{ costo(costos.corregir) }}</p>
   </div>
   {% else %}
   <p>Corrige esos campos y guarda de nuevo. Puedes salir de la ficha cuando quieras: lo guardado no se pierde.</p>
@@ -168,7 +169,7 @@
   <section class="seccion" id="{{ s.ancla }}" aria-labelledby="t-{{ s.ancla }}">
     <h2 id="t-{{ s.ancla }}">{{ s.titulo }}</h2>
     {% if s.origen_comun %}<p class="origen">Fuente de esta sección: {{ s.origen_comun }}</p>{% endif %}
-    {% if s.titulo.split(". ", 1)[-1].startswith("Evaluación") %}<p class="mensaje">AulaLista no genera la evaluación (decisión 37). Lo que escribas aquí se guarda, pero no se usa.</p>{% endif %}
+    {% if s.titulo.split(". ", 1)[-1].startswith("Evaluación") %}<p class="mensaje">AulaLista no genera la evaluación (decisión 37). Lo que escribas aquí se guarda, pero no se usa. PBQ quiere decir «Performance Based Question»: una pregunta que se responde haciendo una tarea, no eligiendo una opción.</p>{% endif %}
     {% for e in s.elementos %}
       {% if e.repetible %}
         {% if e.encabezado %}<p class="nota">{{ e.encabezado }}</p>{% endif %}
@@ -190,7 +191,7 @@
     {% if extra %}
     <div class="completar">
       <button type="submit" name="accion" value="completar.{{ extra.clave }}" class="secundario" {% if propuesta.estado == "trabajando" %}disabled{% endif %}>{{ extra.boton }}</button>
-      <p class="ayuda">{{ extra.ayuda }} Gasta tokens. {{ costo(costos["completar." ~ extra.clave]) }}</p>
+      <p class="ayuda">{{ extra.ayuda }} {{ gasta(terminos) }}. {{ costo(costos["completar." ~ extra.clave]) }}</p>
     </div>
     {% endif %}
   </section>
@@ -210,7 +211,7 @@
     {% endif %}
   </div>
   <p class="nota">«Guardar» guarda la ficha y, si está completa, la confirma. «Proponer desde las fuentes» y
-    «Completar» solo llenan campos vacíos y gastan tokens. {{ costo(costos.proponer, "La última propuesta") }}</p>
+    «Completar» solo llenan campos vacíos y {{ gasta(terminos, "gastan") }}. {{ costo(costos.proponer, "La última propuesta") }}</p>
 </form>
 
 {% if versiones %}

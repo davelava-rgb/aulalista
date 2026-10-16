@@ -699,7 +699,8 @@ class _Trabajo:
             if ajustes:
                 self.ajustes += ajustes
                 self.avance(f"Ajuste sin IA: recorté el margen interior de {comun.cuantos(len(ajustes), 'recuadro')} "
-                            "que se pasaba 0.5 cm o menos. La letra no cambia. Mido de nuevo.")
+                            f"que se {'pasaba' if len(ajustes) == 1 else 'pasaban'} 0.5 cm o menos. La letra no cambia. "
+                            "Mido de nuevo.")
                 fallas, avisos = una_vez()
         return fallas, avisos
 

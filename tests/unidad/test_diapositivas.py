@@ -329,7 +329,7 @@ def test_se_aprueban_desde_la_pagina(con_lectura):
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/diapositivas/aprobar", follow_redirects=False)
     assert "Diapositivas aprobadas." in unquote(r.headers["location"])
     assert diapositivas.estado(con_lectura, 1)["estado"] == "aprobada"
-    assert "Aprobadas por ti el" in cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
+    assert "Aprobadas</span>" in cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
 
 
 def test_detener_y_material_desconocido(con_lectura):

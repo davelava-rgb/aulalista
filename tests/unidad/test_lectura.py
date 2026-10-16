@@ -439,7 +439,7 @@ def test_la_pagina_de_la_sesion_genera_y_permite_descargar(sesion, monkeypatch):
     for hilo in servidor_hilos:
         hilo.join(timeout=60)
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
-    assert "Verificada" in pagina and "S1_Lectura.docx" in pagina
+    assert "Para aprobar</span>" in pagina and "S1_Lectura.docx" in pagina
     descarga = cliente.get("/cursos/scrum/sesiones/1/descargar/S1_Lectura.docx")
     assert descarga.status_code == 200 and descarga.content[:2] == b"PK"
     assert cliente.get("/cursos/scrum/sesiones/1/descargar/..%5C..%5Cficha_del_curso.json").status_code == 404
