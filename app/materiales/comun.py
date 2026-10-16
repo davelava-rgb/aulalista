@@ -60,6 +60,25 @@ def ordenar_materiales(carpeta: Path) -> None:
             ruta.unlink()
         except OSError:
             pass
+    _quitar_entrega_md_del_estado(carpeta.parent / "estado.json")
+
+
+def _quitar_entrega_md_del_estado(ruta: Path) -> None:
+    """La entrega guardada de un material anterior nombra su Entrega.md, que ya no existe: la página lo mostraba
+    como un enlace que no abre."""
+    if not ruta.exists():
+        return
+    estado_ = json.loads(ruta.read_text(encoding="utf-8"))
+    cambio = False
+    for material in (estado_.get("materiales") or {}).values():
+        if (material.get("archivos") or {}).pop("entrega", None) is not None:
+            cambio = True
+        for seccion in (material.get("entrega") or {}).get("secciones", []):
+            lineas = [l for l in seccion["lineas"] if not l.endswith("_Entrega.md: esta entrega, en texto.")]
+            if len(lineas) != len(seccion["lineas"]):
+                seccion["lineas"], cambio = lineas, True
+    if cambio:
+        ruta.write_text(json.dumps(estado_, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def escribir_sistema(ruta: Path, texto: str) -> Path:

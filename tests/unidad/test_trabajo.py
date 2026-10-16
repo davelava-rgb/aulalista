@@ -50,3 +50,18 @@ def test_los_pedidos_de_correccion_no_repiten_lo_que_va_en_el_mensaje_de_sistema
         assert comun.REGLAS_DE_CORRECCION not in pedido and "- FALLA · algo" in pedido
     for modulo in (lectura, diapositivas, laboratorio):
         assert modulo.archivos(Path("c"), 1)["sistema"].name == "sistema_correccion.txt"
+
+
+def test_la_entrega_guardada_deja_de_nombrar_el_entrega_md(tmp_path):
+    """La página arma los enlaces desde el estado guardado: un Entrega.md borrado daba un enlace que no abre."""
+    import json
+    sesion = tmp_path / "scrum" / "sesiones" / "S1"
+    (sesion / "materiales").mkdir(parents=True)
+    lineas = ["S1_Lectura.docx: la lectura.", "S1_Lectura_Entrega.md: esta entrega, en texto."]
+    estado = {"materiales": {"lectura": {"archivos": {"word": "S1_Lectura.docx", "entrega": "S1_Lectura_Entrega.md"},
+                                         "entrega": {"secciones": [{"clave": "archivos", "lineas": lineas}]}}}}
+    (sesion / "estado.json").write_text(json.dumps(estado), encoding="utf-8")
+    comun.ordenar_cursos(tmp_path)
+    lectura_ = json.loads((sesion / "estado.json").read_text(encoding="utf-8"))["materiales"]["lectura"]
+    assert lectura_["archivos"] == {"word": "S1_Lectura.docx"}
+    assert lectura_["entrega"]["secciones"][0]["lineas"] == ["S1_Lectura.docx: la lectura."]
