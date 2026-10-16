@@ -104,6 +104,7 @@ def ver_curso(request: Request, curso: str, mensaje: str = ""):
         {
             "curso": curso,
             "nombre": cursos.nombre(curso),
+            "nombre_en_la_ficha": (ficha_curso["campos"].get("curso.nombre") or {}).get("valor", "").strip(),
             "ficha_curso": ficha_curso,
             "ficha_curso_existe": almacen.ruta_ficha(carpeta, "curso").exists(),
             "sesiones": sesiones,
@@ -180,6 +181,11 @@ def marcar_revisada(curso: str, archivo: str):
 TITULOS_FICHA = {"curso": "Ficha del curso", "sesion": "Ficha de la sesión"}
 
 
+# Resultado de la última acción en cada ficha, para mostrarlo después de redirigir (post-redirect-get):
+# recargar la página ya no reenvía «Proponer» ni «Completar», que gastan tokens. Un solo usuario: basta en memoria.
+_AVISOS_FICHA: dict[str, tuple[str, list | None]] = {}
+
+
 def _url_ficha(curso: str, sesion: int | None) -> str:
     return f"/cursos/{curso}/ficha" if sesion is None else f"/cursos/{curso}/sesiones/{sesion}/ficha"
 
@@ -216,7 +222,7 @@ def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, m
         "curso": curso, "nombre": cursos.nombre(curso), "titulo": titulo, "ficha": ficha,
         "propuesta": flujo.estado_propuesta(carpeta, tipo, sesion),
         "hay_propuestos": any((d or {}).get("estado") == almacen.PROPUESTO for d in ficha["campos"].values()),
-        "secciones": secciones, "generados": generados, "costos": costos,
+        "secciones": secciones, "generados": generados, "generados_texto": _y(generados), "costos": costos,
         "url_propuesta": _url_ficha(curso, sesion) + "/propuesta",
         "preguntas": almacen.preguntas_pendientes(ficha),
         "errores": errores or [], "mensaje": mensaje, "corregibles": corregibles,
@@ -247,6 +253,14 @@ def _indice_de_secciones(secciones: list[dict]) -> list[dict]:
                 campos.append(e)
         s["ancla"] = f"seccion-{numero}"
         s["alertas"] = sum(1 for c in campos if c["estado"] in ALERTAS)
+        # La fuente que más se repite se dice una vez en la sección; cada campo dice solo la suya si es otra.
+        origenes = [c["origen"] for c in campos if c.get("origen") and c["origen"] != "profesor"]
+        comun = max(set(origenes), key=origenes.count) if origenes else ""
+        if origenes.count(comun) < 2:
+            comun = ""
+        s["origen_comun"] = comun
+        for c in campos:
+            c["origen_visible"] = c["origen"] if c.get("origen") not in ("", None, "profesor", comun) else ""
     return secciones
 
 
@@ -314,7 +328,8 @@ async def _accion_ficha(request: Request, curso: str, tipo: str, sesion: int | N
         mensaje = str(error)
     except (FaltaClave, agente.ErrorDeAgente) as error:
         mensaje = str(error)
-    return _pagina_ficha(request, curso, tipo, sesion, mensaje, errores)
+    _AVISOS_FICHA[_url_ficha(curso, sesion)] = (mensaje, errores)
+    return RedirectResponse(_url_ficha(curso, sesion), status_code=303)
 
 
 async def _guardar_y_confirmar(carpeta, curso: str, tipo: str, sesion: int | None) -> str:
@@ -342,7 +357,7 @@ def _proponer_si_corresponde(curso: str, tipo: str, sesion: int | None) -> None:
 @app.get("/cursos/{curso}/ficha")
 def ver_ficha_del_curso(request: Request, curso: str):
     _proponer_si_corresponde(curso, "curso", None)
-    return _pagina_ficha(request, curso, "curso", None)
+    return _pagina_ficha(request, curso, "curso", None, *_AVISOS_FICHA.pop(_url_ficha(curso, None), ("", None)))
 
 
 @app.post("/cursos/{curso}/ficha")
@@ -354,7 +369,7 @@ async def accion_ficha_del_curso(request: Request, curso: str):
 def ver_ficha_de_la_sesion(request: Request, curso: str, sesion: int):
     _exigir_ficha_del_curso(_carpeta(curso), curso)
     _proponer_si_corresponde(curso, "sesion", sesion)
-    return _pagina_ficha(request, curso, "sesion", sesion)
+    return _pagina_ficha(request, curso, "sesion", sesion, *_AVISOS_FICHA.pop(_url_ficha(curso, sesion), ("", None)))
 
 
 @app.post("/cursos/{curso}/sesiones/{sesion}/ficha")

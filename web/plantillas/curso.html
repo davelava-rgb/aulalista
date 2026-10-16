@@ -6,7 +6,8 @@
 
 {% block contenido %}
 <h1>{{ nombre }}</h1>
-
+{% if nombre_en_la_ficha and nombre_en_la_ficha != nombre %}<p class="nota">En los materiales se llama «{{ nombre_en_la_ficha }}», como dice la ficha del curso.</p>
+{% endif %}
 <h2>Fichas</h2>
 <p>
   <a href="/cursos/{{ curso }}/ficha">Ficha del curso</a>:
@@ -63,7 +64,7 @@
         {% if f.estado == "convertida" %}<a href="/cursos/{{ curso }}/fuentes/{{ f.archivo | urlencode }}">{{ f.archivo }}</a>{% else %}{{ f.archivo }}{% endif %}
       </td>
       <td>
-        {{ f.estado }}
+        {{ f.estado | capitalize }}
         {% if f.motivo %}<br><span class="nota">{{ f.motivo }}</span>{% endif %}
         {% for a in f.avisos or [] %}<br><span class="nota">{{ a }}</span>{% endfor %}
       </td>

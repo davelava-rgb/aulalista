@@ -8,6 +8,7 @@ p1_count: 2
 target_identity: "file:C:\\Users\\info\\OneDrive - FUTURASOFT\\Documentos\\aulalista\\web\\plantillas"
 timestamp: 2026-10-16T07-00-40Z
 slug: web-plantillas
+closed: true
 ---
 # Critique 2: interfaz web de AulaLista (web/plantillas)
 

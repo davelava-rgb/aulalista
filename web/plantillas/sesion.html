@@ -94,12 +94,6 @@
   {% elif e.estado == "con fallas" %}
   <p><strong>No se {{ "pueden" if m.plural else "puede" }} aprobar: {{ "tienen" if m.plural else "tiene" }} fallas del verificador.</strong> Genéra{{ m.lo }} de nuevo después de resolverlas en las fichas.</p>
   {% endif %}
-  {% if e.estado in ("verificada", "con pendientes", "aprobada") %}
-  <form method="post" action="{{ base }}/revisor" class="accion">
-    <button type="submit" class="secundario">Pedir revisor independiente</button>
-    <span class="nota">Opcional. Una sesión nueva de Claude Opus lee {{ m.el }}, las fuentes y las fichas. No corrige: lo que encuentra queda pendiente para que decidas. Gasta hasta 2 USD. {{ costo(costo_revisor) }}</span>
-  </form>
-  {% endif %}
   {% endif %}
 
   {% if e.avance %}
@@ -131,9 +125,16 @@
       {% if not puede_empezar %}Espera a que las dos fichas estén confirmadas.
       {% elif m.faltan.ficha or m.faltan.otros %}Espera a que se complete lo de arriba.
       {% elif e.estado == "trabajando" %}Ya está en curso.
+      {% elif m.gasto_corrida and m.costo_ref and m.costo_ref.sesion == sesion %}Gasta tokens, como la corrida de arriba. Puede tardar varios minutos.
       {% else %}Gasta tokens. {{ costo(m.costo_ref, "La última corrida" ~ ("" if not m.costo_ref or m.costo_ref.sesion == sesion else " (sesión " ~ m.costo_ref.sesion ~ ")")) }} Puede tardar varios minutos.{% endif %}
     </span>
   </form>
+  {% if e.estado in ("verificada", "con pendientes", "aprobada") and not e.desactualizado %}
+  <form method="post" action="{{ base }}/revisor" class="accion">
+    <button type="submit" class="secundario" aria-describedby="revisor-{{ m.clave }}">Pedir revisor independiente</button>
+    <span class="nota" id="revisor-{{ m.clave }}">Opcional. Una sesión nueva de Claude Opus lee {{ m.el }}, las fuentes y las fichas. No corrige: lo que encuentra queda pendiente para que decidas. Tope: 2 USD. {{ costo(costo_revisor) }}</span>
+  </form>
+  {% endif %}
   {% if e.estado == "trabajando" %}
   <form method="post" action="{{ base }}/detener" class="accion">
     <button type="submit" class="secundario">Detener</button>

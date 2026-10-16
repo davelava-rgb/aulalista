@@ -76,7 +76,10 @@ def test_el_boton_generar_dice_lo_que_gasto_la_ultima_corrida(sesion):  # noqa: 
     with open(sesion / "tokens.jsonl", "a", encoding="utf-8") as archivo:
         archivo.write(json.dumps({"fecha": "x", "curso": "scrum", "sesion": "S1", "material": "lectura",
                                   "etapa": "redacción", "tokens_entrada": 1, "tokens_salida": 1, "costo_usd": 0.42}) + "\n")
-    assert "La última corrida gastó 0.42 USD estimados (1 llamada)." in cliente.get("/cursos/scrum/sesiones/1").text
+    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    # El costo se dice una sola vez: en «Gasto desde la última vez» y el botón remite a esa línea.
+    assert "Gasto desde la última vez que pulsaste Generar: 1 llamada, 0.42 USD estimados." in pagina
+    assert "Gasta tokens, como la corrida de arriba." in pagina
 
 
 def test_la_tabla_del_curso_muestra_el_avance_de_cada_sesion(sesion):  # noqa: F811
@@ -104,11 +107,20 @@ def test_la_ficha_tiene_indice_aviso_de_cambios_y_consulta_la_propuesta_sin_reca
 
 
 def test_guardar_una_ficha_confirmada_avisa_que_desactualiza_lo_generado(sesion):  # noqa: F811
-    assert "lo ya generado queda desactualizado" not in cliente.get("/cursos/scrum/sesiones/1/ficha").text
+    assert "guardar un cambio desactualiza" not in cliente.get("/cursos/scrum/sesiones/1/ficha").text
     _poner(sesion, "lectura", estado="verificada")
     assert almacen.cargar(sesion, "sesion", 1)["confirmada"]
     pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
-    assert "lo ya generado queda desactualizado y hay que generarlo de nuevo: la lectura." in pagina
+    assert "Ficha confirmada: guardar un cambio desactualiza la lectura." in pagina
+    # Y Guardar lo pregunta antes de enviar.
+    assert 'data-confirmar="Esta ficha está confirmada. Si guardas el cambio, hay que generar de nuevo la lectura' in pagina
+
+
+def test_la_ficha_redirige_despues_de_guardar_y_recargar_no_reenvia(sesion):  # noqa: F811
+    r = cliente.post("/cursos/scrum/sesiones/1/ficha", data={"accion": "guardar"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/cursos/scrum/sesiones/1/ficha"
+    assert "Ficha guardada." in cliente.get(r.headers["location"]).text
+    assert "Ficha guardada." not in cliente.get(r.headers["location"]).text   # el aviso se muestra una sola vez
 
 
 def test_los_bloques_llenos_se_pliegan_y_los_con_alertas_quedan_abiertos():
