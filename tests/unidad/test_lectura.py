@@ -5,6 +5,7 @@ import copy
 import json
 import re
 import zipfile
+from pathlib import Path
 
 import openpyxl
 import pytest
@@ -255,8 +256,10 @@ def test_una_falla_se_corrige_y_se_verifica_de_nuevo(sesion):
     assert (correccion.model, correccion.max_budget_usd, correccion.effort) == ("claude-sonnet-5-5", 0.60, "medium")
     contenido = lectura.archivos(sesion, 1)["contenido"].read_text(encoding="utf-8")
     assert "10 minutos" not in contenido
+    sistema = Path(correccion.system_prompt["path"]).read_text(encoding="utf-8")
+    assert sistema.startswith("REGLAS DE LA SKILL") and "REGLAS DE CORRECCIÓN" in sistema   # la parte fija, en caché
     pedido = consulta.llamadas[1]["prompt"]
-    assert pedido.startswith("REGLAS DE LA SKILL")  # la parte fija va primero
+    assert "REGLAS DE LA SKILL" not in pedido and "REGLAS DE CORRECCIÓN" not in pedido     # decisión 43
     assert pedido.rstrip().endswith("FALLA · tiempo · «Lee este bloque en 10 minutos.»: dice «minutos»")
 
 

@@ -67,6 +67,7 @@ def archivos(carpeta_curso: Path, sesion: int) -> dict[str, Path]:
         "revision": trabajo / "revisor",
         "contenido": trabajo / "contenido.json",
         "explicaciones": trabajo / "explicaciones.json",
+        "sistema": trabajo / "sistema_correccion.txt",
     }
 
 
@@ -197,12 +198,15 @@ def pedido_de_redaccion(carpeta_curso: Path, sesion: int, paginas: list[str] | N
 REGLAS_DE_CORRECCION = comun.REGLAS_DE_CORRECCION
 
 
-def pedido_de_cambios(carpeta_curso: Path, sesion: int, contenido: dict, problemas: list[str]) -> str:
+def sistema_de_correccion(carpeta_curso: Path, sesion: int) -> str:
+    """El mensaje de sistema de todas las correcciones: igual en cada una, se lee de caché (decisión 43)."""
+    return "\n".join([_contexto(carpeta_curso, sesion), _formato(carpeta_curso, sesion), REGLAS_DE_CORRECCION])
+
+
+def pedido_de_cambios(contenido: dict, problemas: list[str]) -> str:
     """Corrección barata: devuelve solo las oraciones que cambian."""
     return "\n".join([
-        _contexto(carpeta_curso, sesion),
-        _formato(carpeta_curso, sesion),
-        REGLAS_DE_CORRECCION,
+        "Corrige el material según el contexto, el formato y las reglas de tus instrucciones.",
         "CÓMO ENTREGAR LA CORRECCIÓN",
         "- En «cambios», una entrada por oración que cambias: «oracion» copiada tal cual de la lectura y «nueva» con el texto nuevo.",
         "- Para eliminar una oración, deja «nueva» vacío. No devuelvas las oraciones que no cambian.",
@@ -215,12 +219,10 @@ def pedido_de_cambios(carpeta_curso: Path, sesion: int, contenido: dict, problem
     ])
 
 
-def pedido_de_correccion(carpeta_curso: Path, sesion: int, contenido: dict, problemas: list[str]) -> str:
+def pedido_de_correccion(contenido: dict, problemas: list[str]) -> str:
     """Corrección completa: solo para problemas de estructura o de extensión, que no son de una oración."""
     return "\n".join([
-        _contexto(carpeta_curso, sesion),
-        _formato(carpeta_curso, sesion),
-        REGLAS_DE_CORRECCION,
+        "Corrige el material según el contexto, el formato y las reglas de tus instrucciones.",
         "Devuelve la lectura completa con el mismo esquema.",
         "",
         "LECTURA ACTUAL:",
@@ -407,17 +409,18 @@ class _Trabajo:
 
     async def corregir(self, problemas: list[str], completa: bool) -> None:
         vuelta = self.vuelta
+        sistema = comun.escribir_sistema(self.rutas["sistema"], sistema_de_correccion(self.carpeta_curso, self.sesion))
         if completa:
             self.avance(f"Corrigiendo la lectura completa: {len(problemas)} problemas.")
-            respuesta = await agente.consultar(pedido_de_correccion(self.carpeta_curso, self.sesion, self.datos, problemas),
+            respuesta = await agente.consultar(pedido_de_correccion(self.datos, problemas),
                                                tarea="correccion", esquema=ESQUEMA_CORRECCION,
-                                               etapa=f"corrección completa {vuelta}", **self.comun)
+                                               etapa=f"corrección completa {vuelta}", sistema=sistema, **self.comun)
             self.datos = respuesta["lectura"]
         else:
             self.avance(f"Corrigiendo {_cuantos(len(problemas), 'problema')}.")
-            respuesta = await agente.consultar(pedido_de_cambios(self.carpeta_curso, self.sesion, self.datos, problemas),
+            respuesta = await agente.consultar(pedido_de_cambios(self.datos, problemas),
                                                tarea="correccion_oraciones", esquema=ESQUEMA_CAMBIOS,
-                                               etapa=f"corrección {vuelta}", **self.comun)
+                                               etapa=f"corrección {vuelta}", sistema=sistema, **self.comun)
             self.datos, no_encontradas = aplicar_cambios(self.datos, respuesta["cambios"])
             if no_encontradas:
                 self.avance(f"{_cuantos(len(no_encontradas), 'oración')} a cambiar no se encontraron en la lectura.")

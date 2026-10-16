@@ -62,6 +62,14 @@ def ordenar_materiales(carpeta: Path) -> None:
             pass
 
 
+def escribir_sistema(ruta: Path, texto: str) -> Path:
+    """Lo que no cambia entre las correcciones (contexto, formato y reglas) va en el mensaje de sistema, en un
+    archivo: el SDK lo guarda en caché y cada corrección siguiente lo paga mucho más barato (decisión 43)."""
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    ruta.write_text(texto, encoding="utf-8")
+    return ruta
+
+
 def ordenar_cursos(carpeta_cursos: Path) -> None:
     for carpeta in carpeta_cursos.glob("*/sesiones/*/materiales"):
         ordenar_materiales(carpeta)

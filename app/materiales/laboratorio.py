@@ -73,6 +73,7 @@ def archivos(carpeta_curso: Path, sesion: int) -> dict[str, Path]:
         "ejecucion_json": trabajo / "ejecucion.json",
         "registro": carpeta / f"S{sesion}_Laboratorio_Ejecucion.md",
         "explicaciones": trabajo / "explicaciones.json",
+        "sistema": trabajo / "sistema_correccion.txt",
     }
 
 
@@ -311,11 +312,18 @@ def pedido_de_redaccion(carpeta_curso: Path, sesion: int, paginas: list[str] | N
     ])
 
 
-def _pedido_con_problemas(carpeta_curso, sesion, datos: dict, problemas: list[str], como_entregar: list[str]) -> str:
+def sistema_de_correccion(carpeta_curso: Path, sesion: int) -> str:
+    """El mensaje de sistema de todas las correcciones: igual en cada una, se lee de caché (decisión 43)."""
     return "\n".join([
         _contexto(carpeta_curso, sesion),
         instrucciones_de_formato(sesion, aviso_de_adjuntos(carpeta_curso), herramienta(carpeta_curso)),
         comun.REGLAS_DE_CORRECCION,
+    ])
+
+
+def _pedido_con_problemas(datos: dict, problemas: list[str], como_entregar: list[str]) -> str:
+    return "\n".join([
+        "Corrige el material según el contexto, el formato y las reglas de tus instrucciones.",
         *como_entregar,
         "",
         "LABORATORIO ACTUAL:",
@@ -326,16 +334,16 @@ def _pedido_con_problemas(carpeta_curso, sesion, datos: dict, problemas: list[st
     ])
 
 
-def pedido_de_cambios(carpeta_curso, sesion, datos, problemas) -> str:
-    return _pedido_con_problemas(carpeta_curso, sesion, datos, problemas, [
+def pedido_de_cambios(datos, problemas) -> str:
+    return _pedido_con_problemas(datos, problemas, [
         "CÓMO ENTREGAR LA CORRECCIÓN",
         "- En «cambios», una entrada por oración que cambias: «oracion» copiada tal cual y «nueva» con el texto nuevo.",
         "  Para eliminar una oración, deja «nueva» vacío. No devuelvas las oraciones que no cambian.",
     ])
 
 
-def pedido_de_correccion(carpeta_curso, sesion, datos, problemas) -> str:
-    return _pedido_con_problemas(carpeta_curso, sesion, datos, problemas,
+def pedido_de_correccion(datos, problemas) -> str:
+    return _pedido_con_problemas(datos, problemas,
                                  ["Devuelve el laboratorio completo con el mismo esquema."])
 
 
@@ -367,9 +375,9 @@ def ejercicios_nombrados(textos: list[str]) -> set[int] | None:
     return numeros or None
 
 
-def pedido_de_correccion_por_ejercicios(carpeta_curso, sesion, datos, problemas, numeros: set[int]) -> str:
+def pedido_de_correccion_por_ejercicios(datos, problemas, numeros: set[int]) -> str:
     cuales = ", ".join(map(str, sorted(numeros)))
-    return _pedido_con_problemas(carpeta_curso, sesion, datos, problemas, [
+    return _pedido_con_problemas(datos, problemas, [
         "CÓMO ENTREGAR LA CORRECCIÓN",
         f"- Los problemas son solo de los ejercicios {cuales}. Corrige solo esos ejercicios.",
         f"- En «ejercicios», devuelve completos los ejercicios {cuales}, con su mismo número. No devuelvas los demás.",
@@ -603,27 +611,28 @@ class _Trabajo:
 
     async def corregir(self, problemas: list[str], completa: bool, ejercicios: set[int] | None = None) -> None:
         vuelta = self.vuelta
+        sistema = comun.escribir_sistema(self.rutas["sistema"], sistema_de_correccion(self.carpeta_curso, self.sesion))
         if completa and ejercicios:
             cuales = ", ".join(map(str, sorted(ejercicios)))
             self.avance(f"Corrigiendo solo los ejercicios {cuales}: {comun.cuantos(len(problemas), 'problema')}.")
             respuesta = await agente.consultar(
-                pedido_de_correccion_por_ejercicios(self.carpeta_curso, self.sesion, self.datos, problemas, ejercicios),
+                pedido_de_correccion_por_ejercicios(self.datos, problemas, ejercicios),
                 tarea="correccion", esquema=ESQUEMA_CORRECCION_POR_EJERCICIO,
-                etapa=f"corrección de ejercicios {vuelta}", **self.comun)
+                etapa=f"corrección de ejercicios {vuelta}", sistema=sistema, **self.comun)
             self.datos, no_volvieron = aplicar_por_ejercicios(self.datos, respuesta, ejercicios)
             if no_volvieron:
                 self.avance(f"La corrección no devolvió los ejercicios {', '.join(map(str, no_volvieron))}.")
         elif completa:
             self.avance(f"Corrigiendo el laboratorio completo: {comun.cuantos(len(problemas), 'problema')}.")
-            respuesta = await agente.consultar(pedido_de_correccion(self.carpeta_curso, self.sesion, self.datos, problemas),
+            respuesta = await agente.consultar(pedido_de_correccion(self.datos, problemas),
                                                tarea="correccion", esquema=ESQUEMA_CORRECCION,
-                                               etapa=f"corrección completa {vuelta}", **self.comun)
+                                               etapa=f"corrección completa {vuelta}", sistema=sistema, **self.comun)
             self.datos = respuesta[CLAVE]
         else:
             self.avance(f"Corrigiendo {comun.cuantos(len(problemas), 'problema')}.")
-            respuesta = await agente.consultar(pedido_de_cambios(self.carpeta_curso, self.sesion, self.datos, problemas),
+            respuesta = await agente.consultar(pedido_de_cambios(self.datos, problemas),
                                                tarea="correccion_oraciones", esquema=comun.ESQUEMA_CAMBIOS,
-                                               etapa=f"corrección {vuelta}", **self.comun)
+                                               etapa=f"corrección {vuelta}", sistema=sistema, **self.comun)
             self.datos, no_encontradas = comun.aplicar_cambios(self.datos, respuesta["cambios"], CAMPOS_QUE_NO_SE_CORRIGEN)
             if no_encontradas:
                 self.avance(f"{comun.cuantos(len(no_encontradas), 'oración')} a cambiar no se encontraron.")

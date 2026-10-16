@@ -73,6 +73,7 @@ def archivos(carpeta_curso: Path, sesion: int) -> dict[str, Path]:
         "revision": trabajo / "revisor",
         "contenido": trabajo / "contenido.json",
         "explicaciones": trabajo / "explicaciones.json",
+        "sistema": trabajo / "sistema_correccion.txt",
     }
 
 
@@ -351,13 +352,20 @@ def pedido_de_redaccion(carpeta_curso: Path, sesion: int, contenido_lectura: Lec
     ])
 
 
-def _pedido_con_problemas(carpeta_curso, sesion, contenido_lectura, datos, problemas, como_entregar) -> str:
+def sistema_de_correccion(carpeta_curso: Path, sesion: int, contenido_lectura: Lectura | None) -> str:
+    """El mensaje de sistema de todas las correcciones: igual en cada una, se lee de caché (decisión 43)."""
     con_lectura = contenido_lectura is not None
     return "\n".join([
         _contexto(carpeta_curso, sesion, contenido_lectura),
         instrucciones_de_formato(con_lectura),
         comun.REGLAS_DE_CORRECCION,
         REGLAS_PROPIAS_CON_LECTURA if con_lectura else REGLAS_PROPIAS_SIN_LECTURA,
+    ])
+
+
+def _pedido_con_problemas(datos, problemas, como_entregar) -> str:
+    return "\n".join([
+        "Corrige el material según el contexto, el formato y las reglas de tus instrucciones.",
         *como_entregar,
         "",
         "DIAPOSITIVAS ACTUALES:",
@@ -368,18 +376,18 @@ def _pedido_con_problemas(carpeta_curso, sesion, contenido_lectura, datos, probl
     ])
 
 
-def pedido_de_cambios(carpeta_curso, sesion, contenido_lectura, datos: dict, problemas: list[str]) -> str:
+def pedido_de_cambios(datos: dict, problemas: list[str]) -> str:
     """Corrección barata: devuelve solo las frases que cambian."""
-    return _pedido_con_problemas(carpeta_curso, sesion, contenido_lectura, datos, problemas, [
+    return _pedido_con_problemas(datos, problemas, [
         "CÓMO ENTREGAR LA CORRECCIÓN",
         "- En «cambios», una entrada por frase que cambias: «oracion» copiada tal cual de las diapositivas y «nueva»",
         "  con el texto nuevo. Para eliminar una frase, deja «nueva» vacío. No devuelvas las frases que no cambian.",
     ])
 
 
-def pedido_de_correccion(carpeta_curso, sesion, contenido_lectura, datos: dict, problemas: list[str]) -> str:
+def pedido_de_correccion(datos: dict, problemas: list[str]) -> str:
     """Corrección completa: para problemas de estructura o de cantidad, que no son de una diapositiva."""
-    return _pedido_con_problemas(carpeta_curso, sesion, contenido_lectura, datos, problemas,
+    return _pedido_con_problemas(datos, problemas,
                                  ["Devuelve las diapositivas completas con el mismo esquema."])
 
 
@@ -447,11 +455,10 @@ def diapositivas_nombradas(problemas: list[str], datos: dict) -> set[int] | None
     return numeros
 
 
-def pedido_por_diapositivas(carpeta_curso, sesion, contenido_lectura, datos: dict, problemas: list[str],
-                            numeros: set[int]) -> str:
+def pedido_por_diapositivas(datos: dict, problemas: list[str], numeros: set[int]) -> str:
     fijas = numeros_de_las_fijas(datos)
     lista = ", ".join(str(n) for n in sorted(numeros))
-    return _pedido_con_problemas(carpeta_curso, sesion, contenido_lectura, datos, problemas, [
+    return _pedido_con_problemas(datos, problemas, [
         "CÓMO ENTREGAR LA CORRECCIÓN",
         f"- Corrige solo las diapositivas {lista}. No devuelvas las demás: quedan como están.",
         "- La portada es la 1 y la idea central la 2. Las de concepto van de la 3 en adelante, en el orden de",
@@ -824,28 +831,30 @@ class _Trabajo:
 
     async def corregir(self, problemas: list[str], completa: bool) -> None:
         vuelta = self.vuelta
+        sistema = comun.escribir_sistema(self.rutas["sistema"],
+                                         sistema_de_correccion(self.carpeta_curso, self.sesion, self.lectura))
         numeros = diapositivas_nombradas(problemas, self.datos) if completa else None
         if numeros:
             self.avance(f"Corrigiendo {comun.cuantos(len(numeros), 'diapositiva')} "
                         f"({', '.join(map(str, sorted(numeros)))}): {comun.cuantos(len(problemas), 'problema')}.")
             respuesta = await agente.consultar(
-                pedido_por_diapositivas(self.carpeta_curso, self.sesion, self.lectura, self.datos, problemas, numeros),
+                pedido_por_diapositivas(self.datos, problemas, numeros),
                 tarea="correccion_diapositivas", esquema=ESQUEMA_POR_DIAPOSITIVAS,
-                etapa=f"corrección de diapositivas {vuelta}", **self.comun)
+                etapa=f"corrección de diapositivas {vuelta}", sistema=sistema, **self.comun)
             self.datos, no_encontradas = aplicar_por_diapositivas(self.datos, respuesta, numeros)
             if no_encontradas:
                 self.avance(f"{comun.cuantos(len(no_encontradas), 'frase')} a cambiar no se encontraron.")
         elif completa:
             self.avance(f"Corrigiendo las diapositivas completas: {comun.cuantos(len(problemas), 'problema')}.")
             respuesta = await agente.consultar(
-                pedido_de_correccion(self.carpeta_curso, self.sesion, self.lectura, self.datos, problemas),
-                tarea="correccion", esquema=ESQUEMA_CORRECCION, etapa=f"corrección completa {vuelta}", **self.comun)
+                pedido_de_correccion(self.datos, problemas), tarea="correccion", esquema=ESQUEMA_CORRECCION,
+                etapa=f"corrección completa {vuelta}", sistema=sistema, **self.comun)
             self.datos = respuesta[CLAVE]
         else:
             self.avance(f"Corrigiendo {comun.cuantos(len(problemas), 'problema')}.")
             respuesta = await agente.consultar(
-                pedido_de_cambios(self.carpeta_curso, self.sesion, self.lectura, self.datos, problemas),
-                tarea="correccion_oraciones", esquema=comun.ESQUEMA_CAMBIOS, etapa=f"corrección {vuelta}", **self.comun)
+                pedido_de_cambios(self.datos, problemas), tarea="correccion_oraciones", esquema=comun.ESQUEMA_CAMBIOS,
+                etapa=f"corrección {vuelta}", sistema=sistema, **self.comun)
             self.datos, no_encontradas = comun.aplicar_cambios(self.datos, respuesta["cambios"], CAMPOS_QUE_NO_SE_CORRIGEN)
             if no_encontradas:
                 self.avance(f"{comun.cuantos(len(no_encontradas), 'frase')} a cambiar no se encontraron.")
