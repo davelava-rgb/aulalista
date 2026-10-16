@@ -274,3 +274,15 @@ def test_el_estado_de_las_fuentes_dice_lo_que_falta(sesion, tmp_path):  # noqa: 
 def test_el_borde_del_panel_tiene_version_de_noche(entorno):
     css = (servidor.RAIZ / "web" / "estaticos" / "estilo.css").read_text(encoding="utf-8")
     assert css.count("--borde: #") == 3   # claro, oscuro según Windows y oscuro elegido
+
+
+def test_una_falla_no_se_presenta_como_decision_ni_con_la_lista_de_generar(sesion):  # noqa: F811
+    entrega = {"pregunta": "", "secciones": [{"clave": "pendientes", "titulo": "Decisiones pendientes", "lineas": [
+        "FALLA · desborde · S1_Diapositivas.pptx · diapositiva 4: no cabe.", "Afirmación sin fuente: algo."]}]}
+    _poner(sesion, "lectura", estado="con fallas", entrega=entrega)
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    assert '<h3 class="alerta">Lo que impide aprobar</h3>' in pagina
+    impide = pagina.split("Lo que impide aprobar</h3>")[1].split("</ol>")[0]
+    assert "FALLA" in impide and "Afirmación sin fuente" not in impide
+    assert "Decisiones pendientes: decide si la aceptas</h3>" in pagina
+    assert "Todo está listo para generar" not in pagina and "resolverlas en las fichas" not in pagina

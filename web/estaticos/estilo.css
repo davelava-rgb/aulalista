@@ -255,7 +255,8 @@ p.origen { margin: -0.5rem 0 0.75rem; font-size: 0.8125rem; }
 strong.alerta, span.alerta { color: var(--error); }
 .detalle { margin: 0.75rem 0; padding: 0 0.75rem; border: 1px solid var(--suave); border-radius: 6px; }
 .detalle > summary, .avance-bloque > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: bold; }
-.detalle > summary { display: list-item; padding: 0.6rem 0; }
+.detalle > summary, .avance-bloque > summary { display: list-item; padding: 0.6rem 0; }
+h3.alerta { color: var(--error); }
 
 /* Indicador de estado: icono, color y palabra. */
 .indicador { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.875rem; font-weight: bold; white-space: nowrap; }

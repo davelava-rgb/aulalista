@@ -65,8 +65,17 @@
   </ul>
   {% endif %}
   {% if ver_pendientes %}
-  <h3>{% if e.estado == "aprobada" %}Aprobaste con {{ n_pendientes }} {{ "decisión pendiente" if n_pendientes == 1 else "decisiones pendientes" }}{% else %}{{ pendientes[0].titulo }}: decide si {{ "las" if n_pendientes > 1 else "la" }} aceptas{% endif %}</h3>
-  <ol class="decisiones">{% for l in pendientes[0].lineas %}<li>{{ l }}</li>{% endfor %}</ol>
+  {# Una FALLA no es una decisión: impide aprobar. Se separa de lo que el profesor sí puede aceptar. #}
+  {% set fallas, decisiones = [], [] %}
+  {% for l in pendientes[0].lineas %}{% if (fallas if l.startswith("FALLA") else decisiones).append(l) %}{% endif %}{% endfor %}
+  {% if fallas %}
+  <h3 class="alerta">Lo que impide aprobar</h3>
+  <ol class="decisiones">{% for l in fallas %}<li>{{ l }}</li>{% endfor %}</ol>
+  {% endif %}
+  {% if decisiones %}
+  <h3>{% if e.estado == "aprobada" %}Aprobaste con {{ decisiones | length }} {{ "decisión pendiente" if decisiones | length == 1 else "decisiones pendientes" }}{% else %}{{ pendientes[0].titulo }}: decide si {{ "las" if decisiones | length > 1 else "la" }} aceptas{% endif %}</h3>
+  <ol class="decisiones">{% for l in decisiones %}<li>{{ l }}</li>{% endfor %}</ol>
+  {% endif %}
   {% endif %}
   {% set otras = secciones | rejectattr("clave", "in", ["archivos", "pendientes"] if ver_pendientes else ["archivos"]) | list %}
   {% if otras or n_avisos %}
@@ -101,10 +110,11 @@
       <button type="submit">Aprobar {{ m.el }}</button>
     </form>
     {% elif e.estado == "con fallas" %}
-    <p><strong>No se {{ "pueden" if m.plural else "puede" }} aprobar: {{ "tienen" if m.plural else "tiene" }} fallas del verificador.</strong> Genéra{{ m.lo }} de nuevo después de resolverlas en las fichas.</p>
+    <p><strong>No se {{ "pueden" if m.plural else "puede" }} aprobar: {{ "tienen" if m.plural else "tiene" }} fallas del verificador.</strong> Para aprobar{{ m.lo }}, genéra{{ m.lo }} de nuevo. Si una falla viene de un dato de las fichas, corrígelo antes.</p>
     {% endif %}
 
-    {% if not generado and e.estado != "trabajando" and (listos or m.faltan.ficha or m.faltan.otros) %}
+    {# La lista «antes de generar» solo va cuando aún no hay nada generado que revisar. #}
+    {% if (not e.estado or e.estado in ("detenida", "error") or e.desactualizado) and (listos or m.faltan.ficha or m.faltan.otros) %}
     <p class="antes">{% if m.faltan.ficha or m.faltan.otros or not puede_empezar %}Antes de generar {{ m.el }}:{% else %}Todo está listo para generar {{ m.el }}.{% endif %}</p>
     <ul class="listo">
       {% for l in listos %}<li class="si">{{ l }}</li>{% endfor %}
