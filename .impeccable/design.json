@@ -1,0 +1,319 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-16T03:36:57.237479+00:00",
+  "title": "Design System: AulaLista",
+  "extensions": {
+    "colorMeta": {
+      "petroleo": {
+        "role": "primary",
+        "displayName": "Petróleo",
+        "canonical": "#0f4c5c",
+        "tonalRamp": [
+          "#05171c",
+          "#08262e",
+          "#0a3540",
+          "#0e4453",
+          "#3f707d",
+          "#7b9da5",
+          "#b7c9ce",
+          "#e7edef"
+        ]
+      },
+      "pizarra": {
+        "role": "neutral",
+        "displayName": "Pizarra",
+        "canonical": "#1f2933",
+        "tonalRamp": [
+          "#090c0f",
+          "#10141a",
+          "#161d24",
+          "#1c252e",
+          "#4c545c",
+          "#84898f",
+          "#bcbfc2",
+          "#e9eaeb"
+        ]
+      },
+      "papel": {
+        "role": "neutral",
+        "displayName": "Papel",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#4d4d4d",
+          "#808080",
+          "#b2b2b2",
+          "#e6e6e6",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff"
+        ]
+      },
+      "niebla": {
+        "role": "neutral",
+        "displayName": "Niebla",
+        "canonical": "#f2f4f5",
+        "tonalRamp": [
+          "#49494a",
+          "#797a7a",
+          "#a9abac",
+          "#dadcdc",
+          "#f5f6f7",
+          "#f8f9fa",
+          "#fbfcfc",
+          "#fefefe"
+        ]
+      },
+      "verde-aprobado": {
+        "role": "status",
+        "displayName": "Verde aprobado",
+        "canonical": "#1e6b3a",
+        "tonalRamp": [
+          "#092011",
+          "#0f361d",
+          "#154b29",
+          "#1b6034",
+          "#4b8961",
+          "#83ae93",
+          "#bcd3c4",
+          "#e8f0eb"
+        ]
+      },
+      "rojo-correccion": {
+        "role": "status",
+        "displayName": "Rojo corrección",
+        "canonical": "#a3261f",
+        "tonalRamp": [
+          "#310b09",
+          "#521310",
+          "#721b16",
+          "#93221c",
+          "#b5514c",
+          "#cc8884",
+          "#e3bebc",
+          "#f6e9e9"
+        ]
+      },
+      "petroleo-noche": {
+        "role": "primary",
+        "displayName": "Petróleo de noche",
+        "canonical": "#6fb3c4",
+        "tonalRamp": [
+          "#21363b",
+          "#385a62",
+          "#4e7d89",
+          "#64a1b0",
+          "#8cc2d0",
+          "#b0d5df",
+          "#d4e8ed",
+          "#f1f7f9"
+        ]
+      },
+      "pizarra-noche": {
+        "role": "neutral",
+        "displayName": "Pizarra de noche",
+        "canonical": "#e4e7ea",
+        "tonalRamp": [
+          "#444546",
+          "#727475",
+          "#a0a2a4",
+          "#cdd0d3",
+          "#e9ecee",
+          "#f0f2f3",
+          "#f7f8f9",
+          "#fcfdfd"
+        ]
+      },
+      "papel-noche": {
+        "role": "neutral",
+        "displayName": "Papel de noche",
+        "canonical": "#14181b",
+        "tonalRamp": [
+          "#060708",
+          "#0a0c0e",
+          "#0e1113",
+          "#121618",
+          "#434649",
+          "#7e8082",
+          "#b8babb",
+          "#e8e8e8"
+        ]
+      },
+      "niebla-noche": {
+        "role": "neutral",
+        "displayName": "Niebla de noche",
+        "canonical": "#1f2529",
+        "tonalRamp": [
+          "#090b0c",
+          "#101214",
+          "#161a1d",
+          "#1c2125",
+          "#4c5154",
+          "#848789",
+          "#bcbebf",
+          "#e9e9ea"
+        ]
+      },
+      "verde-aprobado-noche": {
+        "role": "status",
+        "displayName": "Verde aprobado de noche",
+        "canonical": "#7fd19b",
+        "tonalRamp": [
+          "#263f2f",
+          "#40684e",
+          "#59926c",
+          "#72bc8c",
+          "#99daaf",
+          "#b9e6c8",
+          "#d9f1e1",
+          "#f2faf5"
+        ]
+      },
+      "rojo-correccion-noche": {
+        "role": "status",
+        "displayName": "Rojo corrección de noche",
+        "canonical": "#f08c84",
+        "tonalRamp": [
+          "#482a28",
+          "#784642",
+          "#a8625c",
+          "#d87e77",
+          "#f3a39d",
+          "#f7c0bb",
+          "#fadcda",
+          "#fef4f3"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Título de página",
+        "purpose": "h1 de cada página, en petróleo."
+      },
+      "title": {
+        "displayName": "Título de sección",
+        "purpose": "h2 de cada paso o material."
+      },
+      "body": {
+        "displayName": "Texto",
+        "purpose": "Texto, campos y botones."
+      },
+      "label": {
+        "displayName": "Nota",
+        "purpose": "Ayudas, marcas de procedencia, ruta y avance."
+      }
+    },
+    "shadows": [],
+    "motion": [],
+    "breakpoints": [
+      {
+        "name": "angosto",
+        "value": "40rem"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Botón principal",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Acción principal de cada paso.",
+      "html": "<button class=\"ds-btn\">Generar lectura</button>",
+      "css": ".ds-btn{min-height:44px;padding:0 1.25rem;border:0;border-radius:6px;background:var(--principal,#0f4c5c);color:var(--fondo,#fff);font-size:1rem;font-family:Arial,sans-serif;cursor:pointer}.ds-btn:focus-visible{outline:3px solid var(--texto,#1f2933);outline-offset:2px}.ds-btn:disabled{opacity:.6;cursor:not-allowed}"
+    },
+    {
+      "name": "Botón secundario",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Acción alternativa junto a la principal.",
+      "html": "<button class=\"ds-btn-sec\">Guardar</button>",
+      "css": ".ds-btn-sec{min-height:44px;padding:0 1.25rem;border:1px solid var(--principal,#0f4c5c);border-radius:6px;background:var(--fondo,#fff);color:var(--principal,#0f4c5c);font-size:1rem;font-family:Arial,sans-serif;cursor:pointer}.ds-btn-sec:focus-visible{outline:3px solid var(--texto,#1f2933);outline-offset:2px}"
+    },
+    {
+      "name": "Campo de texto",
+      "kind": "input",
+      "refersTo": "input-text",
+      "description": "Campo de la ficha con su etiqueta.",
+      "html": "<label class=\"ds-lbl\">Público<input class=\"ds-in\" value=\"Analistas de datos\"></label>",
+      "css": ".ds-lbl{display:block;font-weight:bold;font-family:Arial,sans-serif;color:var(--texto,#1f2933)}.ds-in{display:block;margin-top:.25rem;box-sizing:border-box;width:100%;min-height:44px;padding:.5rem .75rem;border:1px solid var(--texto,#1f2933);border-radius:6px;background:var(--fondo,#fff);color:var(--texto,#1f2933);font-weight:normal;font-size:1rem;font-family:Arial,sans-serif;}.ds-in:focus-visible{outline:3px solid var(--principal,#0f4c5c);outline-offset:2px}"
+    },
+    {
+      "name": "Marca de procedencia",
+      "kind": "chip",
+      "refersTo": "chip-marca",
+      "description": "Dice si un dato es propuesto o falta definirlo.",
+      "html": "<span class=\"ds-marca\">Propuesto</span> <span class=\"ds-marca ds-alerta\">Falta definir</span>",
+      "css": ".ds-marca{font-size:.8125rem;font-family:Arial,sans-serif;padding:.1rem .5rem;border:1px solid var(--principal,#0f4c5c);border-radius:999px;color:var(--texto,#1f2933)}.ds-alerta{border-color:var(--error,#a3261f);color:var(--error,#a3261f)}"
+    },
+    {
+      "name": "Ruta de navegación",
+      "kind": "nav",
+      "description": "Línea de ubicación sobre el título.",
+      "html": "<p class=\"ds-ruta\"><a href=\"#\">AulaLista</a> › <a href=\"#\">Gobernanza de Datos</a> › Sesión 1</p>",
+      "css": ".ds-ruta{font-size:.875rem;font-family:Arial,sans-serif;color:var(--texto,#1f2933)}.ds-ruta a{color:var(--principal,#0f4c5c)}.ds-ruta a:focus-visible{outline:3px solid var(--principal,#0f4c5c);outline-offset:2px}"
+    },
+    {
+      "name": "Recuadro de material",
+      "kind": "card",
+      "refersTo": "card-material",
+      "description": "Un material de la sesión con su estado.",
+      "html": "<section class=\"ds-mat\"><h2>1. Lectura</h2><p>Aprobada por ti el 2026-10-14.</p></section>",
+      "css": ".ds-mat{padding:.5rem 1rem 1rem;border:1px solid var(--principal,#0f4c5c);border-radius:6px;line-height:1.5;font-family:Arial,sans-serif;color:var(--texto,#1f2933)}.ds-mat h2{color:var(--principal,#0f4c5c);font-size:1.5rem;line-height:1.2}"
+    },
+    {
+      "name": "Tabla de datos",
+      "kind": "custom",
+      "refersTo": "table-header",
+      "description": "Listas de sesiones y fuentes.",
+      "html": "<table class=\"ds-tab\"><thead><tr><th>Sesión</th><th>Ficha</th></tr></thead><tbody><tr><td>1. Fundamentos</td><td>Confirmada</td></tr><tr><td>2. Calidad</td><td>Llenar</td></tr></tbody></table>",
+      "css": ".ds-tab{width:100%;border-collapse:collapse;font-size:.9375rem;font-family:Arial,sans-serif;color:var(--texto,#1f2933)}.ds-tab th{padding:.5rem;background:var(--principal,#0f4c5c);color:var(--fondo,#fff);text-align:left}.ds-tab td{padding:.5rem;vertical-align:top}.ds-tab tbody tr:nth-child(even){background:var(--suave,#f2f4f5)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "El cuaderno del profesor",
+    "overview": "AulaLista se ve como un cuaderno de trabajo ordenado: hojas blancas, tinta oscura, un solo color para lo que se puede tocar y anotaciones al margen que dicen de dónde salió cada dato. Nada compite por la atención; lo importante es el texto y el estado de cada material.\n\nLa densidad es media y la lectura va de arriba abajo, en una sola columna de 64rem como máximo. No hay sombras, imágenes ni adornos. La jerarquía sale del tamaño del título, del color petróleo y de recuadros con borde fino.\n\nEs una interfaz provisional en lo visual: la marca FuturaSoft todavía no está aplicada porque faltan su logo y su paleta. Cuando lleguen, reemplazan al petróleo; la estructura del cuaderno se mantiene.",
+    "keyCharacteristics": [
+      "Una sola columna, de arriba abajo, con un paso del flujo por sección.",
+      "Un solo color de acción (petróleo) más dos colores de estado (verde y rojo).",
+      "Recuadros planos con borde fino; sin sombras.",
+      "Anotaciones pequeñas de procedencia y costo junto a cada campo o acción.",
+      "Modo claro y oscuro con los mismos papeles de color."
+    ],
+    "rules": [
+      {
+        "name": "La regla de un solo acento",
+        "body": "El petróleo es el único color de acción. Verde y rojo solo describen estados; nunca se usan para decorar ni para botones.",
+        "section": "colors"
+      },
+      {
+        "name": "La regla del color con palabra",
+        "body": "Un estado nunca se comunica solo con color: siempre va con su texto (\"Confirmada\", \"Con fallas\").",
+        "section": "colors"
+      },
+      {
+        "name": "La regla de la etiqueta en negrita",
+        "body": "El nombre de cada campo va en negrita sobre el campo; la ayuda va debajo, más pequeña.",
+        "section": "typography"
+      },
+      {
+        "name": "La regla de la hoja plana",
+        "body": "Ningún elemento flota. Si algo necesita destacarse, cambia su borde o su fondo, nunca su sombra.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** usar el petróleo solo para lo que se puede tocar: enlaces, botones y encabezados de tabla.",
+      "**Do** poner junto a cada acción bloqueada una nota que diga qué falta.",
+      "**Do** acompañar cada color de estado con su palabra.",
+      "**Do** mantener 44px de alto en todo control que se pueda tocar.",
+      "**Do** definir cada color nuevo en `:root` y en su versión de noche."
+    ],
+    "donts": [
+      "**Don't** agregar sombras, degradados ni imágenes decorativas.",
+      "**Don't** usar verde o rojo en botones o adornos; solo describen estados.",
+      "**Don't** cambiar Arial por otra fuente mientras el Excel modelo use Arial.",
+      "**Don't** inventar los colores o el logo de FuturaSoft; se esperan los oficiales.",
+      "**Don't** usar emojis ni lenguaje publicitario."
+    ]
+  }
+}
