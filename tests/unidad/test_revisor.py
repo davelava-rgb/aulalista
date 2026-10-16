@@ -205,7 +205,7 @@ def test_no_se_aprueba_una_lectura_desactualizada_ni_con_fallas(sesion):
     generar(sesion, con_error("Lee este bloque en 10 minutos."), *[cambios()] * lectura.VUELTAS_DEL_VERIFICADOR,
             revisar=False)
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
-    assert "Aprobar la lectura" not in pagina and "Decisiones pendientes" in pagina
+    assert "Aprobar la lectura" not in pagina and "Lo que impide aprobar" in pagina
     assert "Pedir revisor independiente" not in pagina
     cliente.post("/cursos/scrum/sesiones/1/materiales/lectura/aprobar")
     assert lectura.estado(sesion, 1)["estado"] == "con fallas"
