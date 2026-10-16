@@ -102,7 +102,6 @@ def ver_curso(request: Request, curso: str, mensaje: str = ""):
             "fuentes": fuentes,
             "pendientes": sum(1 for f in fuentes if f["estado"] != convertir.CONVERTIDA),
             "costo_convertir": tokens.ultima_corrida(curso, "lectura_imagen"),
-            "gasto": tokens.total(curso),
             "mensaje": mensaje,
             "panel": _panel(carpeta, curso, "curso"),
         },
@@ -212,7 +211,7 @@ def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, m
               "corregir": tokens.ultima_corrida(curso, "corrección de ejercicios"),
               **{f"completar.{c}": tokens.ultima_corrida(curso, f"completar ficha: {c}") for c in flujo.COMPLETAR}}
     return plantillas.TemplateResponse(request, "ficha.html", {
-        "curso": curso, "nombre": cursos.nombre(curso), "titulo": titulo, "ficha": ficha,
+        "curso": curso, "nombre": cursos.nombre(curso), "titulo": titulo, "sesion": sesion, "ficha": ficha,
         "propuesta": flujo.estado_propuesta(carpeta, tipo, sesion),
         "hay_propuestos": any((d or {}).get("estado") == almacen.PROPUESTO for d in ficha["campos"].values()),
         "secciones": secciones, "generados": generados, "generados_texto": _y(generados), "costos": costos,
@@ -631,7 +630,7 @@ def ver_material(request: Request, curso: str, sesion: int, material: str, mensa
         "curso": curso, "nombre": cursos.nombre(curso), "sesion": sesion, "mensaje": mensaje,
         "m": m, "recorrido": _recorrido(m, m["estado"]), "total": len(vista["materiales"]),
         "puede_empezar": vista["puede_empezar"], "siguiente": vista["siguiente"],
-        "gasto": tokens.total(curso), "costo_revisor": tokens.ultima_corrida(curso, "revisor independiente"),
+        "costo_revisor": tokens.ultima_corrida(curso, "revisor independiente"),
         "panel": _panel(carpeta, curso, f"{material}-{sesion}"),
     })
 

@@ -7,6 +7,9 @@
   <span class="panel-nombre">{{ texto }}</span>{{ indicador(situacion) if situacion }}</a></li>
 {% endmacro %}
 
+{# Dentro de un curso, el panel dice dónde estás: no hay ruta arriba del título. #}
+{% block navegacion %}{% endblock %}
+
 {% block cuerpo %}
 <div class="entorno">
   <nav class="panel" id="panel" aria-label="Curso">

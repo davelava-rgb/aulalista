@@ -2,7 +2,6 @@
 {% from "_estado.html" import costo, icono %}
 
 {% block titulo %}{{ titulo }} · AulaLista{% endblock %}
-{% block ruta %} › <a href="/cursos/{{ curso }}">{{ nombre }}</a> › <span aria-current="page">{{ titulo }}</span>{% endblock %}
 
 {% macro control(c) %}
 {% set k = c.control %}
@@ -109,6 +108,7 @@
 {% endmacro %}
 
 {% block contenido %}
+<p class="donde">{{ "Sesión " ~ sesion if sesion else "Preparación del curso" }}</p>
 <h1>{{ titulo }}</h1>
 
 <p class="estado-ficha {{ 'confirmada' if ficha.confirmada else 'pendiente' }}">

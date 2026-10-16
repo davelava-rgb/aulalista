@@ -107,7 +107,7 @@ Paleta sobria de tinta sobre papel, con el magenta de FuturaSoft como acento y d
 
 ### Marca
 - **Morado FuturaSoft** (`morado-marca`, #1E0253) con **gris de marca** (`gris-marca`, #E9E9E9): solo la cabecera con el logo, igual en los dos modos. Nunca en botones ni estados.
-- **Logo:** `web/estaticos/marca/futurasoft-logo.png` (fondo transparente, para fondo oscuro), 44px de alto en la cabecera. Icono: `futurasoft-icono.png`.
+- **Logo:** `web/estaticos/marca/futurasoft-logo.png` (fondo transparente, para fondo oscuro), 36px de alto en una cabecera de 56px. Icono: `futurasoft-icono.png`.
 
 ### Neutral
 - **Pizarra** (`pizarra`; de noche `pizarra-noche`): todo el texto, los títulos h1 y h2 en negrita, bordes de los campos y anillo de foco de los botones.
@@ -134,7 +134,7 @@ Paleta sobria de tinta sobre papel, con el magenta de FuturaSoft como acento y d
 - **Headline** (negrita, 1.75rem, 1.2): el h1 de cada página, en pizarra.
 - **Title** (negrita, 1.125rem a 1.25rem, 1.3): el h2 de cada sección, en pizarra.
 - **Body** (normal, 1rem, 1.5): texto, campos y botones. Las tablas de datos bajan a 0.9375rem.
-- **Label** (normal, 0.875rem a 0.8125rem, 1.5): notas, ayudas, marcas de procedencia, ruta de navegación y avance. Las notas bajan su opacidad a 0.8.
+- **Label** (normal, 0.875rem a 0.8125rem, 1.5): notas, ayudas, marcas de procedencia, la línea de ubicación sobre el título y avance. Las notas bajan su opacidad a 0.8.
 
 ### Named Rules
 **La regla de la etiqueta en negrita.** El nombre de cada campo va en negrita sobre el campo; la ayuda va debajo, más pequeña.
@@ -147,7 +147,7 @@ Las casillas y las paletas usan una rejilla automática de columnas de 13rem a 1
 
 ## Elevation & Depth
 
-Plana por completo: no hay sombras. La profundidad se marca con bordes finos de 1px (magenta en los recuadros de material y de preguntas, niebla en los bloques plegables, rojo en los conflictos) y con el fondo niebla en mensajes y filas pares.
+Plana por completo: no hay sombras. La profundidad se marca con bordes finos de 1px (magenta en los recuadros de preguntas y de acción, borde en el panel del curso, niebla en los bloques plegables, rojo en los conflictos) y con el fondo niebla en mensajes y filas pares.
 
 ### Named Rules
 **La regla de la hoja plana.** Ningún elemento flota. Si algo necesita destacarse, cambia su borde o su fondo, nunca su sombra.
@@ -170,7 +170,8 @@ Esquinas suavemente redondeadas de 6px en botones, campos, mensajes y recuadros.
 - **State:** la variante de alerta usa borde y texto rojo corrección ("Falta definir", "Dos versiones").
 
 ### Cards / Containers
-- **Recuadro de material:** borde magenta de 1px, esquinas de 6px, relleno de 0.5rem 1rem 1rem, 1.5rem de separación arriba.
+- **Página de material:** la hoja entera es el material, sin recuadro. Arriba, la línea de ubicación, el título con su indicador y el recorrido.
+- **Recorrido:** cuatro pasos en fila (Generar, Verificar, Revisar y Aprobar), unidos por una línea de 2px. Es una secuencia de verdad, por eso lleva números en círculos de 1.375rem. Hecho: círculo y línea verde aprobado con ✓. Paso actual: borde y nombre magenta. Con problema: círculo rojo corrección con «!» y nota en rojo. Pendiente: borde fino. Cada paso lleva una nota corta debajo y su estado en palabras para los lectores de pantalla. Bajo 30rem, dos pasos por fila.
 - **Bloque plegable:** `details` con borde niebla y un resumen en negrita de 44px de alto.
 - **Mensaje:** borde magenta, fondo niebla, relleno de 0.75rem 1rem.
 - **Shadow Strategy:** ninguna (ver Elevation & Depth).
@@ -182,7 +183,9 @@ Esquinas suavemente redondeadas de 6px en botones, campos, mensajes y recuadros.
 
 ### Navigation
 - **Panel del curso:** fijo a la izquierda en todas las páginas de un curso. Arriba, "Todos los cursos" y el nombre del curso. Luego, "Preparación del curso" (fuentes y ficha del curso) y "Sesiones": cada sesión con su ficha y sus materiales, cada uno con su indicador de estado (icono y palabra). El elemento actual lleva fondo papel, negrita y una barra magenta de 4px a la izquierda. El material del siguiente paso lleva la píldora "Sigue". Las sesiones que no se están viendo van plegadas, con su avance ("1 de 3 aprobados"). Al pie, el gasto del curso, una sola vez.
-- **Ruta:** solo en la página de inicio no hay panel; dentro de un curso, una línea pequeña sobre el título dice dónde estás ("Sesión 1 · Material 2 de 3"). No hay pestañas.
+- **Ubicación:** no hay ruta de enlaces. Dentro de un curso, el panel dice dónde estás y una línea pequeña sobre el título lo repite en palabras ("Sesión 1 · Material 2 de 3", "Preparación del curso"). No hay pestañas.
+- **Siguiente paso:** una línea con enlace en la página de un material, solo si el siguiente paso está en otra página. Si es el mismo material, lo dicen el recorrido y el botón.
+- **Notas de costo:** una línea corta junto al botón que gasta. El total del curso va una sola vez, al pie del panel.
 - **Alternador de modo:** botón secundario a la derecha de la ruta ("Cambiar a modo claro" o "Cambiar a modo oscuro"). Sin elección guardada, la interfaz sigue el modo de Windows; la elección se guarda en el navegador.
 
 ### Tabla de datos

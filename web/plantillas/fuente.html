@@ -1,9 +1,9 @@
 {% extends "_entorno.html" %}
 
 {% block titulo %}{{ archivo }} · AulaLista{% endblock %}
-{% block ruta %} › <a href="/cursos/{{ curso }}">{{ nombre }}</a> › {{ archivo }}{% endblock %}
 
 {% block contenido %}
+<p class="donde">Fuentes del curso</p>
 <h1>{{ archivo }}</h1>
 <p>Formato: {{ entrada.formato }}. Método: {{ entrada.metodo }}. Pasajes: {{ entrada.pasajes }}.</p>
 

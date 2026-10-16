@@ -41,7 +41,9 @@ def test_la_sesion_abre_el_material_del_siguiente_paso_sin_la_evaluacion(sesion)
     for clave in ("lectura", "diapositivas", "laboratorio"):
         assert f'href="/cursos/scrum/sesiones/1/materiales/{clave}"' in pagina
     assert "Evaluación y clave" not in pagina and "Etapa posterior" not in pagina  # sin etapa 9 (decisión 37)
-    assert "Siguiente paso:" in pagina and "Genera la lectura." in pagina
+    assert "Siguiente paso:" not in pagina   # el siguiente paso es este material: lo dicen el recorrido y el botón
+    otra = cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
+    assert 'Siguiente paso:</strong>' in otra and 'materiales/lectura">Genera la lectura.</a>' in otra
     assert "Sesión 1 · Material 1 de 3" in pagina
 
 
@@ -121,8 +123,8 @@ def test_el_boton_generar_dice_lo_que_gasto_la_ultima_corrida(sesion):  # noqa: 
         archivo.write(json.dumps({"fecha": "x", "curso": "scrum", "sesion": "S1", "material": "lectura",
                                   "etapa": "redacción", "tokens_entrada": 1, "tokens_salida": 1, "costo_usd": 0.42}) + "\n")
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
-    # El costo se dice una sola vez: en «Gasto desde la última vez» y el botón remite a esa línea.
-    assert "Gasto desde la última vez que pulsaste Generar: 1 llamada, 0.42 USD estimados." in pagina
+    # El costo se dice una sola vez: en «Desde que pulsaste Generar» y el botón remite a esa línea.
+    assert "Desde que pulsaste Generar: 1 llamada, 0.42 USD estimados." in pagina
     assert "Gasta tokens, como la corrida de arriba." in pagina
 
 

@@ -2,7 +2,6 @@
 {% from "_estado.html" import indicador, costo, usd %}
 
 {% block titulo %}{{ m.titulo }} · Sesión {{ sesion }} · AulaLista{% endblock %}
-{% block ruta %} › <a href="/cursos/{{ curso }}">{{ nombre }}</a> › Sesión {{ sesion }} › <span aria-current="page">{{ m.titulo }}</span>{% endblock %}
 
 {% macro forma(m, raiz) %}{{ raiz ~ m.o ~ ("s" if m.plural else "") }}{% endmacro %}
 
@@ -24,23 +23,25 @@
   {% if not puede_empezar %}
   <p>Falta confirmar las fichas. Ningún material empieza sin ellas. Una ficha queda confirmada al guardarla completa.</p>
   {% endif %}
+  {# El siguiente paso solo se dice si está en otra página: si es este material, ya lo dicen el recorrido y el botón. #}
+  {% if siguiente.ancla != m.clave %}
   <p class="siguiente" id="siguiente"><strong>Siguiente paso:</strong>
-    {% if siguiente.ancla == m.clave %}{{ siguiente.texto }}
-    {% elif siguiente.ancla %}<a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/{{ siguiente.ancla }}">{{ siguiente.texto }}</a>
+    {% if siguiente.ancla %}<a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/{{ siguiente.ancla }}">{{ siguiente.texto }}</a>
     {% elif not puede_empezar %}<a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">{{ siguiente.texto }}</a>
     {% else %}{{ siguiente.texto }}{% endif %}</p>
+  {% endif %}
   {% if not m.incluido %}
   <p class="estado-material">«Materiales de esta sesión», en la <a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">ficha de la sesión</a>, no {{ "incluyen" if m.plural else "incluye" }} {{ m.el }}.</p>
   {% else %}
   <p class="estado-material">
-    {% if e.estado == "trabajando" %}AulaLista trabaja en {{ m.el }}. Esta parte se actualiza sola.
+    {% if e.estado == "trabajando" %}AulaLista trabaja en {{ m.el }}. Esta página se actualiza sola.
     {% elif e.estado == "aprobada" %}{{ forma(m, "Aprobad") }} por ti el {{ e.aprobada[:10] }}.
-    {% elif e.estado == "verificada" %}{{ forma(m, "Verificad") }}: el verificador y la revisión del contenido terminaron sin errores abiertos.
-    {% elif e.estado == "con pendientes" %}{{ "Listas" if m.plural else forma(m, "List") }}, con pendientes de la revisión. Míralos en «Decisiones pendientes» y decide: puedes aprobar{{ m.lo }} igual.
+    {% elif e.estado == "verificada" %}{{ forma(m, "Verificad") }}, sin errores abiertos.
+    {% elif e.estado == "con pendientes" %}{{ "Listas" if m.plural else forma(m, "List") }}, con pendientes. Míralos abajo y decide: puedes aprobar{{ m.lo }} igual.
     {% elif e.estado == "con fallas" %}Con fallas del verificador. No se {{ "pueden" if m.plural else "puede" }} aprobar así.
     {% elif e.estado == "error" %}Se {{ "detuvieron" if m.plural else "detuvo" }} por un error: {{ e.error }}
     {% elif e.estado == "detenida" %}{{ forma(m, "Detenid") }} por ti. Puedes generar{{ m.lo }} de nuevo.
-    {% else %}Sin generar.{% endif %}
+    {% endif %}
     {% if e.desactualizado %}<strong class="alerta">{{ forma(m, "Desactualizad") }}: {{ "la lectura o las fichas cambiaron" if m.plural else "las fichas cambiaron" }}. Genéra{{ m.lo }} de nuevo para que {{ "sigan" if m.plural else "siga" }} a las fichas.</strong>{% endif %}
   </p>
 
@@ -97,7 +98,7 @@
   {% endif %}
 
   {% if m.gasto_corrida %}
-  <p class="nota">Gasto desde la última vez que pulsaste Generar: {{ m.gasto_corrida.llamadas }} {{ "llamada" if m.gasto_corrida.llamadas == 1 else "llamadas" }}, {{ usd(m.gasto_corrida.costo_usd) }} estimados.{% if e.revisor %} Incluye el revisor independiente.{% endif %}</p>
+  <p class="nota">Desde que pulsaste Generar: {{ m.gasto_corrida.llamadas }} {{ "llamada" if m.gasto_corrida.llamadas == 1 else "llamadas" }}, {{ usd(m.gasto_corrida.costo_usd) }} estimados.{% if e.revisor %} Incluye el revisor independiente.{% endif %}</p>
   {% endif %}
 
   {% if m.faltan.ficha %}
@@ -118,14 +119,14 @@
       {% if not puede_empezar %}Espera a que las dos fichas estén confirmadas.
       {% elif m.faltan.ficha or m.faltan.otros %}Espera a que se complete lo de arriba.
       {% elif e.estado == "trabajando" %}Ya está en curso.
-      {% elif m.gasto_corrida and m.costo_ref and m.costo_ref.sesion == sesion %}Gasta tokens, como la corrida de arriba. Puede tardar varios minutos.
-      {% else %}Gasta tokens. {{ costo(m.costo_ref, "La última corrida" ~ ("" if not m.costo_ref or m.costo_ref.sesion == sesion else " (sesión " ~ m.costo_ref.sesion ~ ")")) }} Puede tardar varios minutos.{% endif %}
+      {% elif m.gasto_corrida and m.costo_ref and m.costo_ref.sesion == sesion %}Gasta tokens, como la corrida de arriba. Tarda unos minutos.
+      {% else %}Gasta tokens. {{ costo(m.costo_ref, "La última corrida" ~ ("" if not m.costo_ref or m.costo_ref.sesion == sesion else " (sesión " ~ m.costo_ref.sesion ~ ")")) }} Tarda unos minutos.{% endif %}
     </span>
   </form>
   {% if e.estado in ("verificada", "con pendientes", "aprobada") and not e.desactualizado %}
   <form method="post" action="{{ base }}/revisor" class="accion">
     <button type="submit" class="secundario" aria-describedby="revisor-{{ m.clave }}">Pedir revisor independiente</button>
-    <span class="nota" id="revisor-{{ m.clave }}">Opcional. Una sesión nueva de Claude Opus lee {{ m.el }}, las fuentes y las fichas. No corrige: lo que encuentra queda pendiente para que decidas. Tope: 2 USD. {{ costo(costo_revisor) }}</span>
+    <span class="nota" id="revisor-{{ m.clave }}">Opcional. Otra sesión de Claude lee {{ m.el }} sin ver borradores. No corrige: lo que encuentre queda pendiente. Tope: 2 USD. {{ costo(costo_revisor) }}</span>
   </form>
   {% endif %}
   {% if e.estado == "trabajando" %}
@@ -136,8 +137,6 @@
   {% endif %}
   {% endif %}
 </section>
-
-<p class="nota">Gasto total de este curso, con todas las corridas: {{ gasto.llamadas }} llamadas, {{ usd(gasto.costo_usd) }} estimados.</p>
 {% endblock %}
 
 {% block scripts %}

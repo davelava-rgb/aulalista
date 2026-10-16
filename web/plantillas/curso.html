@@ -2,7 +2,6 @@
 {% from "_estado.html" import indicador, costo, usd %}
 
 {% block titulo %}{{ nombre }} · AulaLista{% endblock %}
-{% block ruta %} › <span aria-current="page">{{ nombre }}</span>{% endblock %}
 
 {% block contenido %}
 <p class="donde">Preparación del curso</p>
@@ -48,7 +47,7 @@
 
 <form method="post" action="/cursos/{{ curso }}/convertir" id="form-convertir" class="accion">
   <button type="submit" id="convertir">Convertir fuentes a texto</button>
-  <span class="nota">{{ pendientes }} sin convertir. Un archivo reemplazado se convierte de nuevo; uno sin cambios no gasta. Las imágenes y las páginas escaneadas las lee Claude y gastan tokens. {{ costo(costo_convertir, "La última lectura de imágenes") }}</span>
+  <span class="nota">{{ pendientes }} sin convertir. Solo se convierte lo nuevo o reemplazado. Las imágenes y las páginas escaneadas las lee Claude y gastan tokens. {{ costo(costo_convertir, "La última lectura de imágenes") }}</span>
 </form>
 {% endif %}
 

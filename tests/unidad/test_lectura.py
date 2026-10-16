@@ -358,13 +358,13 @@ def test_la_pagina_muestra_el_gasto_de_la_ultima_corrida_aunque_falle(sesion):
     gasto = lectura.gasto_de_la_corrida(sesion, "scrum", 1)
     assert gasto["llamadas"] == tokens.total("scrum")["llamadas"] - antes == 1
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
-    assert "Gasto desde la última vez que pulsaste Generar: 1 llamada," in pagina
-    assert "Gasto total de este curso, con todas las corridas:" in pagina
+    assert "Desde que pulsaste Generar: 1 llamada," in pagina
+    assert "Gasto del curso <b>" in pagina   # el total va una sola vez, en el panel
 
 
 def test_sin_generar_no_muestra_gasto_de_corrida(sesion):
     assert lectura.gasto_de_la_corrida(sesion, "scrum", 1) is None
-    assert "Gasto desde la última vez" not in cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    assert "Desde que pulsaste Generar" not in cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
 
 
 def test_el_word_real_cuenta_sus_paginas_con_word(sesion):

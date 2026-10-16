@@ -191,7 +191,7 @@ def test_el_profesor_aprueba_la_lectura_desde_la_pagina(sesion):
 def test_con_pendientes_la_pagina_deja_aprobar(sesion):
     generar(sesion, LIMPIA, respuesta(error(RELLENO, "vacío")), cambios(), revisar=False)
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
-    assert "Lista, con pendientes de la revisión" in pagina and "Aprobar la lectura" in pagina
+    assert "Lista, con pendientes." in pagina and "Aprobar la lectura" in pagina
     cliente.post("/cursos/scrum/sesiones/1/materiales/lectura/aprobar")
     assert lectura.estado(sesion, 1)["estado"] == "aprobada"
 
