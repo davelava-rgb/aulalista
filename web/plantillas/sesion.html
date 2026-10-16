@@ -1,47 +1,91 @@
 {% extends "base.html" %}
+{% from "_estado.html" import indicador, costo, usd %}
 
 {% block titulo %}Sesión {{ sesion }} · AulaLista{% endblock %}
-{% block ruta %} › <a href="/cursos/{{ curso }}">{{ nombre }}</a> › Sesión {{ sesion }}{% endblock %}
+{% block ruta %} › <a href="/cursos/{{ curso }}">{{ nombre }}</a> › <span aria-current="page">Sesión {{ sesion }}</span>{% endblock %}
+
+{% macro forma(m, raiz) %}{{ raiz ~ m.o ~ ("s" if m.plural else "") }}{% endmacro %}
 
 {% block contenido %}
 <h1>Sesión {{ sesion }}</h1>
 <p><a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">Ficha de la sesión</a>:
-  {{ 'confirmada' if puede_empezar else 'falta confirmar las fichas. Ningún material empieza sin ellas. Una ficha queda confirmada al guardarla completa.' }}</p>
+  {{ 'confirmada.' if puede_empezar else 'falta confirmar las fichas. Ningún material empieza sin ellas. Una ficha queda confirmada al guardarla completa.' }}</p>
 
-{% for m in materiales %}
+<div id="franja">
+<nav class="franja" aria-label="Materiales de la sesión">
+  <ol>
+    {% for m in materiales %}
+    <li class="{{ 'actual' if siguiente.ancla == m.clave }}">
+      {% if m.posterior %}<span class="nombre">{{ m.numero }}. {{ m.corto }}</span>
+      {% else %}<a class="nombre" href="#{{ m.clave }}">{{ m.numero }}. {{ m.corto }}</a>{% endif %}
+      {{ indicador(m.situacion) }}
+    </li>
+    {% endfor %}
+  </ol>
+</nav>
+<p class="siguiente"><strong>Siguiente paso:</strong>
+  {% if siguiente.ancla %}<a href="#{{ siguiente.ancla }}">{{ siguiente.texto }}</a>
+  {% elif not puede_empezar %}<a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">{{ siguiente.texto }}</a>
+  {% else %}{{ siguiente.texto }}{% endif %}</p>
+</div>
+
+{% for m in materiales if not m.posterior %}
 {% set e = m.estado %}
 {% set base = "/cursos/" ~ curso ~ "/sesiones/" ~ sesion ~ "/materiales/" ~ m.clave %}
-<section class="material" id="{{ m.clave }}" data-estado="{{ e.estado or '' }}">
-  <h2>{{ m.numero }}. {{ m.titulo }}</h2>
+<section class="material" id="{{ m.clave }}" data-estado="{{ e.estado or '' }}" data-avance="{{ (e.avance or []) | length }}" aria-labelledby="t-{{ m.clave }}">
+  <div class="cabeza">
+    <h2 id="t-{{ m.clave }}">{{ m.numero }}. {{ m.titulo }}</h2>
+    {{ indicador(m.situacion) }}
+  </div>
+  {% if not m.incluido %}
+  <p class="estado-material">«Materiales de esta sesión», en la <a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">ficha de la sesión</a>, no {{ "incluyen" if m.plural else "incluye" }} {{ m.el }}.</p>
+  {% else %}
   <p class="estado-material">
-    {% if e.estado == "trabajando" %}Trabajando…
-    {% elif e.estado == "aprobada" %}{{ "Aprobadas" if m.plural else "Aprobada" }} por ti el {{ e.aprobada[:10] }}.
-    {% elif e.estado == "verificada" %}{{ "Verificadas" if m.plural else "Verificada" }}: el verificador y la revisión del contenido terminaron sin errores abiertos.
-    {% elif e.estado == "con pendientes" %}{{ "Listas" if m.plural else "Lista" }}, con pendientes de la revisión. Míralos en «Decisiones pendientes» y decide: puedes {{ "aprobarlas" if m.plural else "aprobarla" }} igual.
+    {% if e.estado == "trabajando" %}AulaLista trabaja en {{ m.el }}. Esta parte se actualiza sola.
+    {% elif e.estado == "aprobada" %}{{ forma(m, "Aprobad") }} por ti el {{ e.aprobada[:10] }}.
+    {% elif e.estado == "verificada" %}{{ forma(m, "Verificad") }}: el verificador y la revisión del contenido terminaron sin errores abiertos.
+    {% elif e.estado == "con pendientes" %}{{ "Listas" if m.plural else forma(m, "List") }}, con pendientes de la revisión. Míralos en «Decisiones pendientes» y decide: puedes aprobar{{ m.lo }} igual.
     {% elif e.estado == "con fallas" %}Con fallas del verificador. No se {{ "pueden" if m.plural else "puede" }} aprobar así.
     {% elif e.estado == "error" %}Se {{ "detuvieron" if m.plural else "detuvo" }} por un error: {{ e.error }}
-    {% elif e.estado == "detenida" %}{{ "Detenidas" if m.plural else "Detenida" }} por ti. Puedes {{ "generarlas" if m.plural else "generarla" }} de nuevo.
+    {% elif e.estado == "detenida" %}{{ forma(m, "Detenid") }} por ti. Puedes generar{{ m.lo }} de nuevo.
     {% else %}Sin generar.{% endif %}
-    {% if e.desactualizado %}<strong>{{ "Desactualizadas: la lectura o las fichas cambiaron." if m.plural else "Desactualizada: las fichas cambiaron." }}</strong>{% endif %}
+    {% if e.desactualizado %}<strong class="alerta">{{ forma(m, "Desactualizad") }}: {{ "la lectura o las fichas cambiaron" if m.plural else "las fichas cambiaron" }}. Genéra{{ m.lo }} de nuevo para que {{ "sigan" if m.plural else "siga" }} a las fichas.</strong>{% endif %}
   </p>
 
   {% if e.entrega and e.estado != "trabajando" %}
+  {% set secciones = e.entrega.secciones %}
+  {% set archivos = secciones | selectattr("clave", "equalto", "archivos") | list %}
+  {% set pendientes = secciones | selectattr("clave", "equalto", "pendientes") | list %}
+  {% set n_archivos = archivos[0].lineas | length if archivos else 0 %}
+  {% set n_pendientes = pendientes[0].lineas | length if pendientes else 0 %}
   <h3>Entrega</h3>
-  {% for s in e.entrega.secciones %}
-  <h4>{{ s.titulo }}</h4>
-  {% if s.clave == "archivos" %}
+  <p class="resumen">{{ n_archivos }} {{ "archivo" if n_archivos == 1 else "archivos" }} · {{ n_pendientes }} {{ "decisión pendiente" if n_pendientes == 1 else "decisiones pendientes" }}{% if e.avisos_de_diseno %} · {{ e.avisos_de_diseno | length }} {{ "aviso" if e.avisos_de_diseno | length == 1 else "avisos" }} de diseño{% endif %}</p>
+  {% if archivos %}
+  <h4>{{ archivos[0].titulo }}</h4>
   <ul class="lista">
-    {% for l in s.lineas %}{% set archivo, resto = l.split(": ", 1) %}
+    {% for l in archivos[0].lineas %}{% set archivo, resto = l.split(": ", 1) %}
     <li><a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/descargar/{{ archivo }}">{{ archivo }}</a>: {{ resto }}</li>
     {% endfor %}
   </ul>
-  {% else %}
-  <ul class="lista">{% for l in s.lineas %}<li>{{ l }}</li>{% endfor %}</ul>
   {% endif %}
-  {% endfor %}
-  {% if e.avisos_de_diseno %}
-  <h4>Avisos de diseño</h4>
-  <ul>{% for a in e.avisos_de_diseno %}<li>{{ a }}</li>{% endfor %}</ul>
+  {% set por_decidir = e.estado in ("verificada", "con pendientes", "con fallas") %}
+  {% if pendientes and por_decidir %}
+  <h4>{{ pendientes[0].titulo }}</h4>
+  <ul class="lista">{% for l in pendientes[0].lineas %}<li>{{ l }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if secciones | rejectattr("clave", "in", ["archivos", "pendientes"] if por_decidir else ["archivos"]) | list or e.avisos_de_diseno %}
+  <details class="detalle">
+    {% set resto = secciones | rejectattr("clave", "equalto", "archivos") | list %}
+    <summary>Detalles de la entrega: {% for s in resto if not (s.clave == "pendientes" and por_decidir) %}{{ s.titulo | lower }}{{ ", " if not loop.last }}{% endfor %}{% if e.avisos_de_diseno %} y avisos de diseño{% endif %}</summary>
+    {% for s in secciones if s.clave != "archivos" and not (s.clave == "pendientes" and por_decidir) %}
+    <h4>{{ s.titulo }}</h4>
+    <ul class="lista">{% for l in s.lineas %}<li>{{ l }}</li>{% endfor %}</ul>
+    {% endfor %}
+    {% if e.avisos_de_diseno %}
+    <h4>Avisos de diseño</h4>
+    <ul class="lista">{% for a in e.avisos_de_diseno %}<li>{{ a }}</li>{% endfor %}</ul>
+    {% endif %}
+  </details>
   {% endif %}
   {% if e.estado in ("verificada", "con pendientes") and not e.desactualizado %}
   <form method="post" action="{{ base }}/aprobar" class="aprobar">
@@ -49,58 +93,102 @@
     <button type="submit">Aprobar {{ m.el }}</button>
   </form>
   {% elif e.estado == "con fallas" %}
-  <p><strong>No se {{ "pueden" if m.plural else "puede" }} aprobar: {{ "tienen" if m.plural else "tiene" }} fallas del verificador.</strong> {{ "Genéralas" if m.plural else "Genérala" }} de nuevo después de resolverlas en las fichas.</p>
+  <p><strong>No se {{ "pueden" if m.plural else "puede" }} aprobar: {{ "tienen" if m.plural else "tiene" }} fallas del verificador.</strong> Genéra{{ m.lo }} de nuevo después de resolverlas en las fichas.</p>
   {% endif %}
   {% if e.estado in ("verificada", "con pendientes", "aprobada") %}
-  <form method="post" action="{{ base }}/revisor">
-    <button type="submit">Pedir revisor independiente</button>
-    <span class="nota">Opcional. Una sesión nueva de Claude Opus lee {{ m.el }}, las fuentes y las fichas. No corrige: lo que encuentra queda pendiente para que decidas. Gasta hasta 2 USD.</span>
+  <form method="post" action="{{ base }}/revisor" class="accion">
+    <button type="submit" class="secundario">Pedir revisor independiente</button>
+    <span class="nota">Opcional. Una sesión nueva de Claude Opus lee {{ m.el }}, las fuentes y las fichas. No corrige: lo que encuentra queda pendiente para que decidas. Gasta hasta 2 USD. {{ costo(costo_revisor) }}</span>
   </form>
   {% endif %}
   {% endif %}
 
   {% if e.avance %}
-  <details {% if e.estado == "trabajando" %}open{% endif %}>
+  <details class="avance-bloque" {% if e.estado == "trabajando" %}open{% endif %}>
     <summary>Avance</summary>
     <ol class="avance" aria-live="polite">{% for a in e.avance %}<li>{{ a }}</li>{% endfor %}</ol>
   </details>
   {% endif %}
 
   {% if m.gasto_corrida %}
-  <p class="nota">Gasto desde la última vez que pulsaste Generar: {{ m.gasto_corrida.llamadas }} {{ "llamada" if m.gasto_corrida.llamadas == 1 else "llamadas" }}, {{ "%.4f"|format(m.gasto_corrida.costo_usd) }} USD estimados.{% if e.revisor %} Incluye el revisor independiente.{% endif %}</p>
+  <p class="nota">Gasto desde la última vez que pulsaste Generar: {{ m.gasto_corrida.llamadas }} {{ "llamada" if m.gasto_corrida.llamadas == 1 else "llamadas" }}, {{ usd(m.gasto_corrida.costo_usd) }} estimados.{% if e.revisor %} Incluye el revisor independiente.{% endif %}</p>
   {% endif %}
 
   {% if m.faltan.ficha %}
   <p><strong>Para generar {{ m.el }}, completa en la <a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">ficha de la sesión</a>:</strong></p>
-  <ul>{% for f in m.faltan.ficha %}<li>{{ f }}</li>{% endfor %}</ul>
+  <ul class="lista">{% for f in m.faltan.ficha %}<li>{{ f }}</li>{% endfor %}</ul>
   {% endif %}
   {% if m.faltan.otros %}
   <p><strong>Para generar {{ m.el }}:</strong></p>
-  <ul>{% for f in m.faltan.otros %}<li>{{ f }}</li>{% endfor %}</ul>
+  <ul class="lista">{% for f in m.faltan.otros %}<li>{{ f }}</li>{% endfor %}</ul>
   {% endif %}
-  <form method="post" action="{{ base }}">
-    <button type="submit" {% if not puede_empezar or m.faltan.ficha or m.faltan.otros or e.estado == "trabajando" %}disabled{% endif %}>
+  {% set bloqueado = not puede_empezar or m.faltan.ficha or m.faltan.otros or e.estado == "trabajando" %}
+  <form method="post" action="{{ base }}" class="accion"
+        {% if e.estado == "aprobada" %}data-confirmar="{{ m.el | capitalize }} ya {{ 'están' if m.plural else 'está' }} {{ forma(m, 'aprobad') }}. Si {{ m.lo }} generas de nuevo, AulaLista {{ m.lo }} reemplaza, gasta tokens y tendrás que aprobar{{ m.lo }} otra vez. ¿Generar de nuevo?"{% endif %}>
+    <button type="submit" {% if bloqueado %}disabled aria-describedby="motivo-{{ m.clave }}"{% endif %}>
       {{ 'Generar de nuevo' if e.estado else m.generar }}
     </button>
-    <span class="nota">Gasta tokens. La redacción y las correcciones pueden tardar varios minutos.</span>
+    <span class="nota" id="motivo-{{ m.clave }}">
+      {% if not puede_empezar %}Espera a que las dos fichas estén confirmadas.
+      {% elif m.faltan.ficha or m.faltan.otros %}Espera a que se complete lo de arriba.
+      {% elif e.estado == "trabajando" %}Ya está en curso.
+      {% else %}Gasta tokens. {{ costo(m.costo_ref, "La última corrida" ~ ("" if not m.costo_ref or m.costo_ref.sesion == sesion else " (sesión " ~ m.costo_ref.sesion ~ ")")) }} Puede tardar varios minutos.{% endif %}
+    </span>
   </form>
   {% if e.estado == "trabajando" %}
-  <form method="post" action="{{ base }}/detener">
-    <button type="submit">Detener</button>
+  <form method="post" action="{{ base }}/detener" class="accion">
+    <button type="submit" class="secundario">Detener</button>
     <span class="nota">Corta el trabajo en curso. Lo que ya se gastó no se recupera.</span>
   </form>
+  {% endif %}
   {% endif %}
 </section>
 {% endfor %}
 
-<p class="nota">Gasto total de este curso, con todas las corridas: {{ gasto.llamadas }} llamadas, {{ "%.4f"|format(gasto.costo_usd) }} USD estimados.</p>
+{% for m in materiales if m.posterior %}
+<section class="material posterior" id="{{ m.clave }}" aria-labelledby="t-{{ m.clave }}">
+  <div class="cabeza">
+    <h2 id="t-{{ m.clave }}">{{ m.numero }}. {{ m.titulo }}</h2>
+    {{ indicador(m.situacion) }}
+  </div>
+  <p class="estado-material">{% if m.incluido %}AulaLista todavía no genera {{ m.el }}. Llegan en una etapa posterior del plan.{% else %}«Materiales de esta sesión» no la incluye.{% endif %}</p>
+</section>
+{% endfor %}
+
+<p class="nota">Gasto total de este curso, con todas las corridas: {{ gasto.llamadas }} llamadas, {{ usd(gasto.costo_usd) }} estimados.</p>
 {% endblock %}
 
 {% block scripts %}
 <script>
-  // Mientras se trabaja en algún material, la página se actualiza sola cada 5 segundos.
-  if (document.querySelector('section.material[data-estado="trabajando"]')) {
-    setTimeout(() => location.reload(), 5000);
-  }
+  // Mientras se trabaja en algún material, la página pide su versión nueva cada 5 segundos y cambia solo
+  // lo que cambió: el avance se agrega al final y el foco y la lectura no se pierden.
+  (function () {
+    const trabajando = () => document.querySelector('section.material[data-estado="trabajando"]');
+    if (!trabajando()) return;
+    async function actualizar() {
+      let nueva;
+      try {
+        const respuesta = await fetch(location.pathname, { headers: { "Accept": "text/html" } });
+        nueva = new DOMParser().parseFromString(await respuesta.text(), "text/html");
+      } catch (error) { setTimeout(actualizar, 5000); return; }
+      document.querySelectorAll("section.material").forEach((actual) => {
+        const otra = nueva.getElementById(actual.id);
+        if (!otra) return;
+        if (otra.dataset.estado === actual.dataset.estado) {
+          const lista = actual.querySelector("ol.avance"), nuevos = otra.querySelectorAll("ol.avance li");
+          if (lista) for (let i = lista.children.length; i < nuevos.length; i++) lista.append(nuevos[i].cloneNode(true));
+          actual.dataset.avance = otra.dataset.avance;
+          const nota = otra.querySelector(":scope > p.nota"), notaActual = actual.querySelector(":scope > p.nota");
+          if (nota && notaActual) notaActual.textContent = nota.textContent;
+        } else {
+          actual.replaceWith(otra);
+        }
+      });
+      const franja = document.getElementById("franja"), franjaNueva = nueva.getElementById("franja");
+      if (franja && franjaNueva && !franja.contains(document.activeElement)) franja.replaceWith(franjaNueva);
+      if (trabajando()) setTimeout(actualizar, 5000);
+    }
+    setTimeout(actualizar, 5000);
+  })();
 </script>
 {% endblock %}

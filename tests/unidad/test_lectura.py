@@ -450,7 +450,7 @@ def test_sin_fichas_el_boton_esta_desactivado(entorno):
     flujo.confirmar_curso(carpeta)
     pagina = cliente.get("/cursos/otro/sesiones/1").text
     assert "falta confirmar las fichas" in pagina
-    assert re.search(r"<button type=\"submit\"\s+disabled>", pagina)
+    assert re.search(r"<button type=\"submit\"\s+disabled[\s>]", pagina)
 
 
 def test_una_configuracion_rota_se_detecta_antes_de_gastar_tokens(sesion):

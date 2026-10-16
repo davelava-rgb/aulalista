@@ -47,28 +47,20 @@ button {
   cursor: pointer;
 }
 
-button:disabled { opacity: 0.6; cursor: wait; }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
 button:focus-visible { outline: 3px solid var(--texto); outline-offset: 2px; }
-
-#resultado {
-  margin-top: 1rem;
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--principal);
-  border-radius: 6px;
-  background: var(--suave);
-}
-
-#resultado.bien { border-color: var(--bien); }
-#resultado.error { border-color: var(--error); color: var(--error); }
 
 table { border-collapse: collapse; }
 th, td { padding: 0.35rem 1rem 0.35rem 0; text-align: left; }
-th { font-weight: normal; }
-td { font-weight: bold; }
 .nota { font-size: 0.875rem; opacity: 0.8; }
 
 a { color: var(--principal); }
-.ruta { font-size: 0.875rem; margin: 0 0 1rem; }
+.ruta { font-size: 0.875rem; margin: 0 0 1rem; overflow-wrap: anywhere; }
+h1, h2, h3 { overflow-wrap: anywhere; }
+
+/* Texto corrido a una medida cómoda de leer; las tablas y los formularios usan todo el ancho. */
+main p, main li, details summary { max-width: 75ch; }
+table p, table li { max-width: none; }
 
 .mensaje {
   padding: 0.75rem 1rem;
@@ -125,6 +117,13 @@ table.datos .ubicacion { white-space: nowrap; font-size: 0.8125rem; }
 
 @media (max-width: 40rem) {
   table.datos .ubicacion { white-space: normal; }
+  /* La tabla de sesiones pasa a una tarjeta por sesión: tres columnas no caben en un teléfono. */
+  table.sesiones thead { display: none; }
+  table.sesiones tr, table.sesiones td { display: block; }
+  table.sesiones td { padding: 0.25rem 0.5rem; }
+  table.sesiones tr { padding: 0.5rem 0; }
+  table.sesiones td:first-child { font-weight: bold; }
+  table.sesiones td[data-etiqueta]::before { content: attr(data-etiqueta); }
 }
 
 button.secundario {
@@ -214,4 +213,49 @@ input.numero { width: 8rem; }
 
 .material { margin-top: 1.5rem; padding: 0.5rem 1rem 1rem; border: 1px solid var(--principal); border-radius: 6px; }
 .avance { font-size: 0.875rem; }
-button:disabled { cursor: not-allowed; }
+.material.posterior { border-style: dashed; }
+.material .cabeza { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 1rem; }
+.material .cabeza h2 { margin: 0.75rem 0; }
+.material h3 { margin-bottom: 0.25rem; }
+.resumen { margin-top: 0; font-weight: bold; }
+.accion { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; margin: 1rem 0; }
+.accion .nota { flex: 1 1 20rem; }
+strong.alerta, span.alerta { color: var(--error); }
+.detalle { margin: 0.75rem 0; padding: 0 0.75rem; border: 1px solid var(--suave); border-radius: 6px; }
+.detalle > summary, .avance-bloque > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: bold; }
+.detalle > summary { display: list-item; padding: 0.6rem 0; }
+
+/* Indicador de estado: icono, color y palabra. */
+.indicador { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.875rem; font-weight: bold; white-space: nowrap; }
+.indicador .icono { flex: none; }
+.indicador.bien { color: var(--bien); }
+.indicador.error { color: var(--error); }
+.indicador.espera, .indicador.trabajando { color: var(--texto); }
+.indicador.neutro, .indicador.posterior { color: var(--texto); font-weight: normal; opacity: 0.8; }
+
+/* Franja con los materiales de la sesión y el siguiente paso. */
+.franja ol { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr)); gap: 0.5rem; margin: 1rem 0 0.5rem; padding: 0; list-style: none; }
+.franja li { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.5rem 0.75rem; border: 1px solid var(--suave); border-radius: 6px; max-width: none; }
+.franja li.actual { border-color: var(--principal); }
+.franja .nombre { font-weight: bold; }
+.franja .indicador { white-space: normal; }
+.franja a.nombre { min-height: 24px; }
+.siguiente { margin: 0 0 1rem; }
+
+/* Avance por sesión en la tabla del curso. */
+.mini { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin: 0.25rem 0 0; padding: 0; list-style: none; }
+.mini li { display: inline-flex; align-items: center; gap: 0.35rem; }
+.mini .nombre { font-size: 0.8125rem; }
+.siguiente-corto { margin: 0.25rem 0 0; font-size: 0.8125rem; }
+
+/* Índice de la ficha. */
+.indice { margin: 1rem 0; padding: 0.5rem 1rem; border: 1px solid var(--suave); border-radius: 6px; }
+.titulo-indice { margin: 0.25rem 0; font-weight: bold; }
+.indice ul { margin: 0.25rem 0 0.5rem; padding-left: 1.5rem; columns: 2 18rem; column-gap: 2rem; }
+.indice li { break-inside: avoid; padding: 0.15rem 0; }
+.indice .marca { font-size: 0.8125rem; }
+.seccion { scroll-margin-top: 1rem; }
+.estado-bloque { margin-left: 0.5rem; font-weight: normal; font-size: 0.875rem; opacity: 0.85; }
+.estado-bloque.alerta { color: var(--error); opacity: 1; }
+.sin-guardar { margin: 0; align-self: center; font-weight: bold; }
+.aviso-guardar { flex-basis: 100%; margin: 0; font-size: 0.875rem; font-weight: bold; }

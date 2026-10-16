@@ -1,7 +1,8 @@
 {% extends "base.html" %}
+{% from "_estado.html" import indicador, costo, usd %}
 
 {% block titulo %}{{ nombre }} · AulaLista{% endblock %}
-{% block ruta %} › {{ nombre }}{% endblock %}
+{% block ruta %} › <span aria-current="page">{{ nombre }}</span>{% endblock %}
 
 {% block contenido %}
 <h1>{{ nombre }}</h1>
@@ -13,14 +14,23 @@
 </p>
 {% if ficha_curso.confirmada %}
   {% if sesiones %}
-  <table class="datos">
+  <table class="datos sesiones">
     <thead><tr><th scope="col">Sesión</th><th scope="col">Ficha de la sesión</th><th scope="col">Materiales</th></tr></thead>
     <tbody>
       {% for s in sesiones %}
+      {% set hechos = s.materiales | selectattr("situacion.clase", "equalto", "bien") | list | length %}
+      {% set van = s.materiales | selectattr("incluido") | rejectattr("posterior") | list | length %}
       <tr>
         <td>{{ s.numero }}. {{ s.texto }}</td>
-        <td><a href="/cursos/{{ curso }}/sesiones/{{ s.numero }}/ficha">{% if s.confirmada %}Confirmada{% elif s.existe %}Sin confirmar{% else %}Llenar{% endif %}</a></td>
-        <td><a href="/cursos/{{ curso }}/sesiones/{{ s.numero }}">Abrir sesión</a></td>
+        <td data-etiqueta="Ficha de la sesión: "><a href="/cursos/{{ curso }}/sesiones/{{ s.numero }}/ficha">{% if s.confirmada %}Confirmada{% elif s.existe %}Sin confirmar{% else %}Llenar{% endif %}</a></td>
+        <td>
+          <a href="/cursos/{{ curso }}/sesiones/{{ s.numero }}">Abrir sesión</a>
+          <span class="nota">· {{ hechos }} de {{ van }} {{ "aprobado" if van == 1 else "aprobados" }}</span>
+          <ul class="mini">
+            {% for m in s.materiales if m.incluido %}<li><span class="nombre">{{ m.corto }}:</span> {{ indicador(m.situacion) }}</li>{% endfor %}
+          </ul>
+          {% if s.siguiente %}<p class="siguiente-corto">Sigue: {{ s.siguiente.texto }}</p>{% endif %}
+        </td>
       </tr>
       {% endfor %}
     </tbody>
@@ -67,13 +77,13 @@
   </tbody>
 </table>
 
-<form method="post" action="/cursos/{{ curso }}/convertir" id="form-convertir">
+<form method="post" action="/cursos/{{ curso }}/convertir" id="form-convertir" class="accion">
   <button type="submit" id="convertir">Convertir fuentes a texto</button>
-  <span class="nota">{{ pendientes }} sin convertir o con cambios. Las imágenes y las páginas escaneadas las lee Claude y gastan tokens.</span>
+  <span class="nota">{{ pendientes }} sin convertir. Un archivo reemplazado se convierte de nuevo; uno sin cambios no gasta. Las imágenes y las páginas escaneadas las lee Claude y gastan tokens. {{ costo(costo_convertir, "La última lectura de imágenes") }}</span>
 </form>
 {% endif %}
 
-<p class="nota">Gasto de este curso: {{ gasto.llamadas }} llamadas, {{ "%.4f"|format(gasto.costo_usd) }} USD estimados.</p>
+<p class="nota">Gasto de este curso: {{ gasto.llamadas }} llamadas, {{ usd(gasto.costo_usd) }} estimados.</p>
 {% endblock %}
 
 {% block scripts %}

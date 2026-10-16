@@ -1,7 +1,8 @@
 {% extends "base.html" %}
+{% from "_estado.html" import costo %}
 
 {% block titulo %}{{ titulo }} · AulaLista{% endblock %}
-{% block ruta %} › <a href="/cursos/{{ curso }}">{{ nombre }}</a> › {{ titulo }}{% endblock %}
+{% block ruta %} › <a href="/cursos/{{ curso }}">{{ nombre }}</a> › <span aria-current="page">{{ titulo }}</span>{% endblock %}
 
 {% macro control(c) %}
 {% set k = c.control %}
@@ -116,8 +117,10 @@
 </p>
 
 {% if propuesta.estado == "trabajando" %}
-<p class="mensaje" role="status" id="propuesta-en-curso">Leyendo las fuentes y proponiendo la ficha. Puede tardar unos minutos.
-  La página se actualiza sola. No hace falta que hagas nada.</p>
+<div class="mensaje" role="status" id="propuesta-en-curso" data-url="{{ url_propuesta }}">
+  <p>Leyendo las fuentes y proponiendo la ficha. Puede tardar unos minutos. Te aviso aquí cuando termine;
+    la página no se recarga sola.</p>
+</div>
 {% elif propuesta.mensaje and not ficha.confirmada %}
 <p class="mensaje" role="status">{{ propuesta.mensaje }}</p>
 {% endif %}
@@ -131,7 +134,7 @@
     <button type="submit" form="form-ficha" name="accion" value="corregir_ejercicios"
             {% if propuesta.estado == "trabajando" %}disabled{% endif %}>Corregir los ejercicios</button>
     <p class="ayuda">AulaLista corrige los ejercicios marcados, los revisa de nuevo y, si cumplen, confirma la ficha.
-      Lo cambiado queda marcado «Propuesto». Gasta tokens.</p>
+      Lo cambiado queda marcado «Propuesto». Gasta tokens. {{ costo(costos.corregir) }}</p>
   </div>
   {% else %}
   <p>Corrige esos campos y guarda de nuevo. Puedes salir de la ficha cuando quieras: lo guardado no se pierde.</p>
@@ -148,16 +151,27 @@
 </section>
 {% endif %}
 
+{% set total_alertas = secciones | sum(attribute="alertas") %}
+<nav class="indice" aria-label="Secciones de la ficha">
+  <p class="titulo-indice">Secciones{% if total_alertas %} · <span class="alerta">{{ total_alertas }} {{ "campo" if total_alertas == 1 else "campos" }} en «Falta definir» o con dos versiones</span>{% endif %}</p>
+  <ul>
+    {% for s in secciones %}
+    <li><a href="#{{ s.ancla }}">{{ s.titulo }}</a>{% if s.alertas %} <span class="marca alerta">{{ s.alertas }} por definir</span>{% endif %}</li>
+    {% endfor %}
+  </ul>
+</nav>
+
 <form method="post" id="form-ficha" enctype="multipart/form-data">
   {% for s in secciones %}
-  <section class="seccion">
-    <h2>{{ s.titulo }}</h2>
+  <section class="seccion" id="{{ s.ancla }}" aria-labelledby="t-{{ s.ancla }}">
+    <h2 id="t-{{ s.ancla }}">{{ s.titulo }}</h2>
     {% for e in s.elementos %}
       {% if e.repetible %}
         {% if e.encabezado %}<p class="nota">{{ e.encabezado }}</p>{% endif %}
         {% for b in e.bloques %}
-        <details class="bloque" {% if b.campos | selectattr('valor') | list or b.campos | selectattr('estado') | list or b.numero <= 3 %}open{% endif %}>
-          <summary>{{ 'Ejercicio' if e.nombre == 'ejercicio' else 'Pregunta' }} {{ b.numero }}</summary>
+        <details class="bloque" {% if b.situacion == "alerta" or (b.situacion == "vacio" and b.numero <= 3) %}open{% endif %}>
+          <summary>{{ 'Ejercicio' if e.nombre == 'ejercicio' else 'Pregunta' }} {{ b.numero }}
+            <span class="estado-bloque {{ b.situacion }}">{{ {"alerta": "con campos por definir", "lleno": "con datos", "vacio": "vacío"}[b.situacion] }}</span></summary>
           {% for c in b.campos %}{{ campo(c) }}{% endfor %}
         </details>
         {% endfor %}
@@ -172,7 +186,7 @@
     {% if extra %}
     <div class="completar">
       <button type="submit" name="accion" value="completar.{{ extra.clave }}" class="secundario" {% if propuesta.estado == "trabajando" %}disabled{% endif %}>{{ extra.boton }}</button>
-      <p class="ayuda">{{ extra.ayuda }} Gasta tokens.</p>
+      <p class="ayuda">{{ extra.ayuda }} Gasta tokens. {{ costo(costos["completar." ~ extra.clave]) }}</p>
     </div>
     {% endif %}
   </section>
@@ -185,10 +199,14 @@
     {% endif %}
     <button type="submit" name="accion" value="guardar" {% if hay_propuestos and not ficha.confirmada %}class="secundario"{% endif %} {% if ocupada %}disabled{% endif %}>Guardar</button>
     <button type="submit" name="accion" value="proponer" class="secundario" {% if ocupada %}disabled{% endif %}>Proponer desde las fuentes</button>
+    <p class="sin-guardar" id="sin-guardar" role="status" hidden>Hay cambios sin guardar.</p>
+    {% if ficha.confirmada and generados %}
+    <p class="aviso-guardar">Esta ficha está confirmada. Si guardas un cambio, lo ya generado queda desactualizado y hay que generarlo de nuevo: {{ generados | join(", ") }}.</p>
+    {% endif %}
   </div>
   <p class="nota">«Guardar» guarda la ficha y, si está completa, la confirma. Con fuentes convertidas, la ficha se
     propone sola la primera vez que la abres. «Proponer desde las fuentes» y los botones «Completar» solo llenan
-    campos vacíos y gastan tokens. «Aceptar lo propuesto y guardar» guarda lo que corregiste, acepta lo marcado
+    campos vacíos y gastan tokens. {{ costo(costos.proponer, "La última propuesta") }} «Aceptar lo propuesto y guardar» guarda lo que corregiste, acepta lo marcado
     «Propuesto» y confirma.</p>
 </form>
 
@@ -208,9 +226,24 @@
 
 {% block scripts %}
 <script>
-  // Mientras la ficha se propone sola, la página se actualiza cada 5 segundos.
-  if (document.getElementById("propuesta-en-curso")) {
-    setTimeout(() => location.reload(), 5000);
+  // Mientras la ficha se propone sola, la página pregunta cada 5 segundos si terminó, sin recargarse: el foco y
+  // lo que estés escribiendo no se pierden. Al terminar, avisa y ofrece mostrar la ficha propuesta.
+  const enCurso = document.getElementById("propuesta-en-curso");
+  if (enCurso) {
+    const consultar = async () => {
+      let estado = {};
+      try { estado = await (await fetch(enCurso.dataset.url)).json(); } catch (error) { estado = { estado: "trabajando" }; }
+      if (estado.estado === "trabajando") { setTimeout(consultar, 5000); return; }
+      enCurso.replaceChildren();
+      const texto = document.createElement("p");
+      texto.textContent = (estado.estado === "error" ? "La propuesta se detuvo. " : "La propuesta terminó. ") + (estado.mensaje || "");
+      const boton = document.createElement("button");
+      boton.type = "button";
+      boton.textContent = "Mostrar la ficha propuesta";
+      boton.addEventListener("click", () => location.reload());
+      enCurso.append(texto, boton);
+    };
+    setTimeout(consultar, 5000);
   }
   // Controles de la ficha (decisión 27).
   const formulario = document.getElementById("form-ficha");
@@ -265,7 +298,15 @@
     actualizar();
   });
 
+  // Aviso de cambios sin guardar: junto a los botones y al salir de la página.
+  let sinGuardar = false;
+  const marcarCambio = () => { sinGuardar = true; porId("sin-guardar").hidden = false; };
+  formulario.addEventListener("input", marcarCambio);
+  formulario.addEventListener("change", marcarCambio);
+  window.addEventListener("beforeunload", (evento) => { if (sinGuardar) { evento.preventDefault(); evento.returnValue = ""; } });
+
   formulario.addEventListener("submit", (evento) => {
+    sinGuardar = false;
     const boton = evento.submitter;
     if (boton) {
       boton.textContent = boton.value === "proponer" ? "Leyendo las fuentes… puede tardar"

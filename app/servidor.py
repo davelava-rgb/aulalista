@@ -44,10 +44,14 @@ def lector_de_imagenes(curso: str) -> convertir.LectorImagen:
 
 @app.get("/")
 def inicio(request: Request, mensaje: str = ""):
+    lista = [{**c, "gasto": tokens.total(c["curso"])} for c in cursos.listar()]
+    sistema = tokens.total(tokens.CURSO_SISTEMA)
+    total = {"llamadas": sistema["llamadas"] + sum(c["gasto"]["llamadas"] for c in lista),
+             "costo_usd": sistema["costo_usd"] + sum(c["gasto"]["costo_usd"] for c in lista)}
     return plantillas.TemplateResponse(
         request,
         "inicio.html",
-        {"gasto": tokens.total(tokens.CURSO_SISTEMA), "cursos": cursos.listar(), "mensaje": mensaje},
+        {"gasto": sistema, "total": total, "cursos": lista, "mensaje": mensaje},
     )
 
 
@@ -89,8 +93,11 @@ def ver_curso(request: Request, curso: str, mensaje: str = ""):
     sesiones = []
     for s in almacen.sesiones_del_curso(ficha_curso):
         ficha_sesion = almacen.cargar(carpeta, "sesion", s["numero"])
+        vista = _vista_de_materiales(carpeta, curso, s["numero"]) if ficha_curso["confirmada"] else None
         sesiones.append({**s, "confirmada": ficha_sesion["confirmada"],
-                         "existe": almacen.ruta_ficha(carpeta, "sesion", s["numero"]).exists()})
+                         "existe": almacen.ruta_ficha(carpeta, "sesion", s["numero"]).exists(),
+                         "materiales": vista["materiales"] if vista else [],
+                         "siguiente": vista["siguiente"] if vista else None})
     return plantillas.TemplateResponse(
         request,
         "curso.html",
@@ -102,6 +109,7 @@ def ver_curso(request: Request, curso: str, mensaje: str = ""):
             "sesiones": sesiones,
             "fuentes": fuentes,
             "pendientes": sum(1 for f in fuentes if f["estado"] != convertir.CONVERTIDA),
+            "costo_convertir": tokens.ultima_corrida(curso, "lectura_imagen"),
             "gasto": tokens.total(curso),
             "mensaje": mensaje,
         },
@@ -188,13 +196,27 @@ def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, m
             errores = flujo.problemas_de_ejercicios_guardados(ficha)
     # Los problemas de la revisión de los ejercicios los corrige la IA con un botón.
     corregibles = sesion is not None and bool(set(errores or []) & set(flujo.problemas_de_ejercicios_guardados(ficha)))
+    # La herramienta de los ejercicios solo pide su respuesta si el curso usa IA (decisión 36).
+    secciones = _indice_de_secciones(plantillas_fichas.vista(
+        tipo, ficha["campos"],
+        () if tipo == "curso" or "ia" in almacen.herramienta_de_los_ejercicios(carpeta) else ("pregunta_herramienta",)))
+    # Lo que ya se generó y quedaría desactualizado si se guarda un cambio en una ficha confirmada.
+    if sesion is None:
+        generados = ["los materiales de todas las sesiones"] if any(
+            m.get("estado") for s in almacen.sesiones_del_curso(ficha)
+            for m in almacen.cargar_estado(carpeta, s["numero"])["materiales"].values()) else []
+    else:
+        generados = [d["el"] for c, d in MATERIALES.items()
+                     if almacen.cargar_estado(carpeta, sesion)["materiales"].get(c, {}).get("estado")]
+    costos = {"proponer": tokens.ultima_corrida(curso, f"propuesta ficha {tipo}"),
+              "corregir": tokens.ultima_corrida(curso, "corrección de ejercicios"),
+              **{f"completar.{c}": tokens.ultima_corrida(curso, f"completar ficha: {c}") for c in flujo.COMPLETAR}}
     return plantillas.TemplateResponse(request, "ficha.html", {
         "curso": curso, "nombre": cursos.nombre(curso), "titulo": titulo, "ficha": ficha,
         "propuesta": flujo.estado_propuesta(carpeta, tipo, sesion),
         "hay_propuestos": any((d or {}).get("estado") == almacen.PROPUESTO for d in ficha["campos"].values()),
-        # La respuesta a una pregunta de la herramienta solo existe si el curso usa IA (decisión 36).
-        "secciones": plantillas_fichas.vista(tipo, ficha["campos"], () if tipo == "curso" or "ia" in
-                                             almacen.herramienta_de_los_ejercicios(carpeta) else ("pregunta_herramienta",)),
+        "secciones": secciones, "generados": generados, "costos": costos,
+        "url_propuesta": _url_ficha(curso, sesion) + "/propuesta",
         "preguntas": almacen.preguntas_pendientes(ficha),
         "errores": errores or [], "mensaje": mensaje, "corregibles": corregibles,
         "versiones": almacen.listar_versiones(carpeta, tipo, sesion),
@@ -202,6 +224,40 @@ def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, m
         "desactualizados": desactualizados,
         "completar": {d["seccion"]: {"clave": c, **d} for c, d in flujo.COMPLETAR.items()} if tipo == "curso" else {},
     })
+
+
+ALERTAS = ("falta definir", "conflicto")
+
+
+def _indice_de_secciones(secciones: list[dict]) -> list[dict]:
+    """Agrega a cada sección su ancla y cuántos campos tiene en «Falta definir» o con dos versiones, para el
+    índice de la ficha. Cada bloque repetido dice si está vacío, lleno o con alertas: los llenos se pliegan."""
+    for numero, s in enumerate(secciones, 1):
+        campos = []
+        for e in s["elementos"]:
+            if e.get("repetible"):
+                for b in e["bloques"]:
+                    b["situacion"] = ("alerta" if any(c["estado"] in ALERTAS for c in b["campos"])
+                                      else "lleno" if any(c["valor"] for c in b["campos"]) else "vacio")
+                    campos += b["campos"]
+            elif e.get("grupo"):
+                campos += e["campos"]
+            else:
+                campos.append(e)
+        s["ancla"] = f"seccion-{numero}"
+        s["alertas"] = sum(1 for c in campos if c["estado"] in ALERTAS)
+    return secciones
+
+
+@app.get("/cursos/{curso}/ficha/propuesta")
+def propuesta_del_curso(curso: str):
+    """Estado de la propuesta automática: la página lo consulta sin recargarse."""
+    return flujo.estado_propuesta(_carpeta(curso), "curso") or {}
+
+
+@app.get("/cursos/{curso}/sesiones/{sesion}/ficha/propuesta")
+def propuesta_de_la_sesion(curso: str, sesion: int):
+    return flujo.estado_propuesta(_carpeta(curso), "sesion", sesion) or {}
 
 
 def _exigir_ficha_del_curso(carpeta, curso):
@@ -357,15 +413,105 @@ def _trabajo_en_segundo_plano(funcion, *argumentos, clave: tuple | None = None) 
 
 # Materiales que ya se generan, en el orden de la skill. Cada módulo tiene las mismas funciones:
 # estado, faltan, generar, marcar_detenida, revisar_con_revisor, aprobar y gasto_de_la_corrida.
+# «o» es la terminación del género («aprobada», «aprobado») y «lo» el pronombre («generarla», «generarlo»).
 MATERIALES = {
-    lectura.CLAVE: {"modulo": lectura, "numero": 1, "titulo": "Lectura", "el": "la lectura", "plural": False,
+    lectura.CLAVE: {"modulo": lectura, "numero": 1, "titulo": "Lectura", "corto": "Lectura", "el": "la lectura",
+                    "plural": False, "o": "a", "lo": "la",
                     "aprobado": "Lectura aprobada.", "generar": "Generar lectura"},
-    diapositivas.CLAVE: {"modulo": diapositivas, "numero": 2, "titulo": "Diapositivas", "el": "las diapositivas",
-                         "plural": True, "aprobado": "Diapositivas aprobadas.", "generar": "Generar diapositivas"},
+    diapositivas.CLAVE: {"modulo": diapositivas, "numero": 2, "titulo": "Diapositivas", "corto": "Diapositivas",
+                         "el": "las diapositivas", "plural": True, "o": "a", "lo": "las",
+                         "aprobado": "Diapositivas aprobadas.", "generar": "Generar diapositivas"},
     laboratorio.CLAVE: {"modulo": laboratorio, "numero": 3, "titulo": "Laboratorio y archivos de práctica",
-                        "el": "el laboratorio", "plural": False, "aprobado": "Laboratorio aprobado.",
-                        "generar": "Generar laboratorio"},
+                        "corto": "Laboratorio", "el": "el laboratorio", "plural": False, "o": "o", "lo": "lo",
+                        "aprobado": "Laboratorio aprobado.", "generar": "Generar laboratorio"},
 }
+
+# Materiales de la sesión que llegan en una etapa posterior del PLAN.md (§4). La práctica interactiva y la guía
+# del profesor no se generan (PLAN.md §0, decisiones 34 y 35).
+POSTERIORES = {"evaluación": {"numero": 4, "titulo": "Evaluación y clave", "corto": "Evaluación y clave",
+                              "el": "la evaluación y su clave"}}
+
+
+def _forma(datos: dict, raiz: str) -> str:
+    """«Aprobad» → «Aprobada», «Aprobadas» o «Aprobado», según el material."""
+    return raiz + datos.get("o", "a") + ("s" if datos.get("plural") else "")
+
+
+def _situacion(datos: dict, estado: dict, incluido: bool) -> dict:
+    """Indicador de un material: clase (color e icono) y texto corto. El color nunca va sin su palabra."""
+    e = estado.get("estado")
+    if not incluido:
+        return {"clase": "neutro", "texto": "No va en esta sesión"}
+    if e == "trabajando":
+        return {"clase": "trabajando", "texto": "Trabajando"}
+    if estado.get("desactualizado") and e in ("aprobada", "verificada", "con pendientes"):
+        return {"clase": "error", "texto": _forma(datos, "Desactualizad")}
+    textos = {"aprobada": ("bien", _forma(datos, "Aprobad")),
+              "verificada": ("espera", "Para aprobar"),
+              "con pendientes": ("espera", "Con pendientes"),
+              "con fallas": ("error", "Con fallas"),
+              "error": ("error", "Error"),
+              "detenida": ("neutro", _forma(datos, "Detenid"))}
+    clase, texto = textos.get(e, ("neutro", "Sin generar"))
+    return {"clase": clase, "texto": texto}
+
+
+def _costo_de_referencia(carpeta, curso: str, sesion: int, clave: str, sesiones: list[int]) -> dict | None:
+    """Lo que gastó la última corrida de este material: en esta sesión o, si nunca se generó aquí, en la sesión
+    más reciente que lo tenga. Se muestra junto al botón Generar antes de pulsarlo."""
+    modulo = MATERIALES[clave]["modulo"]
+    for numero in [sesion] + sorted((n for n in sesiones if n != sesion), reverse=True):
+        gasto = modulo.gasto_de_la_corrida(carpeta, curso, numero)
+        if gasto and gasto["llamadas"]:
+            return {**gasto, "sesion": numero}
+    return None
+
+
+def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False) -> dict:
+    """Los materiales de una sesión con su indicador, y el siguiente paso. Con `detalle`, también lo que les
+    falta y el costo de la última corrida (la página de la sesión)."""
+    puede_empezar = almacen.puede_empezar_material(carpeta, sesion)
+    incluidos = almacen.materiales_de_la_sesion(almacen.cargar(carpeta, "sesion", sesion))
+    numeros = [s["numero"] for s in almacen.sesiones_del_curso(almacen.cargar(carpeta, "curso"))] if detalle else []
+    materiales, siguiente = [], None
+    for clave, datos in MATERIALES.items():
+        modulo = datos["modulo"]
+        estado = modulo.estado(carpeta, sesion)   # calcula si quedó desactualizado
+        incluido = clave in incluidos
+        m = {**{k: v for k, v in datos.items() if k != "modulo"}, "clave": clave, "estado": estado,
+             "incluido": incluido, "situacion": _situacion(datos, estado, incluido)}
+        faltan = modulo.faltan(carpeta, sesion) if puede_empezar and incluido else {"ficha": [], "otros": []}
+        if detalle:
+            m |= {"faltan": faltan, "gasto_corrida": modulo.gasto_de_la_corrida(carpeta, curso, sesion),
+                  "costo_ref": _costo_de_referencia(carpeta, curso, sesion, clave, numeros)}
+        materiales.append(m)
+        if siguiente or not incluido:
+            continue
+        e, viejo = estado.get("estado"), estado.get("desactualizado")
+        if not puede_empezar:
+            siguiente = {"texto": "Guarda completas las dos fichas: así quedan confirmadas.", "ancla": "", "corto": "Fichas"}
+        elif e == "trabajando":
+            siguiente = {"texto": f"Espera: AulaLista trabaja en {datos['el']}.", "ancla": clave, "corto": datos["corto"]}
+        elif e == "aprobada" and not viejo:
+            continue
+        elif e in ("verificada", "con pendientes") and not viejo:
+            siguiente = {"texto": f"Revisa la entrega y aprueba {datos['el']}.", "ancla": clave, "corto": datos["corto"]}
+        elif e == "con fallas":
+            siguiente = {"texto": f"Resuelve las fallas de {datos['el']} en las fichas y genéra{datos['lo']} de nuevo.",
+                         "ancla": clave, "corto": datos["corto"]}
+        elif faltan["ficha"] or faltan["otros"]:
+            siguiente = {"texto": f"Completa lo que falta para generar {datos['el']}.", "ancla": clave, "corto": datos["corto"]}
+        else:
+            siguiente = {"texto": f"Genera {datos['el']}.", "ancla": clave, "corto": datos["corto"]}
+    for clave, datos in POSTERIORES.items():
+        incluido = clave in incluidos
+        materiales.append({**datos, "clave": clave, "posterior": True, "incluido": incluido, "estado": {},
+                           "situacion": {"clase": "posterior" if incluido else "neutro",
+                                         "texto": "Etapa posterior" if incluido else "No va en esta sesión"}})
+    if siguiente is None:
+        siguiente = {"texto": "Los materiales que AulaLista ya genera están aprobados. "
+                              "La evaluación y su clave llegan en una etapa posterior.", "ancla": "", "corto": "Listo"}
+    return {"puede_empezar": puede_empezar, "materiales": materiales, "siguiente": siguiente}
 
 
 def _material(material: str) -> dict:
@@ -378,17 +524,11 @@ def _material(material: str) -> dict:
 def ver_sesion(request: Request, curso: str, sesion: int, mensaje: str = ""):
     carpeta = _carpeta(curso)
     _exigir_ficha_del_curso(carpeta, curso)
-    puede_empezar = almacen.puede_empezar_material(carpeta, sesion)
-    materiales = []
-    for clave, datos in MATERIALES.items():
-        modulo = datos["modulo"]
-        materiales.append({**{k: v for k, v in datos.items() if k != "modulo"}, "clave": clave,
-                           "estado": modulo.estado(carpeta, sesion),
-                           "faltan": modulo.faltan(carpeta, sesion) if puede_empezar else {"ficha": [], "otros": []},
-                           "gasto_corrida": modulo.gasto_de_la_corrida(carpeta, curso, sesion)})
+    vista = _vista_de_materiales(carpeta, curso, sesion, detalle=True)
     return plantillas.TemplateResponse(request, "sesion.html", {
         "curso": curso, "nombre": cursos.nombre(curso), "sesion": sesion, "mensaje": mensaje,
-        "puede_empezar": puede_empezar, "materiales": materiales, "gasto": tokens.total(curso),
+        **vista, "gasto": tokens.total(curso),
+        "costo_revisor": tokens.ultima_corrida(curso, "revisor independiente"),
     })
 
 

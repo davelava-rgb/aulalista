@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_estado.html" import usd %}
 
 {% block contenido %}
 <h1>AulaLista</h1>
@@ -6,7 +7,7 @@
 <h2>Cursos</h2>
 {% if cursos %}
 <ul class="lista">
-  {% for c in cursos %}<li><a href="/cursos/{{ c.curso }}">{{ c.nombre }}</a></li>{% endfor %}
+  {% for c in cursos %}<li><a href="/cursos/{{ c.curso }}">{{ c.nombre }}</a> <span class="nota">· {{ usd(c.gasto.costo_usd) }} estimados</span></li>{% endfor %}
 </ul>
 {% else %}
 <p>Todavía no hay cursos.</p>
@@ -17,4 +18,8 @@
   <input id="nombre" name="nombre" required maxlength="120">
   <button type="submit">Crear curso</button>
 </form>
+
+<p class="nota">Gasto total: {{ total.llamadas }} {{ "llamada" if total.llamadas == 1 else "llamadas" }} a Claude, {{ usd(total.costo_usd) }} estimados.
+  {% if gasto.llamadas %}Incluye {{ usd(gasto.costo_usd) }} de las pruebas de conexión.{% endif %}
+  Es una estimación, no la factura.</p>
 {% endblock %}
