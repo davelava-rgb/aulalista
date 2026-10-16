@@ -90,14 +90,6 @@ def ver_curso(request: Request, curso: str, mensaje: str = ""):
     archivos = sorted(r.name for r in (carpeta / "fuentes").glob("*") if r.is_file())
     fuentes = [{"archivo": a, **indice.get(a, {"estado": "sin convertir"})} for a in archivos]
     ficha_curso = almacen.cargar(carpeta, "curso")
-    sesiones = []
-    for s in almacen.sesiones_del_curso(ficha_curso):
-        ficha_sesion = almacen.cargar(carpeta, "sesion", s["numero"])
-        vista = _vista_de_materiales(carpeta, curso, s["numero"]) if ficha_curso["confirmada"] else None
-        sesiones.append({**s, "confirmada": ficha_sesion["confirmada"],
-                         "existe": almacen.ruta_ficha(carpeta, "sesion", s["numero"]).exists(),
-                         "materiales": vista["materiales"] if vista else [],
-                         "siguiente": vista["siguiente"] if vista else None})
     return plantillas.TemplateResponse(
         request,
         "curso.html",
@@ -107,7 +99,6 @@ def ver_curso(request: Request, curso: str, mensaje: str = ""):
             "nombre_en_la_ficha": (ficha_curso["campos"].get("curso.nombre") or {}).get("valor", "").strip(),
             "ficha_curso": ficha_curso,
             "ficha_curso_existe": almacen.ruta_ficha(carpeta, "curso").exists(),
-            "sesiones": sesiones,
             "fuentes": fuentes,
             "pendientes": sum(1 for f in fuentes if f["estado"] != convertir.CONVERTIDA),
             "costo_convertir": tokens.ultima_corrida(curso, "lectura_imagen"),

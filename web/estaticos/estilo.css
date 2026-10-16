@@ -154,13 +154,6 @@ table.datos .ubicacion { white-space: nowrap; font-size: 0.8125rem; }
 
 @media (max-width: 40rem) {
   table.datos .ubicacion { white-space: normal; }
-  /* La tabla de sesiones pasa a una tarjeta por sesión: tres columnas no caben en un teléfono. */
-  table.sesiones thead { display: none; }
-  table.sesiones tr, table.sesiones td { display: block; }
-  table.sesiones td { padding: 0.25rem 0.5rem; }
-  table.sesiones tr { padding: 0.5rem 0; }
-  table.sesiones td:first-child { font-weight: bold; }
-  table.sesiones td[data-etiqueta]::before { content: attr(data-etiqueta); }
 }
 
 button.secundario {
@@ -273,11 +266,6 @@ strong.alerta, span.alerta { color: var(--error); }
 
 .siguiente { margin: 0 0 1rem; }
 
-/* Avance por sesión en la tabla del curso. */
-.mini { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin: 0.25rem 0 0; padding: 0; list-style: none; }
-.mini li { display: inline-flex; align-items: center; gap: 0.35rem; }
-.mini .nombre { font-size: 0.8125rem; }
-.siguiente-corto { margin: 0.25rem 0 0; font-size: 0.8125rem; }
 
 /* Índice de la ficha. */
 .indice { margin: 1rem 0; padding: 0.5rem 1rem; border: 1px solid var(--suave); border-radius: 6px; }

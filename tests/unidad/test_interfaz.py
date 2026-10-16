@@ -126,10 +126,14 @@ def test_el_boton_generar_dice_lo_que_gasto_la_ultima_corrida(sesion):  # noqa: 
     assert "Gasta tokens, como la corrida de arriba." in pagina
 
 
-def test_la_tabla_del_curso_muestra_el_avance_de_cada_sesion(sesion):  # noqa: F811
+def test_la_pagina_del_curso_es_la_preparacion_y_el_avance_va_en_el_panel(sesion):  # noqa: F811
     _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00")
     pagina = cliente.get("/cursos/scrum").text
-    assert "1 de 3 aprobados" in pagina and "las diapositivas.</p>" in pagina
+    hoja = pagina.split('<main class="hoja">')[1]
+    assert "Preparación del curso" in hoja and 'id="fuentes"' in hoja
+    assert '<span class="indicador bien"><svg' in hoja and "Confirmada</span>" in hoja   # estado de la ficha del curso
+    assert "table class=\"datos sesiones\"" not in pagina and "Abrir sesión" not in pagina
+    assert "1 de 3 aprobados" in pagina.split('id="panel"')[1].split("</nav>")[0]
 
 
 def test_la_entrega_resume_en_una_linea_y_pliega_los_detalles(sesion):  # noqa: F811
