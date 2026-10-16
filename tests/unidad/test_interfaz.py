@@ -124,3 +124,10 @@ def test_los_bloques_llenos_se_pliegan_y_los_con_alertas_quedan_abiertos():
 def test_el_inicio_muestra_el_gasto(entorno):
     pagina = cliente.get("/").text
     assert "Gasto total: 0 llamadas a Claude" in pagina
+
+
+def test_todas_las_paginas_tienen_el_alternador_de_modo_claro_u_oscuro(entorno):
+    pagina = cliente.get("/").text
+    assert 'id="alternar-tema"' in pagina and '>Cambiar a modo oscuro</button>' in pagina
+    css = (servidor.RAIZ / "web" / "estaticos" / "estilo.css").read_text(encoding="utf-8")
+    assert ':root[data-tema="oscuro"]' in css and ':root:not([data-tema="claro"])' in css

@@ -170,6 +170,7 @@ Esquinas suavemente redondeadas de 6px en botones, campos, mensajes y recuadros.
 
 ### Navigation
 - **Ruta:** una línea de 0.875rem sobre el título ("AulaLista › curso › sesión"), con enlaces en petróleo. No hay menú lateral ni pestañas.
+- **Alternador de modo:** botón secundario a la derecha de la ruta ("Cambiar a modo claro" o "Cambiar a modo oscuro"). Sin elección guardada, la interfaz sigue el modo de Windows; la elección se guarda en el navegador.
 
 ### Tabla de datos
 - **Style:** ancho completo, encabezado con fondo petróleo y texto papel en negrita, filas pares en niebla, celdas con relleno de 0.5rem y alineadas arriba. Las filas leídas por IA van en cursiva.

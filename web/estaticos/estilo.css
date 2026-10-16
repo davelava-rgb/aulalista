@@ -5,17 +5,30 @@
   --suave: #f2f4f5;
   --bien: #1e6b3a;
   --error: #a3261f;
+  color-scheme: light;
 }
 
+/* Modo oscuro: sigue a Windows, salvo que el profesor elija uno con el alternador (data-tema en <html>). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-tema="claro"]) {
     --fondo: #14181b;
     --texto: #e4e7ea;
     --principal: #6fb3c4;
     --suave: #1f2529;
     --bien: #7fd19b;
     --error: #f08c84;
+    color-scheme: dark;
   }
+}
+
+:root[data-tema="oscuro"] {
+  --fondo: #14181b;
+  --texto: #e4e7ea;
+  --principal: #6fb3c4;
+  --suave: #1f2529;
+  --bien: #7fd19b;
+  --error: #f08c84;
+  color-scheme: dark;
 }
 
 body {
@@ -55,7 +68,9 @@ th, td { padding: 0.35rem 1rem 0.35rem 0; text-align: left; }
 .nota { font-size: 0.875rem; opacity: 0.8; }
 
 a { color: var(--principal); }
-.ruta { font-size: 0.875rem; margin: 0 0 1rem; overflow-wrap: anywhere; }
+.cabecera { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; margin: 0 0 1rem; }
+.ruta { font-size: 0.875rem; margin: 0; overflow-wrap: anywhere; min-width: 0; }
+button.tema { flex: none; min-height: 44px; padding: 0 0.75rem; font-size: 0.875rem; }
 h1, h2, h3 { overflow-wrap: anywhere; }
 
 /* Texto corrido a una medida cómoda de leer; las tablas y los formularios usan todo el ancho. */
