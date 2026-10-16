@@ -607,6 +607,18 @@ def _recorrido(datos: dict, estado: dict) -> list[dict]:
     return [{"paso": p, "clase": c, "nota": n} for p, c, n in zip(PASOS, clases, notas)]
 
 
+def _listos(carpeta, sesion: int, material: dict, puede_empezar: bool) -> list[str]:
+    """Lo que ya se cumple para generar un material. Se muestra con ✓ junto a lo que falta, para que el profesor
+    vea que el botón está listo por algo y no tenga que adivinarlo."""
+    listos = ["Las dos fichas están confirmadas."] if puede_empezar else []
+    if puede_empezar and not material["faltan"]["ficha"]:
+        listos.append(f"La ficha de la sesión tiene lo que {'piden' if material['plural'] else 'pide'} {material['el']}.")
+    if (puede_empezar and material["clave"] == diapositivas.CLAVE and not material["faltan"]["otros"]
+            and diapositivas.usa_lectura(carpeta, sesion)):
+        listos.append("La lectura está aprobada.")
+    return listos
+
+
 @app.get("/cursos/{curso}/sesiones/{sesion}")
 def ver_sesion(curso: str, sesion: int):
     """La sesión abre en el material del siguiente paso; sin fichas confirmadas, en la ficha de la sesión."""
@@ -629,6 +641,7 @@ def ver_material(request: Request, curso: str, sesion: int, material: str, mensa
     return plantillas.TemplateResponse(request, "material.html", {
         "curso": curso, "nombre": cursos.nombre(curso), "sesion": sesion, "mensaje": mensaje,
         "m": m, "recorrido": _recorrido(m, m["estado"]), "total": len(vista["materiales"]),
+        "listos": _listos(carpeta, sesion, m, vista["puede_empezar"]),
         "puede_empezar": vista["puede_empezar"], "siguiente": vista["siguiente"],
         "costo_revisor": tokens.ultima_corrida(curso, "revisor independiente"),
         "panel": _panel(carpeta, curso, f"{material}-{sesion}"),

@@ -44,7 +44,7 @@ def test_la_sesion_abre_el_material_del_siguiente_paso_sin_la_evaluacion(sesion)
     assert "Siguiente paso:" not in pagina   # el siguiente paso es este material: lo dicen el recorrido y el botón
     otra = cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
     assert 'Siguiente paso:</strong>' in otra and 'materiales/lectura">Genera la lectura.</a>' in otra
-    assert "Sesión 1 · Material 1 de 3" in pagina
+    assert "Material 1 de 3 de la sesión 1" in pagina
 
 
 def test_sin_fichas_la_sesion_abre_la_ficha(sesion):  # noqa: F811
@@ -138,15 +138,43 @@ def test_la_pagina_del_curso_es_la_preparacion_y_el_avance_va_en_el_panel(sesion
     assert "1 de 3 aprobados" in pagina.split('id="panel"')[1].split("</nav>")[0]
 
 
-def test_la_entrega_resume_en_una_linea_y_pliega_los_detalles(sesion):  # noqa: F811
+def test_la_entrega_resume_en_una_linea_muestra_las_decisiones_y_pliega_los_detalles(sesion):  # noqa: F811
     entrega = {"pregunta": "¿Apruebas la lectura?", "secciones": [
         {"clave": "archivos", "titulo": "Archivos", "lineas": ["S1_Lectura.docx: la lectura."]},
         {"clave": "probe", "titulo": "Qué probé", "lineas": ["Algo."]},
         {"clave": "pendientes", "titulo": "Decisiones pendientes", "lineas": ["Una.", "Otra."]}]}
     _poner(sesion, "lectura", estado="con pendientes", entrega=entrega)
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
-    assert "1 archivo · 2 decisiones pendientes" in pagina
+    assert "1 archivo y 2 decisiones pendientes." in pagina
+    assert '<ul class="entrega-archivos" aria-label="Archivos">' in pagina and "<span>La lectura.</span>" in pagina
+    assert "Decisiones pendientes: decide si las aceptas</h3>" in pagina and "<li>Una.</li>" in pagina
     assert '<details class="detalle">' in pagina and "Detalles de la entrega: qué probé</summary>" in pagina
+    _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00")
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    assert "Aprobaste con 2 decisiones pendientes</h3>" in pagina   # después de aprobar siguen a la vista
+
+
+def test_las_acciones_van_juntas_con_un_solo_boton_principal(sesion):  # noqa: F811
+    _poner(sesion, "lectura", estado="con pendientes", entrega={"pregunta": "¿Apruebas la lectura?", "secciones": []})
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    bloque = pagina.split('<div class="bloque-accion">')[1].split("</section>")[0]
+    assert "Aprobar la lectura</button>" in bloque and "Pedir revisor independiente</button>" in bloque
+    assert bloque.count('<button type="submit">') == 1   # Aprobar es el único principal; Generar de nuevo es secundario
+
+
+def test_antes_de_generar_dice_lo_que_ya_se_cumple_y_lo_que_falta(sesion):  # noqa: F811
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    assert "Todo está listo para generar la lectura." in pagina
+    assert '<li class="si">Las dos fichas están confirmadas.</li>' in pagina
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
+    assert "Antes de generar las diapositivas:" in pagina
+    assert '<li class="no">Aprueba primero la lectura: las diapositivas salen de ella.</li>' in pagina
+
+
+def test_ninguna_pagina_usa_puntos_medios_como_separador(sesion):  # noqa: F811
+    for url in ("/", "/cursos/scrum", "/cursos/scrum/ficha", "/cursos/scrum/sesiones/1/materiales/lectura"):
+        pagina = cliente.get(url).text
+        assert " · " not in pagina.split("<body>")[1], url
 
 
 def test_la_ficha_tiene_indice_aviso_de_cambios_y_consulta_la_propuesta_sin_recargar(sesion):  # noqa: F811

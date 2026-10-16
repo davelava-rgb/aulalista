@@ -1,7 +1,7 @@
 {% extends "_entorno.html" %}
 {% from "_estado.html" import costo, icono %}
 
-{% block titulo %}{{ titulo }} · AulaLista{% endblock %}
+{% block titulo %}{{ titulo }} | AulaLista{% endblock %}
 
 {% macro control(c) %}
 {% set k = c.control %}
@@ -153,11 +153,12 @@
 {% endif %}
 
 {% set total_alertas = secciones | sum(attribute="alertas") %}
+{# Barra fija con las secciones de esta ficha: el panel dice dónde estás en el curso; esta barra, dónde estás en el formulario. #}
 <nav class="indice" aria-label="Secciones de la ficha">
-  <p class="titulo-indice">Secciones{% if total_alertas %} · <span class="alerta">{{ total_alertas }} {{ "campo" if total_alertas == 1 else "campos" }} en «Falta definir» o con dos versiones</span>{% endif %}</p>
+  {% if total_alertas %}<p class="titulo-indice alerta">{{ total_alertas }} {{ "campo" if total_alertas == 1 else "campos" }} en «Falta definir» o con dos versiones.</p>{% endif %}
   <ul>
     {% for s in secciones %}
-    <li><a href="#{{ s.ancla }}">{{ s.titulo }}</a>{% if s.alertas %} <span class="marca alerta">{{ s.alertas }} por definir</span>{% endif %}</li>
+    <li><a href="#{{ s.ancla }}" title="{{ s.titulo }}">{{ s.titulo }}</a>{% if s.alertas %} <span class="marca alerta">{{ s.alertas }} por definir</span>{% endif %}</li>
     {% endfor %}
   </ul>
 </nav>
@@ -219,7 +220,7 @@
         data-confirmar="La ficha vuelve a la versión elegida y lo que ves ahora se reemplaza.{% if ficha.confirmada and generados %} Lo ya generado puede quedar desactualizado.{% endif %} ¿Recuperar esta versión?">
     <label for="version">Versión</label>
     <select id="version" name="version">
-      {% for v in versiones %}<option value="{{ v.archivo }}">{{ v.fecha }} · {{ v.motivo }}</option>{% endfor %}
+      {% for v in versiones %}<option value="{{ v.archivo }}">{{ v.fecha }}, {{ v.motivo }}</option>{% endfor %}
     </select>
     <button type="submit" class="secundario">Recuperar esta versión</button>
   </form>

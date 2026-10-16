@@ -7,7 +7,7 @@
 <h1>Cursos</h1>
 {% if cursos %}
 <ul class="lista">
-  {% for c in cursos %}<li><a href="/cursos/{{ c.curso }}">{{ c.nombre }}</a> <span class="nota">· {{ usd(c.gasto.costo_usd) }} estimados</span></li>{% endfor %}
+  {% for c in cursos %}<li><a href="/cursos/{{ c.curso }}">{{ c.nombre }}</a> <span class="nota">({{ usd(c.gasto.costo_usd) }} estimados)</span></li>{% endfor %}
 </ul>
 {% else %}
 <p>Todavía no hay cursos.</p>

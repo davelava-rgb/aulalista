@@ -519,7 +519,7 @@ def test_sin_bloques_la_lectura_no_empieza_y_la_pagina_dice_que_falta(sesion):
     with pytest.raises(lectura.NoSePuedeEmpezar, match="La lectura necesita de 2 a 4 bloques"):
         asyncio.run(lectura.generar(sesion, "scrum", 1, consulta=consulta_en_secuencia()))
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
-    assert "Para generar la lectura, completa en la" in pagina and "La lectura necesita de 2 a 4 bloques, o un material de referencia." in pagina
+    assert "Antes de generar la lectura:" in pagina and "La lectura necesita de 2 a 4 bloques, o un material de referencia." in pagina
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura", follow_redirects=True)
     assert "Falta en la ficha de la sesión: La lectura necesita de 2 a 4 bloques, o un material de referencia." in r.text
     assert lectura.estado(sesion, 1).get("estado") is None   # no empezó: no gastó tokens

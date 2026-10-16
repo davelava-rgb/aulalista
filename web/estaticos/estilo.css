@@ -268,13 +268,14 @@ strong.alerta, span.alerta { color: var(--error); }
 .siguiente { margin: 0 0 1rem; }
 
 
-/* Índice de la ficha. */
-.indice { margin: 1rem 0; padding: 0.5rem 1rem; border: 1px solid var(--suave); border-radius: 6px; }
-.titulo-indice { margin: 0.25rem 0; font-weight: bold; }
-.indice ul { margin: 0.25rem 0 0.5rem; padding-left: 1.5rem; columns: 2 18rem; column-gap: 2rem; }
-.indice li { break-inside: avoid; padding: 0.15rem 0; }
-.indice .marca { font-size: 0.8125rem; }
-.seccion { scroll-margin-top: 1rem; }
+/* Índice de la ficha: una barra fija arriba de la hoja, con una sección por enlace (decisión 38). */
+.indice { position: sticky; top: 0; z-index: 2; margin: 1rem 0; padding: 0.25rem 0; background: var(--fondo); border-bottom: 1px solid var(--borde); }
+.titulo-indice { margin: 0.25rem 0; font-size: 0.875rem; font-weight: bold; }
+.indice ul { display: flex; gap: 0.25rem 1rem; margin: 0; padding: 0; overflow-x: auto; list-style: none; }
+.indice li { flex: none; display: flex; align-items: center; gap: 0.35rem; max-width: none; }
+.indice a { display: inline-flex; align-items: center; min-height: 44px; max-width: 15rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.indice .marca { font-size: 0.8125rem; white-space: nowrap; }
+.seccion { scroll-margin-top: 4.5rem; }
 .estado-bloque { margin-left: 0.5rem; font-weight: normal; font-size: 0.875rem; opacity: 0.85; }
 .estado-bloque.alerta { color: var(--error); opacity: 1; }
 .sin-guardar { margin: 0; align-self: center; font-weight: bold; }
@@ -289,7 +290,7 @@ html { scroll-padding-bottom: 6rem; }
 
 /* Entorno del curso: panel a la izquierda y hoja de trabajo a la derecha (PLAN.md §0, decisión 38). */
 .entorno { display: grid; grid-template-columns: 18.5rem minmax(0, 1fr); align-items: start; }
-main.hoja { max-width: 50rem; margin: 0; padding: 2rem 2.5rem 4rem; }
+main.hoja { min-width: 0; max-width: 50rem; margin: 0; padding: 2rem 2.5rem 4rem; }
 .panel { position: sticky; top: 0; max-height: 100vh; overflow-y: auto; min-height: calc(100vh - 3.5rem); padding: 1.25rem 0 1rem; background: var(--suave); border-right: 1px solid var(--borde); }
 .panel ul { list-style: none; margin: 0; padding: 0; }
 .panel-curso { padding: 0 1.25rem 1rem; }
@@ -322,7 +323,8 @@ main.hoja { max-width: 50rem; margin: 0; padding: 2rem 2.5rem 4rem; }
 
 /* Bajo 52rem el panel pasa arriba: solo el curso y la sesión abierta, como una franja que se desliza de lado. */
 @media (max-width: 52rem) {
-  .entorno { grid-template-columns: 1fr; }
+  /* minmax(0, 1fr): sin esto, un texto largo sin cortes ensancha la columna y la página se sale de la pantalla. */
+  .entorno { grid-template-columns: minmax(0, 1fr); }
   .panel { position: static; max-height: none; min-height: 0; padding: 0.75rem 0 0; border-right: 0; border-bottom: 1px solid var(--borde); }
   .panel-curso { padding-bottom: 0.5rem; }
   .panel-preparacion, .panel-gasto, .panel-grupo > h2, .panel-sesion:not(.abierta) { display: none; }
@@ -360,3 +362,22 @@ main.hoja .material .cabeza h1 { margin: 0; }
   .recorrido { grid-template-columns: 1fr 1fr; row-gap: 1rem; }
   .recorrido li:nth-child(2)::after { display: none; }
 }
+
+/* Entrega de un material: archivos en filas, decisiones numeradas y todas las acciones en un recuadro. */
+.resumen { font-weight: normal; }
+.entrega-archivos { margin: 0.5rem 0 1rem; padding: 0; list-style: none; border-top: 1px solid var(--borde); }
+.entrega-archivos li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.25rem 1rem; max-width: none;
+  padding: 0.6rem 0; border-bottom: 1px solid var(--borde); }
+.entrega-archivos a { overflow-wrap: anywhere; }
+.entrega-archivos span { font-size: 0.875rem; opacity: 0.8; }
+.decisiones { padding-left: 1.5rem; }
+.decisiones li { padding: 0.2rem 0; }
+.bloque-accion { margin-top: 2rem; padding: 0.25rem 1.5rem 0.5rem; border: 1px solid var(--principal); border-radius: 6px; }
+.bloque-accion .aprobar { margin: 1rem 0; }
+.antes { margin: 1rem 0 0.25rem; font-weight: bold; }
+.listo { margin: 0 0 0.5rem; padding: 0; list-style: none; }
+.listo li { position: relative; padding: 0.2rem 0 0.2rem 1.5rem; }
+.listo li::before { position: absolute; left: 0; font-weight: bold; }
+.listo li.si::before { content: "✓"; color: var(--bien); }
+.listo li.no::before { content: "!"; color: var(--error); }
+@media (max-width: 30rem) { .bloque-accion { padding: 0.25rem 1rem 0.5rem; } }
