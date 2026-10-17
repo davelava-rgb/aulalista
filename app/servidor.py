@@ -611,6 +611,8 @@ def _motivo(m: dict) -> str:
     los = "las" if m["plural"] else ("lo" if m["el"].startswith("el ") else "la")
     sigue = "siguen" if m["plural"] else "sigue"
     if m["desactualizado"]:
+        if m["clave"] == diapositivas.CLAVE:
+            return f"La lectura o la ficha cambió después de generar{los}: ya no {sigue} a lo de ahora."
         return f"La ficha cambió después de generar{los}: ya no la {sigue}."
     return {"trabajando": "AulaLista trabaja en esto ahora. La página se actualiza sola.",
             "verificada": "Está listo: revisa la entrega y decide si lo apruebas.",
@@ -714,7 +716,8 @@ def _recorrido(datos: dict, estado: dict) -> list[dict]:
     notas = ["Pendiente", "Sin IA", "Con IA, por bloque", "Lo decides tú"]
     clases = ["ahora", "pendiente", "pendiente", "pendiente"]
     if estado.get("desactualizado") and e in ("aprobada", "verificada", "con pendientes"):
-        notas[0] = "Las fichas cambiaron"
+        # Las diapositivas salen de la lectura: también quedan desactualizadas si la lectura cambia.
+        notas[0] = "La lectura o las fichas cambiaron" if datos.get("clave", "") == diapositivas.CLAVE else "Las fichas cambiaron"
     elif e == "trabajando":
         notas[0] = "En curso"
     elif e == "detenida":

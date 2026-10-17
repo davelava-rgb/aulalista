@@ -356,7 +356,7 @@ def _m(clave="laboratorio", estado="", desactualizado=False, aprobada=""):
 
 def test_el_motivo_de_lo_que_sigue_concuerda_y_dice_por_que():
     assert servidor._motivo(_m("laboratorio", "aprobada", True)) == "La ficha cambió después de generarlo: ya no la sigue."
-    assert servidor._motivo(_m("diapositivas", "aprobada", True)) == "La ficha cambió después de generarlas: ya no la siguen."
+    assert servidor._motivo(_m("diapositivas", "aprobada", True)) == "La lectura o la ficha cambió después de generarlas: ya no siguen a lo de ahora."
     assert servidor._motivo(_m("lectura", "con fallas")) == "Tiene fallas del verificador y no se puede aprobar así."
     assert servidor._motivo(_m("lectura")) == "Todavía no se generó."
     assert servidor._fecha("2026-10-12T09:00:00") == "12 de octubre" and servidor._fecha("") == ""

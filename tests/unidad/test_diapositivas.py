@@ -319,7 +319,8 @@ def test_si_la_lectura_se_genera_de_nuevo_quedan_desactualizadas(con_lectura):
     assert diapositivas.estado(con_lectura, 1)["desactualizado"] is True
     with pytest.raises(diapositivas.NoSePuedeAprobar):
         diapositivas.aprobar(con_lectura, 1)
-    assert "Desactualizadas: la lectura o las fichas cambiaron." in cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
+    assert "Desactualizadas</span>" in pagina and '<span class="paso-nota">La lectura o las fichas cambiaron</span>' in pagina
 
 
 def test_se_aprueban_desde_la_pagina(con_lectura):

@@ -34,7 +34,8 @@
   {% if not m.incluido %}
   <p class="estado-material">«Materiales de esta sesión», en la <a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">ficha de la sesión</a>, no {{ "incluyen" if m.plural else "incluye" }} {{ m.el }}.</p>
   {% else %}
-  {% if e.estado in ("trabajando", "con pendientes", "error", "detenida") or e.desactualizado %}
+  {# Desactualizado no lleva frase: lo dicen el indicador rojo y el recorrido («Las fichas cambiaron»). #}
+  {% if e.estado in ("trabajando", "con pendientes", "error", "detenida") %}
   <p class="estado-material">
     {% if e.estado == "trabajando" %}AulaLista trabaja en {{ m.el }}. Esta página se actualiza sola.
     {# Aprobada, verificada y con fallas no llevan frase: el indicador y el recorrido ya lo dicen. #}
@@ -42,7 +43,6 @@
     {% elif e.estado == "error" %}Se {{ "detuvieron" if m.plural else "detuvo" }} por un error antes de terminar. Prueba otra vez con los botones de abajo. Si se repite, copia el detalle y envíalo.
     {% elif e.estado == "detenida" %}{{ forma(m, "Detenid") }} por ti. Puedes generar{{ m.lo }} de nuevo.
     {% endif %}
-    {% if e.desactualizado %}<strong class="alerta">{{ forma(m, "Desactualizad") }}: {{ "la lectura o las fichas cambiaron" if m.plural else "las fichas cambiaron" }}. Genéra{{ m.lo }} de nuevo para que {{ "sigan" if m.plural else "siga" }} a las fichas.</strong>{% endif %}
   </p>
   {% endif %}
   {% if e.estado == "error" and e.error %}
