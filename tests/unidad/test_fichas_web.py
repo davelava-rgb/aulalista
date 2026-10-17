@@ -38,7 +38,7 @@ def test_guardar_la_ficha_del_curso_completa_la_confirma_y_abre_las_sesiones(cur
     assert "Ficha del curso guardada y confirmada." in r.text
     assert almacen.cargar(curso, "curso")["confirmada"] is True
     pagina = cliente.get("/cursos/scrum").text
-    assert "1. Agilidad y fundamentos de Scrum" in pagina
+    assert "Agilidad y fundamentos de Scrum" in pagina
     assert "/cursos/scrum/sesiones/2/ficha" in pagina
 
 

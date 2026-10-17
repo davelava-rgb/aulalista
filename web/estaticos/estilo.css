@@ -313,39 +313,43 @@ main.hoja { min-width: 0; max-width: 50rem; margin: 0; padding: 2rem 2.5rem 4rem
 .panel-titulo[aria-current] { color: var(--principal); }
 .panel-grupo { padding: 0.75rem 0 0.25rem; border-top: 1px solid var(--borde); }
 .panel-grupo > h2 { margin: 0 1.25rem 0.25rem; color: var(--texto); font-size: 0.8125rem; font-weight: bold; opacity: 0.75; }
-.panel-item { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; min-height: 44px;
-  padding: 0.25rem 1.25rem; color: var(--texto); text-decoration: none; font-size: 0.9375rem; }
-.panel-item:hover { background: var(--fondo); }
-.panel-item .indicador { flex: none; font-size: 0.8125rem; font-weight: normal; }
-.panel-item .panel-nombre { flex: 1; min-width: 0; }
-.panel-item[aria-current] { background: var(--fondo); font-weight: bold; }
-.panel-item[aria-current]::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--principal); }
-.panel-sesion > summary { display: block;
-  min-height: 44px; padding: 0.5rem 1.25rem; cursor: pointer; font-size: 0.9375rem; font-weight: bold; list-style: none; }
-.panel-sesion > summary::-webkit-details-marker { display: none; }
-.panel-sesion > summary::before { content: "▸"; margin-right: 0.35rem; font-weight: normal; }
-.panel-sesion[open] > summary::before { content: "▾"; }
-.panel-avance { display: block; margin-left: 1rem; font-size: 0.8125rem; font-weight: normal; opacity: 0.8; }
-.panel-sesion .panel-item { padding-left: 2rem; }
-.panel-sigue { display: inline-block; padding: 0 0.45rem; border-radius: 999px; background: var(--principal); color: var(--fondo);
-  font-size: 0.75rem; font-weight: bold; line-height: 1.5; vertical-align: 0.05em; }
+/* Sesiones del panel (decisión 44): número y título en una línea; sus materiales como puntos de color con su nombre. */
+.panel-sesion { padding: 0.5rem 1.25rem 0.6rem; }
+.panel-sesion.abierta { background: var(--fondo); }
+.panel-sesion-titulo { display: flex; gap: 0.5rem; min-height: 32px; align-items: center; color: var(--texto);
+  font-size: 0.9375rem; font-weight: bold; text-decoration: none; }
+.panel-sesion-titulo:hover .panel-sesion-nombre { text-decoration: underline; }
+.panel-num { flex: none; font-weight: normal; opacity: 0.7; }
+.panel-sesion-nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel-mats { display: flex; flex-wrap: wrap; gap: 0 0.25rem; margin: 0 0 0 0.85rem !important; }
+.panel-mat { position: relative; display: inline-flex; align-items: center; gap: 0.35rem; min-height: 32px; padding: 0 0.4rem;
+  border-radius: 6px; color: var(--texto); font-size: 0.8125rem; text-decoration: none; }
+.panel-mat:hover { text-decoration: underline; }
+.panel-mat i { flex: none; width: 0.6rem; height: 0.6rem; border: 1.5px solid var(--borde); border-radius: 50%; }
+.panel-mat.bien i { border-color: var(--bien); background: var(--bien); }
+.panel-mat.error i { border-color: var(--error); background: var(--error); }
+.panel-mat.espera i, .panel-mat.trabajando i { border-color: var(--texto); }
+.panel-mat.panel-ficha i { border-radius: 2px; }
+.panel-mat.sigue { color: var(--principal-texto); font-weight: bold; }
+.panel-mat.sigue i { border-color: var(--principal); box-shadow: 0 0 0 2px var(--principal-suave); }
+.panel-mat[aria-current] { background: var(--principal-suave); font-weight: bold; }
+.panel-mat[aria-current]::after { content: ""; position: absolute; left: 0.4rem; right: 0.4rem; bottom: 2px; height: 2px; background: var(--principal); }
 .panel-vacio { margin: 0.25rem 1.25rem; font-size: 0.8125rem; opacity: 0.8; }
 .panel-gasto { margin: 0.75rem 0 0; padding: 1rem 1.25rem 0; border-top: 1px solid var(--borde); font-size: 0.8125rem; opacity: 0.85; }
 .panel-gasto b { display: block; font-size: 1rem; }
 .panel a:focus-visible, .panel summary:focus-visible { outline: 3px solid var(--principal); outline-offset: -3px; }
 
-/* Bajo 52rem el panel pasa arriba: solo el curso y la sesión abierta, como una franja que se desliza de lado. */
+/* Bajo 52rem el panel pasa arriba: solo el curso y la sesión abierta, con sus materiales en una fila que se desliza. */
 @media (max-width: 52rem) {
   /* minmax(0, 1fr): sin esto, un texto largo sin cortes ensancha la columna y la página se sale de la pantalla. */
   .entorno { grid-template-columns: minmax(0, 1fr); }
   .panel { position: static; max-height: none; min-height: 0; padding: 0.75rem 0 0; border-right: 0; border-bottom: 1px solid var(--borde); }
   .panel-curso { padding-bottom: 0.5rem; }
-  .panel-preparacion, .panel-gasto, .panel-grupo > h2, .panel-sesion:not(.abierta) { display: none; }
+  .panel-gasto, .panel-grupo > h2, .panel-sesion:not(.abierta), .panel-vacio { display: none; }
   .panel-grupo { border-top: 0; padding: 0; }
-  .panel-sesion > summary { display: none; }
-  .panel-sesion ul { display: flex; overflow-x: auto; }
-  .panel-sesion .panel-item { flex: none; padding: 0.25rem 1rem; white-space: nowrap; }
-  .panel-item[aria-current]::before { top: auto; right: 0; width: auto; height: 3px; }
+  .panel-sesion.abierta { padding-top: 0.25rem; }
+  .panel-mats { flex-wrap: nowrap; overflow-x: auto; margin-left: 0 !important; }
+  .panel-mat { flex: none; white-space: nowrap; }
   main.hoja { padding: 1.5rem 1rem 3rem; }
 }
 

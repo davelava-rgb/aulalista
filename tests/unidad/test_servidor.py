@@ -50,9 +50,9 @@ def test_con_el_puerto_ocupado_avisa_en_vez_de_abrir_la_version_vieja():
 
 def test_reconoce_su_propia_linea_de_comando():
     from app import __main__ as inicio
-    assert inicio.es_aulalista('"C:\aula\.venv\Scripts\python.exe"  -m app')
+    assert inicio.es_aulalista(r'"C:\aula\.venv\Scripts\python.exe"  -m app')
     assert inicio.es_aulalista(".venv/Scripts/python.exe -m uvicorn app.servidor:app --port 8766")
-    assert not inicio.es_aulalista("C:\Program Files\otro\servidor.exe --port 8765")
+    assert not inicio.es_aulalista(r"C:\Program Files\otro\servidor.exe --port 8765")
 
 
 def test_dice_que_se_esta_generando(tmp_path):

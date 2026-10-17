@@ -260,20 +260,23 @@ def test_el_panel_aparece_en_todas_las_paginas_del_curso_y_no_en_el_inicio(sesio
 
 def test_el_panel_marca_la_pagina_actual_y_abre_su_sesion(sesion):  # noqa: F811
     pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
-    assert 'href="/cursos/scrum/sesiones/1/ficha" aria-current="page"' in pagina
-    assert '<details class="panel-sesion abierta" open>' in pagina
-    pagina = cliente.get("/cursos/scrum/ficha").text
-    assert 'href="/cursos/scrum/ficha" aria-current="page"' in pagina
-    assert '<details class="panel-sesion" >' in pagina   # la sesión que no se ve queda plegada
+    panel = pagina.split('id="panel"')[1].split("</nav>")[0]
+    assert 'href="/cursos/scrum/sesiones/1/ficha" aria-current="page"' in panel
+    assert '<div class="panel-sesion abierta">' in panel and '<div class="panel-sesion">' in panel   # la 2 no se ve
+    pagina = cliente.get("/cursos/scrum").text
+    assert 'class="panel-titulo" aria-current="page"' in pagina
+    assert '<div class="panel-sesion abierta">' not in pagina
 
 
-def test_el_panel_muestra_el_estado_con_palabra_el_siguiente_paso_y_el_gasto(sesion):  # noqa: F811
+def test_el_panel_solo_tiene_sesiones_con_sus_materiales_en_puntos_y_el_gasto(sesion):  # noqa: F811
     _poner(sesion, "lectura", estado="con fallas")
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     panel = pagina.split('id="panel"')[1].split("</nav>")[0]
-    assert 'Lectura <span class="panel-sigue">Sigue</span>' in panel
-    assert '<span class="indicador error"><svg' in panel and "Con fallas</span>" in panel
-    assert "0 de 3 aprobados" in panel
+    assert "Preparación del curso" not in panel and "Fuentes" not in panel
+    assert ('<a class="panel-mat error sigue" href="/cursos/scrum/sesiones/1/materiales/lectura" aria-current="page">'
+            in panel)
+    assert '<span class="sr">: Con fallas. Es lo que sigue</span>' in panel   # el estado también en palabras
+    assert '<a class="panel-mat neutro" href="/cursos/scrum/sesiones/1/materiales/diapositivas">' in panel
     assert "Gasto del curso <b>" in panel and "Es una estimación, no la factura." in panel
 
 
