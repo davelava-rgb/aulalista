@@ -78,7 +78,9 @@ def test_el_recorrido_dice_en_que_paso_va_el_material(sesion):  # noqa: F811
     assert pasos(estado="con pendientes", entrega=pendientes)[2:] == [("hecho", "Con pendientes"), ("ahora", "Lo decides tú")]
     assert pasos(estado="verificada")[2] == ("hecho", "Sin errores abiertos")
     assert pasos(estado="aprobada", aprobada="2026-10-15T10:00:00")[3] == ("hecho", "El 2026-10-15")
-    assert pasos(estado="aprobada", desactualizado=True)[0] == ("ahora", "Las fichas cambiaron")
+    assert pasos(estado="aprobada", desactualizado=True, aprobada="2026-10-15T10:00:00") == [
+        ("hecho", "Listo"), ("hecho", "Sin fallas"), ("hecho", "Hecho"), ("hecho", "El 2026-10-15; después cambió la ficha")]
+    assert pasos(estado="verificada", desactualizado=True)[0] == ("ahora", "Las fichas cambiaron")
 
 
 def test_el_recorrido_se_ve_en_la_pagina_con_su_estado_en_palabras(sesion):  # noqa: F811
@@ -373,15 +375,24 @@ def test_la_frase_de_cada_sesion_resume_su_avance():
 
 
 def test_el_tablero_trae_lo_que_sigue_con_motivo_boton_y_costo(sesion):  # noqa: F811
+    # Un material aprobado no es lo que sigue aunque la ficha haya cambiado: queda marcado como desactualizado.
     _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00", desactualizado=True)
+    tablero = servidor._tablero(sesion, "scrum", servidor._panel(sesion, "scrum", "curso"))
+    assert not tablero["sigue"]["texto"].startswith("Sesión 1: genera la lectura")
+    assert tablero["sesiones"][0]["materiales"][0]["situacion"]["texto"] == "Desactualizada"
+    assert tablero["sesiones"][0]["materiales"][0]["fecha"] == "15 de octubre"
+    # Uno que aún no se aprobó sí lo es: se genera de nuevo para que siga a la ficha.
+    _poner(sesion, "lectura", estado="verificada", aprobada="", desactualizado=True)
     _registro(sesion, ("redacción", "S1", 0.5))
-    panel = servidor._panel(sesion, "scrum", "curso")
-    tablero = servidor._tablero(sesion, "scrum", panel)
-    sigue = tablero["sigue"]
+    sigue = servidor._tablero(sesion, "scrum", servidor._panel(sesion, "scrum", "curso"))["sigue"]
     assert sigue["texto"] == "Sesión 1: genera la lectura de nuevo."
     assert sigue["boton"] == "Ir a la lectura" and sigue["url"] == "/cursos/scrum/sesiones/1/materiales/lectura"
     assert sigue["motivo"] == "La ficha cambió después de generarla: ya no la sigue."
-    assert tablero["preparacion_lista"] and tablero["sesiones"][0]["materiales"][0]["fecha"] == "15 de octubre"
+
+
+def test_material_ficha_y_fuente_tienen_un_enlace_para_volver_al_curso(sesion):  # noqa: F811
+    for url in ("/cursos/scrum/sesiones/1/materiales/lectura", "/cursos/scrum/sesiones/1/ficha"):
+        assert '<p class="volver"><a href="/cursos/scrum">Volver a las sesiones del curso</a></p>' in cliente.get(url).text
 
 
 def test_la_ayuda_explica_el_flujo_y_se_enlaza_desde_todas_las_paginas(sesion):  # noqa: F811

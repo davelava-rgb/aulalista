@@ -561,7 +561,9 @@ def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False
             siguiente = {"texto": "Guarda completas las dos fichas: así quedan confirmadas.", "ancla": "", "corto": "Fichas"}
         elif e == "trabajando":
             siguiente = {"texto": f"Espera: AulaLista trabaja en {datos['el']}.", "ancla": clave, "corto": datos["corto"]}
-        elif e == "aprobada" and not viejo:
+        elif e == "aprobada":
+            # Un material aprobado no es un paso pendiente, aunque la ficha haya cambiado después: se marca como
+            # desactualizado y el profesor decide si lo genera de nuevo.
             continue
         elif e in ("verificada", "con pendientes") and not viejo:
             siguiente = {"texto": f"Revisa la entrega y aprueba {datos['el']}.", "ancla": clave, "corto": datos["corto"]}
@@ -748,7 +750,12 @@ def _recorrido(datos: dict, estado: dict) -> list[dict]:
     e = estado.get("estado")
     notas = ["Pendiente", "Sin IA", "Con IA, por bloque", "Lo decides tú"]
     clases = ["ahora", "pendiente", "pendiente", "pendiente"]
-    if estado.get("desactualizado") and e in ("aprobada", "verificada", "con pendientes"):
+    if estado.get("desactualizado") and e == "aprobada":
+        # Sigue aprobado: el recorrido queda completo y la nota de Aprobar dice que la ficha cambió después.
+        cambio = "la lectura o la ficha" if datos.get("clave", "") == diapositivas.CLAVE else "la ficha"
+        clases = ["hecho"] * 4
+        notas = ["Listo", "Sin fallas", "Hecho", f"El {(estado.get('aprobada') or '')[:10]}; después cambió {cambio}"]
+    elif estado.get("desactualizado") and e in ("verificada", "con pendientes"):
         # Las diapositivas salen de la lectura: también quedan desactualizadas si la lectura cambia.
         notas[0] = "La lectura o las fichas cambiaron" if datos.get("clave", "") == diapositivas.CLAVE else "Las fichas cambiaron"
     elif e == "trabajando":

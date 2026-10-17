@@ -109,6 +109,7 @@
 {% endmacro %}
 
 {% block contenido %}
+<p class="volver"><a href="/cursos/{{ curso }}">{{ "Volver a las sesiones del curso" if sesion else "Volver al curso" }}</a></p>
 <p class="donde">{{ "Sesión " ~ sesion if sesion else "Preparación del curso" }}</p>
 <h1>{{ titulo }}</h1>
 

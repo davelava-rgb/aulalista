@@ -569,3 +569,8 @@ kbd { display: inline-block; min-width: 1.4em; padding: 0 0.35em; border: 1px so
 .sec-estado.estado-vacia, .sec-estado.estado-no_se_usa { opacity: 0.8; font-weight: normal; }
 .plegar-todas { display: flex; gap: 0.75rem; margin: 0.25rem 0 0; }
 @media (prefers-reduced-motion: reduce) { .sec-flecha { transition: none; } }
+
+/* Enlace para volver al tablero del curso desde un material, una ficha o una fuente. */
+.volver { margin: 0 0 0.75rem; font-size: 0.875rem; }
+.volver a { display: inline-flex; align-items: center; gap: 0.35rem; min-height: 32px; }
+.volver a::before { content: ""; width: 0.45rem; height: 0.45rem; border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); }

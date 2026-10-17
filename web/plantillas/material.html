@@ -10,6 +10,7 @@
 {% set e = m.estado %}
 {% set base = "/cursos/" ~ curso ~ "/sesiones/" ~ sesion ~ "/materiales/" ~ m.clave %}
 <section class="material" id="{{ m.clave }}" data-estado="{{ e.estado or '' }}" data-avance="{{ (e.avance or []) | length }}" aria-labelledby="t-{{ m.clave }}">
+  <p class="volver"><a href="/cursos/{{ curso }}">Volver a las sesiones del curso</a></p>
   <p class="donde">Material {{ m.numero }} de {{ total }} de la sesión {{ sesion }}</p>
   <div class="cabeza">
     <h1 id="t-{{ m.clave }}">{{ m.titulo }}</h1>
