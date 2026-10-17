@@ -461,3 +461,9 @@ def test_la_ficha_confirmada_trae_cancelar_y_activa_el_modo_de_lectura(sesion): 
     almacen.guardar(sesion, "sesion", 1, {**ficha, "confirmada": False})
     pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
     assert 'class="ficha-lectura"' not in pagina and 'id="cancelar-seccion"' not in pagina
+
+
+def test_el_texto_oculto_de_las_pildoras_no_ensancha_la_pagina_en_el_celular(entorno):
+    # Un .sr (posición absoluta) sin un padre posicionado se sale de la fila de píldoras y ensancha la página.
+    css = (servidor.RAIZ / "web" / "estaticos" / "estilo.css").read_text(encoding="utf-8")
+    assert ".indice a.pildora { position: relative;" in css and ".panel-mat { position: relative;" in css

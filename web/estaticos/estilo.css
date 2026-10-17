@@ -288,7 +288,7 @@ h3.alerta { color: var(--error); }
 .indice li { flex: none; display: flex; align-items: center; gap: 0.35rem; max-width: none; }
 .indice a { display: inline-flex; align-items: center; min-height: 36px; max-width: 18rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .indice .marca { font-size: 0.8125rem; white-space: nowrap; }
-.seccion { scroll-margin-top: 4.5rem; }
+.seccion, .bloque { scroll-margin-top: 7.5rem; }   /* el índice fijo ocupa hasta dos filas de píldoras */
 .estado-bloque { margin-left: 0.5rem; font-weight: normal; font-size: 0.875rem; opacity: 0.85; }
 .estado-bloque.alerta { color: var(--error); opacity: 1; }
 .sin-guardar { margin: 0; align-self: center; font-weight: bold; }
@@ -494,7 +494,7 @@ main.hoja .material .cabeza h1 { margin: 0; }
 .situaciones dd { margin: 0.25rem 0 0; }
 
 /* Ficha (decisión 45): tarjetas por sección; confirmada, se lee primero y se edita una a la vez. */
-.indice a.pildora { gap: 0.4rem; padding: 0 0.75rem; border: 1px solid var(--borde); border-radius: 999px; color: var(--texto); font-size: 0.875rem; text-decoration: none; }
+.indice a.pildora { position: relative; gap: 0.4rem; padding: 0 0.75rem; border: 1px solid var(--borde); border-radius: 999px; color: var(--texto); font-size: 0.875rem; text-decoration: none; }
 .indice a.pildora:hover { border-color: var(--principal); }
 .indice a.pildora i { flex: none; width: 0.55rem; height: 0.55rem; border: 1.5px solid var(--borde); border-radius: 50%; }
 .indice a.estado-completa i { border-color: var(--bien); background: var(--bien); }
