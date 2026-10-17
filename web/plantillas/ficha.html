@@ -157,6 +157,8 @@
 {# Barra fija con las secciones de esta ficha y su estado (decisión 45): el panel dice dónde estás en el curso; esta
    barra, dónde estás en el formulario. #}
 <nav class="indice" aria-label="Secciones de la ficha">
+  <p class="plegar-todas" hidden><button type="button" class="enlace" data-plegar-todas="1">Plegar todas</button>
+    <button type="button" class="enlace" data-plegar-todas="0">Desplegar todas</button></p>
   {% if total_alertas %}<p class="titulo-indice alerta">{{ total_alertas }} {{ "campo" if total_alertas == 1 else "campos" }} en «Falta definir» o con dos versiones.</p>{% endif %}
   <ul>
     {% for s in secciones %}
@@ -173,10 +175,14 @@
   {% set leer = modo_lectura and s.estado != "alerta" %}
   <section class="seccion tarjeta estado-{{ s.estado }}{{ ' leer' if leer }}{{ ' apagada' if s.estado == 'no_se_usa' }}" id="{{ s.ancla }}" aria-labelledby="t-{{ s.ancla }}">
     <div class="sec-cabeza">
+      <button type="button" class="sec-plegar" aria-expanded="true" aria-controls="cuerpo-{{ s.ancla }}">
+        <span class="sec-flecha" aria-hidden="true"></span><span class="sr">Plegar o desplegar </span></button>
       <h2 id="t-{{ s.ancla }}">{{ s.titulo }}</h2>
       {% if s.origen_comun %}<span class="sec-fuente">De {{ s.origen_comun }}</span>{% endif %}
+      <span class="sec-estado estado-{{ s.estado }}">{{ {"completa": "Completa", "vacia": "Vacía", "alerta": "Por definir", "no_se_usa": "No se usa"}[s.estado] }}</span>
       <button type="button" class="secundario sec-editar" data-editar="{{ s.ancla }}">{{ "Ver lo escrito" if s.estado == "no_se_usa" else "Editar" }}<span class="sr"> {{ s.titulo.split(" (")[0] }}</span></button>
     </div>
+    <div class="sec-cuerpo" id="cuerpo-{{ s.ancla }}">
     <div class="sec-resumen">
       {% if s.estado == "no_se_usa" %}<p class="nota">No se usa: AulaLista no genera la evaluación (decisión 37). Lo escrito se guarda.</p>
       {% else %}
@@ -225,6 +231,7 @@
       <p class="ayuda">{{ extra.ayuda }} {{ gasta(terminos) }}. {{ costo(costos["completar." ~ extra.clave]) }}</p>
     </div>
     {% endif %}
+    </div>
     </div>
   </section>
   {% endfor %}
@@ -343,6 +350,33 @@
   formulario.addEventListener("change", marcarCambio);
   window.addEventListener("beforeunload", (evento) => { if (sinGuardar) { evento.preventDefault(); evento.returnValue = ""; } });
 
+  // Secciones plegables: la ficha se recorre sin desplazarse por todos sus campos. Al abrir la página se pliegan las
+  // secciones que no piden nada: en una ficha confirmada, todas; en una sin confirmar, las completas. Sin JavaScript,
+  // todo queda desplegado.
+  const tarjetas = [...formulario.querySelectorAll("section.seccion.tarjeta")];
+  const plegar = (seccion, plegada) => {
+    seccion.classList.toggle("plegada", plegada);
+    seccion.querySelector(".sec-plegar").setAttribute("aria-expanded", String(!plegada));
+  };
+  document.documentElement.classList.add("plegable-js");
+  tarjetas.forEach((seccion) => {
+    const confirmada = formulario.classList.contains("ficha-lectura");
+    plegar(seccion, confirmada ? !seccion.classList.contains("estado-alerta") : seccion.classList.contains("estado-completa"));
+    seccion.querySelector(".sec-plegar").addEventListener("click", () => plegar(seccion, !seccion.classList.contains("plegada")));
+    seccion.querySelector("h2").addEventListener("click", () => plegar(seccion, !seccion.classList.contains("plegada")));
+  });
+  const todas = document.querySelector(".plegar-todas");
+  if (todas) {
+    todas.hidden = false;
+    todas.querySelectorAll("[data-plegar-todas]").forEach((boton) => boton.addEventListener("click", () =>
+      tarjetas.forEach((seccion) => { if (!seccion.classList.contains("editando")) plegar(seccion, boton.dataset.plegarTodas === "1"); })));
+  }
+  // Un enlace del índice despliega la sección a la que lleva.
+  document.querySelectorAll(".indice a.pildora").forEach((a) => a.addEventListener("click", () => {
+    const destino = document.querySelector(a.getAttribute("href"));
+    if (destino) plegar(destino, false);
+  }));
+
   // Modo de lectura (decisión 45): una ficha confirmada muestra el resumen de cada sección; «Editar» abre una
   // sección a la vez y «Cancelar» devuelve sus campos a lo guardado. El formulario sigue siendo uno solo.
   if (formulario.classList.contains("ficha-lectura")) {
@@ -361,6 +395,8 @@
     function cerrar(seccion) {
       seccion.classList.add("leer");
       seccion.classList.remove("editando");
+      const editar = seccion.querySelector(".sec-editar");
+      editar.firstChild.textContent = editar.dataset.texto || "Editar";
       abierta = null;
       formulario.classList.remove("editando-algo");
       guardar.textContent = "Guardar";
@@ -378,6 +414,10 @@
       }
       seccion.classList.remove("leer");
       seccion.classList.add("editando");
+      plegar(seccion, false);
+      const editar = seccion.querySelector(".sec-editar");
+      editar.dataset.texto = editar.dataset.texto || editar.firstChild.textContent;   // «Editar» o «Ver lo escrito»
+      editar.firstChild.textContent = "Cancelar";
       abierta = seccion;
       formulario.classList.add("editando-algo");
       guardar.textContent = "Guardar esta sección";
@@ -392,10 +432,16 @@
       if (primero) primero.focus({ preventScroll: true });
     }
 
+    // «Editar» abre la sección; en la sección abierta, el mismo botón dice «Cancelar» y revierte lo cambiado.
     formulario.querySelectorAll("[data-editar]").forEach((boton) =>
-      boton.addEventListener("click", () => abrir(porId(boton.dataset.editar), boton.dataset.bloque)));
+      boton.addEventListener("click", () => {
+        const seccion = porId(boton.dataset.editar);
+        if (boton.classList.contains("sec-editar") && seccion === abierta) cancelar();
+        else abrir(seccion, boton.dataset.bloque);
+      }));
 
-    porId("cancelar-seccion").addEventListener("click", () => {
+    porId("cancelar-seccion").addEventListener("click", () => cancelar());
+    function cancelar() {
       if (!abierta) return;
       camposDe(abierta).forEach((el) => {
         if (el.type === "checkbox" || el.type === "radio") el.checked = el.defaultChecked;
@@ -409,7 +455,7 @@
       sinGuardar = false;
       porId("sin-guardar").hidden = true;
       seccion.scrollIntoView({ block: "start" });
-    });
+    }
   }
 
   formulario.addEventListener("submit", (evento) => {

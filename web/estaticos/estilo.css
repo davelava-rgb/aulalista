@@ -515,7 +515,7 @@ main.hoja .material .cabeza h1 { margin: 0; }
 /* Con JavaScript (lo activa la página), una sección «leer» muestra su resumen y esconde sus campos. */
 .ficha-js .seccion.leer .sec-resumen { display: block; }
 .ficha-js .seccion.leer .sec-campos { display: none; }
-.ficha-js .seccion.leer .sec-editar { display: inline-flex; align-items: center; }
+.ficha-js .seccion.leer .sec-editar, .ficha-js .seccion.editando .sec-editar { display: inline-flex; align-items: center; }
 .ficha-js .seccion.editando { border: 2px solid var(--principal); }
 .ficha-js .seccion.editando > .sec-cabeza { background: var(--principal-suave); border-radius: 8px 8px 0 0; }
 /* En modo de lectura, la barra de guardar aparece solo cuando hay una sección abierta. */
@@ -552,3 +552,20 @@ button.enlace { min-height: 32px; padding: 0 0.25rem; border: 0; background: non
 
 kbd { display: inline-block; min-width: 1.4em; padding: 0 0.35em; border: 1px solid var(--borde); border-bottom-width: 2px; border-radius: 4px;
   background: var(--suave); font: inherit; font-size: 0.875em; text-align: center; }
+
+/* Secciones plegables de la ficha: la flecha y el título pliegan; plegada, la sección es solo su cabecera. */
+.sec-plegar { display: none; flex: none; min-height: 36px; width: 36px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--texto); }
+.sec-plegar:hover { background: var(--suave); }
+.sec-flecha { display: inline-block; width: 0.55rem; height: 0.55rem; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: rotate(45deg); transition: transform 0.15s ease; }
+.plegable-js .sec-plegar { display: inline-grid; place-items: center; }
+.plegable-js .sec-cabeza h2 { cursor: pointer; }
+.plegable-js .seccion.plegada .sec-cuerpo { display: none; }
+.plegable-js .seccion.plegada .sec-cabeza { border-bottom: 0; }
+.plegable-js .seccion.plegada .sec-flecha { transform: rotate(-45deg); }
+.sec-estado { font-size: 0.8125rem; font-weight: bold; }
+.sec-estado.estado-completa { color: var(--bien); }
+.sec-estado.estado-alerta { color: var(--error); }
+.sec-estado.estado-vacia, .sec-estado.estado-no_se_usa { opacity: 0.8; font-weight: normal; }
+.plegar-todas { display: flex; gap: 0.75rem; margin: 0.25rem 0 0; }
+@media (prefers-reduced-motion: reduce) { .sec-flecha { transition: none; } }

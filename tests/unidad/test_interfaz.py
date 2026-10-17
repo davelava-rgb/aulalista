@@ -478,3 +478,14 @@ def test_la_tecla_s_lleva_a_lo_que_sigue_y_la_ayuda_lo_explica(sesion):  # noqa:
         assert pagina.count('data-atajo="s"') == 1, url        # un solo destino por página
         assert 'evento.key === "s"' in pagina and 'closest("input, textarea, select, [contenteditable]")' in pagina
     assert "<kbd>S</kbd> abre lo que sigue" in cliente.get("/ayuda").text
+
+
+
+def test_las_secciones_de_la_ficha_se_pliegan_y_editar_alterna_con_cancelar(sesion):  # noqa: F811
+    pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
+    assert '<button type="button" class="sec-plegar" aria-expanded="true" aria-controls="cuerpo-seccion-1">' in pagina
+    assert '<div class="sec-cuerpo" id="cuerpo-seccion-1">' in pagina
+    assert '<span class="sec-estado estado-completa">Completa</span>' in pagina
+    assert 'data-plegar-todas="1">Plegar todas</button>' in pagina
+    assert 'editar.firstChild.textContent = "Cancelar"' in pagina                 # Editar se vuelve Cancelar
+    assert "seccion === abierta) cancelar();" in pagina
