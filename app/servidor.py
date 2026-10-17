@@ -283,8 +283,11 @@ def _indice_de_secciones(secciones: list[dict]) -> list[dict]:
 
 
 def _etiqueta_corta(etiqueta: str) -> str:
-    """«Alcance (obligatorio)» → «Alcance». La etiqueta completa sigue en el campo de edición."""
-    return re.sub(r"\s*\(obligatorio[^)]*\)", "", etiqueta).strip()
+    """Para el resumen de la ficha: sin la explicación entre paréntesis ni la que va después de dos puntos.
+    «Alcance (obligatorio)» → «Alcance»; «Material de referencia: una línea por archivo…» → «Material de referencia».
+    La etiqueta completa sigue en el campo de edición y como texto emergente."""
+    corta = re.split(r":\s| \(", etiqueta, maxsplit=1)[0].strip()
+    return corta or etiqueta.strip()
 
 
 def _resumen_de_seccion(s: dict, campos: list[dict]) -> None:
@@ -306,7 +309,8 @@ def _resumen_de_seccion(s: dict, campos: list[dict]) -> None:
                                    "titulo": valores[0] if valores else "", "detalle": valores[1] if len(valores) > 1 else ""})
         else:
             for c in (e["campos"] if e.get("grupo") else [e]):
-                s["resumen"].append({"etiqueta": _etiqueta_corta(c["etiqueta"]), "valor": " ".join(c["valor"].split())})
+                s["resumen"].append({"etiqueta": _etiqueta_corta(c["etiqueta"]), "completa": c["etiqueta"],
+                                     "valor": " ".join(c["valor"].split())})
 
 
 @app.get("/cursos/{curso}/ficha/propuesta")

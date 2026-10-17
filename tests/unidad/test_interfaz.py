@@ -43,7 +43,7 @@ def test_la_sesion_abre_el_material_del_siguiente_paso_sin_la_evaluacion(sesion)
     assert "Evaluación y clave" not in pagina and "Etapa posterior" not in pagina  # sin etapa 9 (decisión 37)
     assert "Siguiente paso:" not in pagina   # el siguiente paso es este material: lo dicen el recorrido y el botón
     otra = cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
-    assert 'Siguiente paso:</strong>' in otra and 'materiales/lectura">Genera la lectura.</a>' in otra
+    assert 'Siguiente paso:</strong>' in otra and 'materiales/lectura" data-atajo="s" aria-keyshortcuts="S">Genera la lectura.</a>' in otra
     assert "Material 1 de 3 de la sesión 1" in pagina
 
 
@@ -135,7 +135,7 @@ def test_la_pagina_del_curso_es_un_tablero_con_lo_que_sigue_las_sesiones_y_la_pr
     assert '<p class="sigue-paso">Sesión 1: completa lo que falta para generar las diapositivas.</p>' in hoja
     assert '<p class="sigue-motivo">Falta información para generarlas. La página del material dice qué.</p>' in hoja
     assert "Faltan las diapositivas y el laboratorio." in hoja
-    assert '<a class="boton" href="/cursos/scrum/sesiones/1/materiales/diapositivas">Ir a las diapositivas</a>' in hoja
+    assert '<a class="boton" href="/cursos/scrum/sesiones/1/materiales/diapositivas" data-atajo="s" aria-keyshortcuts="S">Ir a las diapositivas</a>' in hoja
     assert '<a class="ficha-material bien" href="/cursos/scrum/sesiones/1/materiales/lectura">' in hoja
     assert "Aprobada el 15 de octubre" in hoja
     assert '<a class="ficha-material vacia" href="/cursos/scrum/sesiones/1/materiales/laboratorio">' in hoja
@@ -322,7 +322,7 @@ def test_el_curso_se_llama_igual_en_todas_partes_y_los_terminos_se_definen(sesio
 def test_el_inicio_muestra_el_avance_de_cada_curso_y_enlaza_lo_que_sigue(sesion):  # noqa: F811
     pagina = cliente.get("/").text
     assert "0 de 6 materiales aprobados en 2 sesiones." in pagina
-    assert '<strong>Sigue:</strong> <a href="/cursos/scrum/sesiones/1/materiales/lectura">Sesión 1: genera la lectura.</a>' in pagina
+    assert '<strong>Sigue:</strong> <a href="/cursos/scrum/sesiones/1/materiales/lectura" data-atajo="s" aria-keyshortcuts="S">Sesión 1: genera la lectura.</a>' in pagina
     _poner(sesion, "lectura", estado="con fallas")
     pagina = cliente.get("/").text
     assert '<p class="curso-problema">Sesión 1: lectura con fallas.</p>' in pagina
@@ -330,7 +330,7 @@ def test_el_inicio_muestra_el_avance_de_cada_curso_y_enlaza_lo_que_sigue(sesion)
     for clave in ("lectura", "diapositivas", "laboratorio"):
         _poner(sesion, clave, estado="aprobada", aprobada="2026-10-15T10:00:00")
     pagina = cliente.get("/").text
-    assert '<a href="/cursos/scrum/sesiones/2/ficha">Sesión 2: confirma su ficha.</a>' in pagina   # la 1 ya está
+    assert '<a href="/cursos/scrum/sesiones/2/ficha" data-atajo="s" aria-keyshortcuts="S">Sesión 2: confirma su ficha.</a>' in pagina   # la 1 ya está
     listo = {"fuentes": {"texto": "1 lista"}, "ficha_curso": {"clase": "bien"},
              "sesiones": [{"numero": 1, "puede_empezar": True, "siguiente": {"ancla": "", "texto": "Listo"}}]}
     assert servidor._que_sigue("scrum", listo) is None      # todo aprobado: la página dice que no queda nada
@@ -339,7 +339,7 @@ def test_el_inicio_muestra_el_avance_de_cada_curso_y_enlaza_lo_que_sigue(sesion)
 def test_el_inicio_de_un_curso_nuevo_enlaza_las_fuentes(entorno):
     cliente.post("/cursos", data={"nombre": "Curso vacío"})
     pagina = cliente.get("/").text
-    assert '<a href="/cursos/curso-vacio#fuentes">Sube las fuentes del curso.</a>' in pagina
+    assert '<a href="/cursos/curso-vacio#fuentes" data-atajo="s" aria-keyshortcuts="S">Sube las fuentes del curso.</a>' in pagina
     assert "Las sesiones aparecen al confirmar la ficha del curso." in pagina
 
 
@@ -421,7 +421,10 @@ def test_cada_seccion_trae_su_estado_y_su_resumen():
         _seccion("5. Evaluación práctica (PBQ)", _campo("d", "Material", "La lectura.")),
     ])
     assert [s["estado"] for s in secciones] == ["completa", "vacia", "alerta", "no_se_usa"]
-    assert secciones[0]["resumen"] == [{"etiqueta": "Alcance", "valor": "Calidad de datos y su ciclo."}]
+    assert secciones[0]["resumen"] == [{"etiqueta": "Alcance", "completa": "Alcance (obligatorio)",
+                                        "valor": "Calidad de datos y su ciclo."}]
+    assert servidor._etiqueta_corta("Material de referencia: una línea por archivo") == "Material de referencia"
+    assert servidor._etiqueta_corta('Riesgos de "Cuidado con" (de 1 a 3)') == 'Riesgos de "Cuidado con"'
 
 
 def test_los_ejercicios_se_resumen_en_una_fila_cada_uno():
@@ -467,3 +470,11 @@ def test_el_texto_oculto_de_las_pildoras_no_ensancha_la_pagina_en_el_celular(ent
     # Un .sr (posición absoluta) sin un padre posicionado se sale de la fila de píldoras y ensancha la página.
     css = (servidor.RAIZ / "web" / "estaticos" / "estilo.css").read_text(encoding="utf-8")
     assert ".indice a.pildora { position: relative;" in css and ".panel-mat { position: relative;" in css
+
+
+def test_la_tecla_s_lleva_a_lo_que_sigue_y_la_ayuda_lo_explica(sesion):  # noqa: F811
+    for url in ("/", "/cursos/scrum", "/cursos/scrum/sesiones/1/materiales/diapositivas"):
+        pagina = cliente.get(url).text
+        assert pagina.count('data-atajo="s"') == 1, url        # un solo destino por página
+        assert 'evento.key === "s"' in pagina and 'closest("input, textarea, select, [contenteditable]")' in pagina
+    assert "<kbd>S</kbd> abre lo que sigue" in cliente.get("/ayuda").text

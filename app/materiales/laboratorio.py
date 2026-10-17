@@ -658,8 +658,30 @@ def _limpiar(rutas: dict[str, Path]) -> None:
         shutil.rmtree(rutas[clave], ignore_errors=True)
 
 
+def se_puede_reanudar(carpeta_curso: Path, sesion: int) -> bool:
+    """Decisión 40: hay contenido guardado de una generación que no terminó bien, y las fichas no cambiaron."""
+    material = estado(carpeta_curso, sesion)
+    return (material.get("estado") in ("con fallas", "detenida", "error") and not material.get("desactualizado")
+            and archivos(carpeta_curso, sesion)["contenido"].exists() and almacen.puede_empezar_material(carpeta_curso, sesion)
+            and not almacen.faltantes_para(carpeta_curso, sesion, CLAVE))
+
+
+async def reanudar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.query, **opciones) -> dict:
+    """Sigue desde el contenido guardado, sin repetir la redacción ni sus correcciones (PLAN.md §0, decisión 40)."""
+    if not se_puede_reanudar(carpeta_curso, sesion):
+        raise NoSePuedeEmpezar("No se puede reanudar el laboratorio: no hay un trabajo guardado que siga a las fichas de ahora. "
+                               "Genéralo de nuevo.")
+    return await generar(carpeta_curso, curso, sesion, consulta, desde_guardado=True, **opciones)
+
+
+def _guardado(carpeta_curso: Path, sesion: int, rutas: dict) -> dict:
+    return {"datos": comun.leer_json(rutas["contenido"]),
+            "explicaciones": comun.leer_json(rutas["explicaciones"]) if rutas["explicaciones"].exists() else {},
+            "fecha": _estado(carpeta_curso, sesion).get("fecha", "")}
+
+
 async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.query, recalcular=None,
-                  contar_paginas=None, ejecutar=None) -> dict:
+                  contar_paginas=None, ejecutar=None, desde_guardado: bool = False) -> dict:
     """`recalcular` reemplaza a Excel en las pruebas (calcula las fórmulas antes de sacar las figuras); `ejecutar`
     reemplaza la ejecución de los ejercicios."""
     if not almacen.puede_empezar_material(carpeta_curso, sesion):
@@ -668,11 +690,13 @@ async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.
     if faltan_:
         raise NoSePuedeEmpezar("Completa la ficha de la sesión antes de generar el laboratorio: " + " ".join(faltan_))
     rutas = archivos(carpeta_curso, sesion)
+    guardado = _guardado(carpeta_curso, sesion, rutas) if desde_guardado else None
     rutas["contenido"].parent.mkdir(parents=True, exist_ok=True)
     _actualizar(carpeta_curso, sesion, estado="trabajando", previo="", avance=[], error="", desactualizado=False,
                 entrega={}, aprobada="", revisor={}, corrida_desde=tokens.lineas(curso))
     try:
-        return await _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, contar_paginas, ejecutar)
+        return await _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, contar_paginas, ejecutar,
+                              guardado)
     except asyncio.CancelledError:
         marcar_detenida(carpeta_curso, sesion)
         raise
@@ -681,7 +705,8 @@ async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.
         raise
 
 
-async def _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, contar_paginas, ejecutar) -> dict:
+async def _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, contar_paginas, ejecutar,
+                   guardado=None) -> dict:
     inicio = tokens.lineas(curso)
     skill.comprobar(secciones=SECCIONES_DE_LA_SKILL + pasada2.SECCIONES_DE_LA_SKILL + revisor.SECCIONES_DE_LA_SKILL,
                     subsecciones=revisor.SUBSECCIONES_DE_LA_SKILL)
@@ -690,12 +715,18 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, co
         verificador.configuracion_del_material(trabajo.carpeta_sesion, MATERIAL, carpeta_practica=CARPETA_PRACTICA))
     _limpiar(rutas)
 
-    trabajo.avance("Leyendo las fichas y las fuentes y escribiendo el laboratorio y sus archivos de práctica.")
-    # Con material de referencia, sus páginas van en el pedido y la redacción no necesita herramientas.
-    paginas = referencia.paginas(carpeta_curso, _ficha_sesion(carpeta_curso, sesion))
-    opciones = trabajo.comun if paginas is None else {**trabajo.comun, "cwd": None, "herramientas": ()}
-    trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion, paginas), tarea="redaccion",
-                                           esquema=ESQUEMA_LABORATORIO, etapa="redacción", **opciones)
+    if guardado is not None:
+        # Decisión 40: el contenido ya redactado y corregido la vez anterior; no se pide de nuevo.
+        trabajo.datos, trabajo.explicaciones = guardado["datos"], guardado["explicaciones"]
+        trabajo.avance(f"Reanudo desde lo generado el {guardado['fecha'][:16].replace('T', ' ')}: "
+                       "no repito la redacción ni sus correcciones.")
+    else:
+        trabajo.avance("Leyendo las fichas y las fuentes y escribiendo el laboratorio y sus archivos de práctica.")
+        # Con material de referencia, sus páginas van en el pedido y la redacción no necesita herramientas.
+        paginas = referencia.paginas(carpeta_curso, _ficha_sesion(carpeta_curso, sesion))
+        opciones = trabajo.comun if paginas is None else {**trabajo.comun, "cwd": None, "herramientas": ()}
+        trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion, paginas), tarea="redaccion",
+                                               esquema=ESQUEMA_LABORATORIO, etapa="redacción", **opciones)
     errores: list[revision.Error] = []
     revisados = 0
     ejecuciones: list[ejecucion.Ejecucion] = []
@@ -731,6 +762,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, co
         revision={"bloques": revisados, "errores": len(errores), "corregidos": sum(e.estado == "corregido" for e in errores),
                   "pendientes": len(pendientes), "descartados": len(trabajo.descartados)},
         datos_agregados=trabajo.datos_agregados,
+        reanudada=guardado["fecha"] if guardado is not None else "",
         avisos_de_diseno=trabajo.identidad.avisos,
         avisos_explicados=sum(1 for h in hallazgos if h.nivel == "AVISO" and h.regla not in comun.AVISOS_INFORMATIVOS),
         avisos_informativos=sum(1 for h in hallazgos if h.nivel == "AVISO" and h.regla in comun.AVISOS_INFORMATIVOS),
@@ -836,6 +868,9 @@ def _entrega(material: dict) -> dict:
         no_pude += ej["no_pude"]
     else:
         no_pude = ["No ejecuté los ejercicios porque quedaron fallas antes de llegar a la ejecución."]
+    if material.get("reanudada"):
+        no_pude.append(f"Reanudé desde lo generado el {material['reanudada'][:16].replace('T', ' ')} "
+                       "(PLAN.md §0, decisión 40). El historial de las vueltas de esa vez no está en el Excel.")
     if not r.get("bloques"):
         no_pude.append("La revisión del contenido no corrió porque quedaron fallas del verificador.")
     decidi = [d["texto"] for d in material["decisiones"] if d["tipo"] == "decisión"]

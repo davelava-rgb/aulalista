@@ -667,3 +667,22 @@ def test_con_referencia_las_paginas_van_en_el_pedido_y_la_redaccion_no_busca(ses
     almacen.guardar(sesion, "sesion", 1, ficha)
     _, consulta = generar(sesion, LIMPIA)
     assert "busca con Grep" in consulta.llamadas[0]["prompt"] and "Read" in consulta.llamadas[0]["options"].allowed_tools
+
+
+# ---------- Reanudar desde lo guardado (PLAN.md §0, decisión 40) ----------
+
+def test_la_lectura_se_reanuda_desde_lo_guardado_sin_redactar_de_nuevo(sesion):
+    generar(sesion, LIMPIA)
+    guardado = lectura._leer_json(lectura.archivos(sesion, 1)["contenido"])
+    assert not lectura.se_puede_reanudar(sesion, 1)          # quedó bien: no hay nada que reanudar
+    lectura._actualizar(sesion, 1, estado="con fallas")
+    assert lectura.se_puede_reanudar(sesion, 1)
+    consulta = consulta_en_secuencia(SIN_ERRORES)
+    material = asyncio.run(lectura.reanudar(sesion, "scrum", 1, consulta=consulta, contar_paginas=una_pagina))
+    assert material["estado"] == "verificada", material.get("problemas")
+    assert len(consulta.llamadas) == 1                       # solo la revisión del contenido
+    assert lectura._leer_json(lectura.archivos(sesion, 1)["contenido"]) == guardado
+    no_pude = {s["clave"]: s["lineas"] for s in material["entrega"]["secciones"]}["no_pude"]
+    assert any("Reanudé desde lo generado el" in l and "decisión 40" in l for l in no_pude)
+    lectura._actualizar(sesion, 1, estado="con fallas", desactualizado=True)
+    assert not lectura.se_puede_reanudar(sesion, 1)          # las fichas cambiaron: hay que generar de nuevo

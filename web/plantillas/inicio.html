@@ -22,7 +22,7 @@
     {% endif %}
     {% for p in c.con_problema %}<p class="curso-problema">{{ p }}.</p>{% endfor %}
     {% if c.sigue %}
-    <p class="curso-sigue"><strong>Sigue:</strong> <a href="{{ c.sigue.url }}">{{ c.sigue.texto }}</a></p>
+    <p class="curso-sigue"><strong>Sigue:</strong> <a href="{{ c.sigue.url }}"{% if loop.first %} data-atajo="s" aria-keyshortcuts="S"{% endif %}>{{ c.sigue.texto }}</a></p>
     {% else %}
     <p class="curso-sigue listo-todo">Todos los materiales están aprobados.</p>
     {% endif %}

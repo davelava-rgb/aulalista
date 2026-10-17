@@ -79,7 +79,7 @@
     <p class="sigue-paso">{{ s.texto }}</p>
     <p class="sigue-motivo">{{ s.motivo }}{% if s.costo %} {{ s.costo }}{% endif %}</p>
   </div>
-  <a class="boton" href="{{ s.url }}">{{ s.boton }}</a>
+  <a class="boton" href="{{ s.url }}" data-atajo="s" aria-keyshortcuts="S">{{ s.boton }}</a>
 </section>
 {% else %}
 <section class="sigue-caja listo-todo-caja" aria-label="Lo que sigue">

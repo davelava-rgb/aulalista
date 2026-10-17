@@ -182,7 +182,7 @@
       {% else %}
       {% if s.resumen %}
       <dl class="resumen-ficha">
-        {% for r in s.resumen %}<dt>{{ r.etiqueta }}</dt><dd>{% if r.valor %}<span>{{ r.valor }}</span>{% else %}<span class="vacio">Ninguno</span>{% endif %}</dd>{% endfor %}
+        {% for r in s.resumen %}<dt{% if r.completa != r.etiqueta %} title="{{ r.completa }}"{% endif %}>{{ r.etiqueta }}</dt><dd>{% if r.valor %}<span>{{ r.valor }}</span>{% else %}<span class="vacio">Ninguno</span>{% endif %}</dd>{% endfor %}
       </dl>
       {% endif %}
       {% if s.filas %}

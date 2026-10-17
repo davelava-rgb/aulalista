@@ -27,7 +27,7 @@
   {# El siguiente paso solo se dice si está en otra página: si es este material, ya lo dicen el recorrido y el botón. #}
   {% if siguiente.ancla != m.clave %}
   <p class="siguiente" id="siguiente"><strong>Siguiente paso:</strong>
-    {% if siguiente.ancla %}<a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/{{ siguiente.ancla }}">{{ siguiente.texto }}</a>
+    {% if siguiente.ancla %}<a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/{{ siguiente.ancla }}" data-atajo="s" aria-keyshortcuts="S">{{ siguiente.texto }}</a>
     {% elif not puede_empezar %}<a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">{{ siguiente.texto }}</a>
     {% else %}{{ siguiente.texto }}{% endif %}</p>
   {% endif %}

@@ -549,3 +549,6 @@ button.enlace { min-height: 32px; padding: 0 0.25rem; border: 0; background: non
   .resumen-ficha dd { border-top: 0; padding-top: 0.15rem; }
   .indice ul { flex-wrap: nowrap; overflow-x: auto; }
 }
+
+kbd { display: inline-block; min-width: 1.4em; padding: 0 0.35em; border: 1px solid var(--borde); border-bottom-width: 2px; border-radius: 4px;
+  background: var(--suave); font: inherit; font-size: 0.875em; text-align: center; }

@@ -484,3 +484,17 @@ def test_la_entrega_de_un_laboratorio_a_mano_no_habla_de_prompts(sesion):  # noq
     assert "En este curso no hay prompts ni fórmulas" in redaccion and laboratorio.AVISO_ADJUNTOS not in redaccion
     textos = [p.text for p in Document(laboratorio.archivos(sesion, 1)["word"]).paragraphs]
     assert laboratorio.AVISO_ADJUNTOS not in textos
+
+
+def test_el_laboratorio_se_reanuda_desde_lo_guardado(sesion):  # noqa: F811
+    generar(sesion, sembrados.limpio())
+    laboratorio._actualizar(sesion, 1, estado="error", error="se cortó")
+    assert laboratorio.se_puede_reanudar(sesion, 1)
+    consulta = consulta_en_secuencia(SIN_ERRORES)
+    material = asyncio.run(laboratorio.reanudar(sesion, "scrum", 1, consulta=consulta, recalcular=recalcular_sin_excel,
+                                                contar_paginas=una_pagina, ejecutar=sin_ejecucion))
+    assert material["estado"] in ("verificada", "con pendientes"), material.get("problemas")
+    assert len(consulta.llamadas) == 1
+    assert any("Reanudo desde lo generado el" in a for a in material["avance"])
+    pagina = TestClient(servidor.app).get("/cursos/scrum/sesiones/1/materiales/laboratorio").text
+    assert "Reanudar desde lo guardado" not in pagina        # ya terminó bien
