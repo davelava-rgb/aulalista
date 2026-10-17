@@ -1,11 +1,13 @@
-{% extends "base.html" %}
+{% extends "_entorno.html" %}
 
-{% block titulo %}{{ archivo }} · AulaLista{% endblock %}
-{% block ruta %} › <a href="/cursos/{{ curso }}">{{ nombre }}</a> › {{ archivo }}{% endblock %}
+{% block titulo %}{{ archivo }} | AulaLista{% endblock %}
 
 {% block contenido %}
+<p class="volver"><a href="/cursos/{{ curso }}#fuentes">Volver al curso</a></p>
+<p class="donde">Fuentes del curso</p>
 <h1>{{ archivo }}</h1>
 <p>Formato: {{ entrada.formato }}. Método: {{ entrada.metodo }}. Pasajes: {{ entrada.pasajes }}.</p>
+<p class="nota">Un pasaje es un trozo corto de texto de la fuente, con su página o lugar. Los materiales citan pasajes como prueba de lo que dicen.</p>
 
 {% for a in entrada.avisos %}<p class="mensaje">{{ a }}</p>{% endfor %}
 

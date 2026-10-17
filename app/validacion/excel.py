@@ -18,11 +18,13 @@ def _estilo(fila) -> None:
         celda.alignment = Alignment(wrap_text=True, vertical="top")
 
 
-def solo_hallazgos(ruta: Path) -> None:
-    """Deja solo la hoja Hallazgos: sin tabla de pasaje y veredicto por oración (decisión 22)."""
+def solo_hallazgos(ruta: Path, donde: str = "Diapositiva") -> None:
+    """Deja solo la hoja Hallazgos: sin tabla de pasaje y veredicto por oración (decisión 22).
+    `donde` nombra la columna B: «Diapositiva» en las diapositivas y «Sección» en los documentos (decisión 31)."""
     libro = openpyxl.load_workbook(ruta)
     for nombre in [n for n in libro.sheetnames if n != HOJA]:
         del libro[nombre]
+    libro[HOJA]["B1"].value = donde
     libro.save(ruta)
 
 

@@ -75,14 +75,15 @@ Estas reglas se convierten en pruebas automáticas del proyecto.
 - **Lenguaje claro.** Una idea por oración. Sin jerga. Todo término inevitable se define la primera vez.
 - **Sin datos inventados.** El software no inventa cifras reales, estudios ni funciones de herramientas.
 - **Fuentes copiadas.** Toda afirmación sobre el contenido de una fuente sale de un pasaje copiado de una fuente del curso. Se puede decir con otras palabras si no cambia el sentido.
+- **La fuente manda.** Si una ficha contradice una fuente, se sigue la fuente y la diferencia va a la entrega. Los temas siguen el orden de la fuente. Las cifras de las fuentes y de las fichas no se quitan ni se cambian.
 - **"En este curso".** Toda regla propia del curso lleva escritas esas palabras.
 - **Datos ficticios y coherentes.** Los datos del caso cuadran entre sí y con los datos fijos de la ficha.
 - **Sin datos personales reales.** Las personas se nombran por su cargo o con un nombre ficticio.
-- **Vocabulario único.** Cada concepto clave tiene el mismo nombre y el mismo orden en todos los materiales.
+- **Vocabulario único.** Cada concepto clave tiene el mismo nombre y el mismo orden en todos los materiales. El orden es el de la fuente. Una variante prohibida solo se prohíbe como nombre del concepto: un término que la fuente usa con su sentido se puede usar.
 - **Ejercicios independientes.** Ningún ejercicio ni pregunta necesita el resultado de otro.
 - **Ejercicios que funcionan tal cual.** Lo que el alumno copia no tiene espacios por llenar a mano.
 - **Respuestas separadas.** Solo la guía del profesor y la clave de la evaluación traen respuestas.
-- **Neutralidad de herramientas.** Si la ficha la pide, ningún material menciona marcas, botones ni menús.
+- **Neutralidad de herramientas.** Si la ficha la pide, ningún material menciona marcas, botones ni menús, salvo los que nombran las fuentes del curso o las fichas.
 - **Diseño uniforme.** Tres colores como máximo, los mismos recuadros y las mismas tablas en todos los materiales.
 - **Lo que nunca se incluye.** Por defecto: objetivos de aprendizaje, requisitos previos, glosarios, relleno, emojis y lenguaje publicitario.
 

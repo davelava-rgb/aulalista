@@ -146,6 +146,21 @@ def contar_paginas_word(ruta: Path) -> int:
             documento.Close(False)
 
 
+def recalcular_excel(ruta: Path) -> Path:
+    """Abre un Excel con el Excel instalado, calcula sus fórmulas y lo guarda. Así el archivo trae los valores
+    calculados y una figura muestra lo mismo que ve el alumno al abrirlo (SKILL.md, «Imágenes»)."""
+    with abrir_excel() as excel:
+        libro = excel.Workbooks.Open(str(ruta.resolve()), UpdateLinks=0, ReadOnly=False, AddToMru=False)
+        try:
+            excel.CalculateFull()
+            libro.Save()
+        except Exception as error:
+            raise ErrorDeOffice(f"Excel no pudo calcular {ruta.name}: {error}") from error
+        finally:
+            libro.Close(False)
+    return ruta
+
+
 # ---------- Diapositivas: desbordes medidos con PowerPoint ----------
 
 PUNTOS_POR_CM = 72 / 2.54

@@ -15,8 +15,12 @@ CASOS_POR_ORACION = [
     ("porcentaje de la nota", "El ejercicio representa el 20 % del curso.", "FALLA", "puntaje"),
     ("vale un porcentaje", "El informe vale el 30 % y se entrega al final.", "FALLA", "puntaje"),
     ("emoji", "Revisa el registro con cuidado ✅", "FALLA", "emoji"),
+    ("marca de la ficha", "El archivo trae quince usuarios con su grupo (propuesto).", "FALLA", "marca de la ficha"),
     ("nunca se incluye", "Objetivos de aprendizaje de la sesión.", "FALLA", "lo que nunca se incluye"),
     ("variante", "El equipo trabaja según el enfoque Agile.", "FALLA", "variante de un concepto"),
+    ("variante como nombre", "El administrador de datos aprueba la política.", "FALLA", "variante de un concepto"),
+    # Decisión 31: el término de la fuente usado con su sentido es un aviso informativo, no una falla.
+    ("termino de la fuente", "El jefe administrador de datos aprueba la política.", "AVISO", "término de la fuente"),
     ("dato fijo", "Fecha de referencia: lunes 5 de octubre de 2025.", "FALLA", "dato fijo"),
     ("cita", "La guía dice «Scrum es un marco para equipos grandes y complejos».", "FALLA", "cita sin fuente"),
     ("clausula", "Lo explica la lámina 99 del capítulo.", "FALLA", "referencia inexistente"),

@@ -23,15 +23,22 @@ modelo = "claude-sonnet-5-5"
 tope_usd = 0.30
 max_turns = 3
 
+# Botón «Corregir los ejercicios»: corrige los ejercicios que marcó la revisión anterior.
+[correccion_ejercicios]
+modelo = "claude-sonnet-5-5"
+tope_usd = 0.40
+max_turns = 3
+
 # Redacción de un material a partir de las fichas y de los pasajes de las fuentes.
 [redaccion]
 modelo = "claude-opus-5-5"
 tope_usd = 3.00
 max_turns = 40
 
-# Corrección de un material después del verificador.
+# Corrección de un material después del verificador: completa o por ejercicio. Solo arregla lo que señala la
+# validación, así que no necesita el modelo de la redacción (decisión del profesor, 15/10/2026).
 [correccion]
-modelo = "claude-opus-5-5"
+modelo = "claude-sonnet-5-5"
 tope_usd = 1.50
 max_turns = 20
 
@@ -55,3 +62,53 @@ esfuerzo = "medium"
 modelo = "claude-opus-5-5"
 tope_usd = 2.00
 max_turns = 30
+
+# Botones «Completar» de la ficha del curso: sesiones, caso y datos fijos (PLAN.md §0, decisión 28).
+[completar_ficha]
+modelo = "claude-sonnet-5-5"
+tope_usd = 0.40
+max_turns = 15
+
+# Revisión visual de las diapositivas: mira la imagen de cada una y propone cambios de diseño (decisión 30).
+[revision_visual]
+modelo = "claude-sonnet-5-5"
+tope_usd = 0.60
+max_turns = 3
+
+# Corrección de las diapositivas que nombran los problemas (desborde, palabras, diseño): devuelve solo esas
+# diapositivas, no el documento entero (PLAN.md §0, decisión 31).
+[correccion_diapositivas]
+modelo = "claude-sonnet-5-5"
+tope_usd = 0.80
+max_turns = 10
+esfuerzo = "medium"
+
+# Ejecución de cada prompt del laboratorio como lo haría un alumno: conversación nueva, sin herramientas
+# (PLAN.md §0, decisión 35).
+[ejecucion]
+modelo = "claude-sonnet-5-5"
+tope_usd = 0.40
+max_turns = 1
+
+# Comparación de lo que salió al ejecutar un ejercicio con la respuesta correcta de la ficha (decisión 35).
+[comparacion_ejecucion]
+modelo = "claude-sonnet-5-5"
+tope_usd = 0.30
+max_turns = 1
+esfuerzo = "medium"
+
+# Agente diseñador: escribe el programa pptxgenjs de las diapositivas (decisión 32). Esfuerzo medio: con el
+# esfuerzo por defecto, dos tercios de lo que escribía era razonamiento (decisión 41).
+[diseno]
+modelo = "claude-opus-5-5"
+tope_usd = 4.00
+max_turns = 3
+esfuerzo = "medium"
+
+# Arreglos del diseñador: corrige solo las diapositivas que nombran los problemas. Es una corrección, así que va
+# con Sonnet, como las demás correcciones (decisión 41).
+[arreglo_diseno]
+modelo = "claude-sonnet-5-5"
+tope_usd = 1.00
+max_turns = 3
+esfuerzo = "medium"

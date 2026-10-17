@@ -7,12 +7,13 @@ Cada ficha se guarda en dos archivos:
 Cada vez que se guarda, queda una copia en fichas/versiones/ con la fecha.
 """
 
+import hashlib
 import json
 import re
 from datetime import datetime
 from pathlib import Path
 
-from app.fichas import plantillas
+from app.fichas import controles, plantillas
 
 NOMBRES = {"curso": "ficha_del_curso", "sesion": "ficha_de_la_sesion"}
 PROPUESTO = "propuesto"
@@ -21,7 +22,8 @@ CONFLICTO = "conflicto"
 PROFESOR = "profesor"
 MAX_PREGUNTAS_POR_VEZ = 4  # SPEC §3: cuatro preguntas como máximo por vez
 
-MATERIALES = ("lectura", "diapositivas", "laboratorio", "guía del profesor", "práctica interactiva", "evaluación")
+# Sin práctica interactiva ni guía del profesor (PLAN.md §0, decisiones 34 y 35).
+MATERIALES = ("lectura", "diapositivas", "laboratorio", "evaluación")
 
 
 class FichaIncompleta(ValueError):
@@ -53,14 +55,80 @@ def _carpeta_versiones(carpeta_curso: Path, tipo: str, sesion: int | None) -> Pa
 # ---------- Leer y guardar ----------
 
 def nueva(tipo: str) -> dict:
-    return {"tipo": tipo, "confirmada": False, "fecha_confirmacion": "", "campos": {}}
+    ficha = {"tipo": tipo, "confirmada": False, "fecha_confirmacion": "", "campos": {}}
+    poner_por_omision(ficha)
+    return ficha
 
 
 def cargar(carpeta_curso: Path, tipo: str, sesion: int | None = None) -> dict:
     ruta = ruta_ficha(carpeta_curso, tipo, sesion)
     ficha = json.loads(ruta.read_text(encoding="utf-8")) if ruta.exists() else nueva(tipo)
     quitar_faltas_viejas(ficha)
+    revision = ficha.get("revision_ejercicios") or {}
+    vigente = ficha["tipo"] == "sesion" and revision.get("huella") == huella_de_ejercicios(ficha)
+    quitar_marcas_del_valor(ficha)
+    if vigente:
+        # Quitar la marca no cambia los ejercicios: la revisión guardada sigue valiendo.
+        revision["huella"] = huella_de_ejercicios(ficha)
+    poner_por_omision(ficha)
     return ficha
+
+
+def texto_de_ejercicios(ficha: dict) -> tuple[str, list[int]]:
+    """Los ejercicios llenos, con sus etiquetas: lo que revisa la IA antes de confirmar la ficha de la sesión."""
+    ids = ("area", "accion", "entregable", "archivo", "problema", "respuesta", "pregunta_herramienta")
+    numeros = bloques_llenos(ficha, "ejercicio", plantillas.MAX_EJERCICIOS, ids)
+    etiquetas = {c.id: c.etiqueta for c in plantillas.FICHA_DE_LA_SESION[1][3].elementos[0].campos}
+    bloques = []
+    for n in numeros:
+        bloques.append("\n".join(
+            f"- {etiquetas[i].replace('[número]', str(n))}: {valor(ficha, f'ejercicio.{n}.{i}')}" for i in ids
+        ))
+    return "\n\n".join(bloques), numeros
+
+
+def huella_de_ejercicios(ficha: dict) -> str:
+    return hashlib.sha256(texto_de_ejercicios(ficha)[0].encode("utf-8")).hexdigest()
+
+
+MARCA_PROPUESTO = re.compile(r"[ \t]*\(\s*propuest[oa]s?\s*\)", re.I)
+
+
+def sin_marca(texto: str) -> str:
+    """Quita «(propuesto)» de una línea. La marca vive en el estado del dato, nunca en su valor:
+    si queda en el valor, llega a los materiales."""
+    return MARCA_PROPUESTO.sub("", texto).rstrip()
+
+
+def quitar_marcas_del_valor(ficha: dict) -> None:
+    """Una ficha propuesta antes de esta corrección puede traer «(propuesto)» escrito dentro del valor."""
+    for dato in ficha["campos"].values():
+        if dato and dato.get("valor"):
+            dato["valor"] = sin_marcas(dato["valor"])
+        for version in (dato or {}).get("versiones", []):
+            version["valor"] = sin_marcas(version["valor"])
+
+
+def sin_marcas(texto: str) -> str:
+    """sin_marca() en cada línea de un valor."""
+    return "\n".join(sin_marca(l) for l in texto.split("\n")).strip()
+
+
+def herramienta_de_los_ejercicios(carpeta_curso: Path) -> frozenset[str]:
+    """«excel», «ia», los dos o ninguno, según la ficha del curso (PLAN.md §0, decisión 36). Vacío vale «ninguna»:
+    los ejercicios salen del tema de la sesión y el alumno trabaja a mano en el archivo de práctica."""
+    texto = valor(cargar(carpeta_curso, "curso"), "herramientas.ejercicios").strip().lower()
+    return frozenset(nombre for nombre, patron in (("excel", r"\bexcel\b"), ("ia", r"\bia\b")) if re.search(patron, texto))
+
+
+def poner_por_omision(ficha: dict) -> None:
+    """El docente y el contacto vacíos de la ficha del curso toman su valor por defecto. Se pueden cambiar,
+    pero no quedar vacíos (decisión 27)."""
+    if ficha["tipo"] != "curso":
+        return
+    for campo_id, texto in controles.POR_OMISION_DEL_CURSO.items():
+        if not valor(ficha, campo_id):
+            ficha["campos"][campo_id] = {"valor": texto, "origen": PROFESOR, "estado": ""}
 
 
 def quitar_faltas_viejas(ficha: dict) -> None:
@@ -111,6 +179,18 @@ def guardar(carpeta_curso: Path, tipo: str, sesion: int | None, ficha: dict, mot
     # Nombre corto: Windows no admite rutas de más de 260 caracteres.
     (versiones / f"{marca}_{_slug(motivo)[:24]}.json").write_text(texto, encoding="utf-8")
     return ruta
+
+
+# Las horas solo sirven para repartir el tema en sesiones. Ningún material muestra tiempos (SPEC §6).
+SOLO_PARA_LA_FICHA = ("- Horas del curso:",)
+
+
+def texto_para_materiales(carpeta_curso: Path, tipo: str, sesion: int | None = None) -> str:
+    """El .md de la ficha que recibe el redactor, sin los datos que no van a ningún material."""
+    texto = ruta_ficha(carpeta_curso, tipo, sesion, ".md").read_text(encoding="utf-8")
+    # La marca «(propuesto)» del .md es para el profesor: el redactor no la recibe.
+    return "".join(MARCA_PROPUESTO.sub("", l) for l in texto.splitlines(keepends=True)
+                   if not l.startswith(SOLO_PARA_LA_FICHA))
 
 
 def _slug(texto: str) -> str:
@@ -175,7 +255,7 @@ def aplicar_formulario(ficha: dict, formulario: dict) -> bool:
         anterior = ficha["campos"].get(campo_id) or {}
         if anterior.get("estado") == CONFLICTO and not nuevo:
             continue
-        if nuevo == anterior.get("valor", ""):
+        if nuevo == anterior.get("valor", "") or controles.equivalente(campo_id, nuevo, anterior.get("valor", "")):
             continue
         if nuevo:
             ficha["campos"][campo_id] = {"valor": nuevo, "origen": PROFESOR, "estado": ""}
@@ -188,7 +268,7 @@ def aplicar_formulario(ficha: dict, formulario: dict) -> bool:
 
 
 def _limpiar(texto: str) -> str:
-    return "\n".join(linea.rstrip() for linea in str(texto).replace("\r\n", "\n").strip().split("\n"))
+    return "\n".join(sin_marca(linea) for linea in str(texto).replace("\r\n", "\n").strip().split("\n"))
 
 
 def marcar_faltantes(ficha: dict) -> None:
@@ -202,13 +282,13 @@ def marcar_faltantes(ficha: dict) -> None:
 # ---------- Revisión ----------
 
 def materiales_de_la_sesion(ficha_sesion: dict) -> set[str]:
-    """Materiales que se producen. Vacío o «los seis» significa todos."""
+    """Materiales que se producen. Vacío, «los cuatro», o «los cinco» y «los seis» de fichas anteriores, significa todos."""
     texto = valor(ficha_sesion, "materiales.cuales").lower()
-    if not texto.strip() or "seis" in texto or "todos" in texto:
+    if not texto.strip() or re.search(r"\b(cuatro|cinco|seis|todos)\b", texto):
         return set(MATERIALES)
     sin_tildes = texto.replace("í", "i").replace("á", "a").replace("ó", "o")
     claves = {"lectura": "lectura", "diapositiva": "diapositivas", "laboratorio": "laboratorio",
-              "guia": "guía del profesor", "practica": "práctica interactiva", "evaluacion": "evaluación"}
+              "evaluacion": "evaluación"}
     return {material for clave, material in claves.items() if clave in sin_tildes}
 
 
@@ -269,10 +349,6 @@ def errores_del_material(ficha: dict, material: str) -> list[str]:
                                      ("respuesta", "la respuesta correcta"), ("accion", "la acción del alumno")):
                 if not valor(ficha, f"ejercicio.{n}.{campo_id}"):
                     lista.append(f"Ejercicio {n}: falta {nombre}.")
-    if material == "práctica interactiva":
-        estaciones = _renglones(valor(ficha, "practica.estaciones"))
-        if not 5 <= len(estaciones) <= 7:
-            lista.append(f"La práctica necesita de 5 a 7 estaciones, una por línea; tiene {len(estaciones)}.")
     if material == "evaluación":
         ids = ("concepto", "tarea", "archivo", "problema", "respuesta")
         preguntas = bloques_llenos(ficha, "pregunta", plantillas.MAX_PREGUNTAS, ids)
@@ -398,7 +474,7 @@ def puede_empezar_material(carpeta_curso: Path, sesion: int) -> bool:
 def faltantes_para(carpeta_curso: Path, sesion: int, material: str) -> list[str]:
     """Lo que falta para producir un material: las dos fichas confirmadas y los datos de ese material."""
     if not puede_empezar_material(carpeta_curso, sesion):
-        return ["Confirma la ficha del curso y la ficha de la sesión."]
+        return ["Guarda completas la ficha del curso y la ficha de la sesión: al guardarlas completas quedan confirmadas."]
     from app.fichas import referencia   # importa este módulo: se carga aquí para no formar un círculo
     ficha = cargar(carpeta_curso, "sesion", sesion)
     return errores_del_material(ficha, material) + referencia.interpretar(carpeta_curso, ficha)[1]

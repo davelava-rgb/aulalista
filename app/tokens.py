@@ -83,3 +83,23 @@ def total(curso: str, carpeta_cursos: Path | None = None, *, sesion: str | None 
         suma["costo_usd"] += fila["costo_usd"]
     suma["costo_usd"] = round(suma["costo_usd"], 6)
     return suma
+
+
+def ultima_corrida(curso: str, etapa: str, carpeta_cursos: Path | None = None, *, sesion: str | None = None) -> dict | None:
+    """Lo que gastó la última vez una acción: las llamadas seguidas, al final del registro, cuya etapa empieza
+    con `etapa`. Sirve para decir el costo junto al botón antes de pulsarlo. None si nunca se hizo."""
+    ruta = (carpeta_cursos or config.CARPETA_CURSOS) / curso / "tokens.jsonl"
+    if not ruta.exists():
+        return None
+    filas = [json.loads(l) for l in ruta.read_text(encoding="utf-8").splitlines() if l.strip()]
+    coincide = [str(f.get("etapa", "")).startswith(etapa) and (sesion is None or f.get("sesion") == sesion)
+                for f in filas]
+    if True not in coincide:
+        return None
+    fin = len(coincide) - 1 - coincide[::-1].index(True)
+    inicio = fin
+    while inicio > 0 and coincide[inicio - 1]:
+        inicio -= 1
+    grupo = filas[inicio:fin + 1]
+    return {"llamadas": len(grupo), "costo_usd": round(sum(f["costo_usd"] for f in grupo), 6),
+            "fecha": grupo[-1]["fecha"]}

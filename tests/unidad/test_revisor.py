@@ -53,6 +53,7 @@ def test_el_revisor_es_una_sesion_nueva_con_el_pedido_de_la_skill(sesion):
     pedido, opciones = llamada["prompt"], llamada["options"]
     assert revisor.PEDIDO_DE_AULALISTA in pedido
     assert "- Imprecisión:" in pedido and "- Relleno:" in pedido
+    assert "sin desarrollarlo, también es «cumple» (decisión 31)" in pedido
     # Sesión nueva: no continúa ni retoma la del redactor.
     assert opciones.resume is None and not opciones.continue_conversation and not opciones.fork_session
     assert opciones.model == "claude-opus-5-5"
@@ -148,10 +149,8 @@ def test_la_entrega_tiene_los_puntos_del_spec_en_orden(sesion):
     assert secciones["valide"][-1].startswith("Costo de esta lectura: 2 llamadas, ")
     assert secciones["no_pude"] == ["Nada: la lectura no tiene ejercicios que ejecutar."]
     assert secciones["decidi"] == ["Usé una tienda como ejemplo."]
-    texto = lectura.archivos(sesion, 1)["entrega"].read_text(encoding="utf-8")
-    posiciones = [texto.index(f"## {t}") for t in TITULOS]
-    assert posiciones == sorted(posiciones)
-    assert texto.rstrip().endswith(entrega.PREGUNTA)
+    assert [s["titulo"] for s in material["entrega"]["secciones"]] == TITULOS
+    assert not list(lectura.carpeta_materiales(sesion, 1).glob("*_Entrega.md"))    # la página ya la muestra (decisión 42)
 
 
 def test_con_pendientes_la_entrega_los_lista(sesion):
@@ -176,21 +175,21 @@ cliente = TestClient(servidor.app)
 
 def test_el_profesor_aprueba_la_lectura_desde_la_pagina(sesion):
     generar(sesion, LIMPIA)
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     for titulo in TITULOS:
         assert titulo in pagina
     assert entrega.PREGUNTA in pagina and "Aprobar la lectura" in pagina and "Pedir revisor independiente" in pagina
-    assert cliente.get("/cursos/scrum/sesiones/1/descargar/S1_Lectura_Entrega.md").status_code == 200
+    assert cliente.get("/cursos/scrum/sesiones/1/descargar/S1_Lectura.docx").status_code == 200
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura/aprobar", follow_redirects=False)
     assert r.status_code == 303
     assert lectura.estado(sesion, 1)["estado"] == "aprobada"
-    assert "Aprobada" in cliente.get("/cursos/scrum/sesiones/1").text
+    assert "Aprobada" in cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
 
 
 def test_con_pendientes_la_pagina_deja_aprobar(sesion):
     generar(sesion, LIMPIA, respuesta(error(RELLENO, "vacío")), cambios(), revisar=False)
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
-    assert "Lista, con pendientes de la revisión" in pagina and "Aprobar la lectura" in pagina
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    assert "Lista, con pendientes." in pagina and "Aprobar la lectura" in pagina
     cliente.post("/cursos/scrum/sesiones/1/materiales/lectura/aprobar")
     assert lectura.estado(sesion, 1)["estado"] == "aprobada"
 
@@ -203,8 +202,8 @@ def test_no_se_aprueba_una_lectura_desactualizada_ni_con_fallas(sesion):
     assert "Las fichas cambiaron" in r.text
     generar(sesion, con_error("Lee este bloque en 10 minutos."), *[cambios()] * lectura.VUELTAS_DEL_VERIFICADOR,
             revisar=False)
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
-    assert "Aprobar la lectura" not in pagina and "Decisiones pendientes" in pagina
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    assert "Aprobar la lectura" not in pagina and "Lo que impide aprobar" in pagina
     assert "Pedir revisor independiente" not in pagina
     cliente.post("/cursos/scrum/sesiones/1/materiales/lectura/aprobar")
     assert lectura.estado(sesion, 1)["estado"] == "con fallas"
@@ -243,7 +242,7 @@ def test_generar_de_nuevo_borra_la_entrega_y_la_aprobacion_anteriores(sesion):
         generar(sesion, revisar=False)      # la redacción falla: no hay respuesta
     material = lectura.estado(sesion, 1)
     assert material["estado"] == "error" and material["entrega"] == {} and material["aprobada"] == ""
-    assert "Aprobar la lectura" not in cliente.get("/cursos/scrum/sesiones/1").text
+    assert "Aprobar la lectura" not in cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
 
 # ---------- Lista de verificación por material (PLAN.md §0, decisión 11) ----------
 

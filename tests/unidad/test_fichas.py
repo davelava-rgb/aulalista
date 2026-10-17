@@ -56,6 +56,8 @@ def revisor_sin_problemas():
 @pytest.mark.parametrize("tipo, indice", [("curso", 0), ("sesion", 1)])
 def test_la_ficha_vacia_es_igual_a_la_plantilla_de_la_skill(tipo, indice):
     plantilla = re.findall(r"```\n(FICHA DE.*?)```", SKILL, re.S)[indice]
+    # Decisión 49: la ficha del curso no pide los materiales; se eligen en la ficha de cada sesión.
+    plantilla = plantilla.replace("- Materiales por sesión (por defecto, los cuatro):\n", "")
     assert plantillas.renderizar(tipo, {}) == plantilla
 
 
@@ -87,6 +89,39 @@ def test_la_ficha_llena_conserva_las_etiquetas_y_anota_el_origen(curso):
     assert "- Ejercicio 3 · Área: Recursos Humanos\n" in md
     assert "  Pregunta 2 · Concepto que evalúa: Pilares de Scrum\n" in md
     assert "- Ejercicio 4 · Área" not in md  # los bloques vacíos no se escriben
+
+
+def test_la_marca_propuesto_nunca_queda_en_el_valor_ni_llega_al_redactor(curso):
+    # Una ficha propuesta antes de la corrección trae la marca escrita dentro del valor.
+    ficha = datos.ficha("sesion", datos.SESION)
+    ficha["campos"]["sesion.alcance"] = {"valor": "Pilares (propuesto)", "origen": "silabo.pdf", "estado": "propuesto"}
+    ficha["campos"]["lectura.cuidado"] = {"valor": "Riesgo uno. (propuesto)\nRiesgo dos (Propuesto)",
+                                          "origen": "deducido", "estado": ""}
+    almacen.ruta_ficha(curso, "sesion", 1).parent.mkdir(parents=True)
+    almacen.ruta_ficha(curso, "sesion", 1).write_text(json.dumps(ficha, ensure_ascii=False), encoding="utf-8")
+    cargada = almacen.cargar(curso, "sesion", 1)
+    assert almacen.valor(cargada, "sesion.alcance") == "Pilares"
+    assert almacen.valor(cargada, "lectura.cuidado") == "Riesgo uno.\nRiesgo dos"
+    # El .md del profesor conserva la marca como nota; el texto del redactor no la trae.
+    almacen.guardar(curso, "sesion", 1, cargada)
+    assert "Pilares (propuesto) (fuente: silabo.pdf)" in almacen.ruta_ficha(curso, "sesion", 1, ".md").read_text(encoding="utf-8")
+    assert "propuesto" not in almacen.texto_para_materiales(curso, "sesion", 1).lower()
+    # La propuesta de la IA y lo que escribe el profesor también se limpian.
+    nueva = datos.ficha("sesion", {})
+    flujo.aplicar_propuesta(curso, nueva, {"campos": [
+        {"id": "sesion.alcance", "valor": "Roles. (propuesto)", "origen": "deducido", "literal": False}]})
+    assert almacen.valor(nueva, "sesion.alcance") == "Roles."
+    almacen.aplicar_formulario(nueva, {"sesion.numero_titulo": "1. Scrum (propuesto)"})
+    assert almacen.valor(nueva, "sesion.numero_titulo") == "1. Scrum"
+
+
+def test_quitar_la_marca_no_invalida_la_revision_de_los_ejercicios(curso):
+    ficha = datos.ficha("sesion", datos.SESION)
+    ficha["campos"]["ejercicio.1.archivo"]["valor"] += " (propuesto)"
+    ficha["revision_ejercicios"] = {"huella": almacen.huella_de_ejercicios(ficha), "problemas": ["Ejercicio 1: falla."]}
+    almacen.ruta_ficha(curso, "sesion", 1).parent.mkdir(parents=True)
+    almacen.ruta_ficha(curso, "sesion", 1).write_text(json.dumps(ficha, ensure_ascii=False), encoding="utf-8")
+    assert flujo.problemas_de_ejercicios_guardados(almacen.cargar(curso, "sesion", 1)) == ["Ejercicio 1: falla."]
 
 
 # ---------- Edición y versiones ----------
@@ -151,7 +186,6 @@ def test_ficha_de_la_sesion_revisa_bloques_ejercicios_estaciones_y_preguntas():
     valores.pop("ejercicio.3.area"); valores.pop("ejercicio.3.accion"); valores.pop("ejercicio.3.entregable")
     valores.pop("ejercicio.3.archivo"); valores.pop("ejercicio.3.problema"); valores.pop("ejercicio.3.respuesta")
     valores.pop("ejercicio.2.problema")
-    valores["practica.estaciones"] = "Una\nDos"
     valores.pop("pregunta.1.respuesta")
     ficha = datos.ficha("sesion", valores)
     assert almacen.errores(ficha) == []          # para confirmar no se exigen los datos de los materiales
@@ -159,13 +193,11 @@ def test_ficha_de_la_sesion_revisa_bloques_ejercicios_estaciones_y_preguntas():
     laboratorio = almacen.errores_del_material(ficha, "laboratorio")
     assert "El laboratorio necesita de 3 a 5 ejercicios; tiene 2." in laboratorio
     assert "Ejercicio 2: falta el problema que trae a propósito." in laboratorio
-    assert almacen.errores_del_material(ficha, "práctica interactiva") == [
-        "La práctica necesita de 5 a 7 estaciones, una por línea; tiene 2."]
     assert "Pregunta 1: falta la respuesta correcta." in almacen.errores_del_material(ficha, "evaluación")
 
 
 def test_si_la_sesion_no_produce_un_material_no_se_exigen_sus_datos():
-    valores = {k: v for k, v in datos.SESION.items() if not k.startswith(("ejercicio.", "pregunta.", "practica."))}
+    valores = {k: v for k, v in datos.SESION.items() if not k.startswith(("ejercicio.", "pregunta."))}
     valores["materiales.cuales"] = "Lectura y diapositivas"
     ficha = datos.ficha("sesion", valores)
     assert almacen.errores(ficha) == [] and almacen.errores_del_material(ficha, "lectura") == []
@@ -370,3 +402,28 @@ def test_el_pedido_de_la_sesion_recuerda_formatos_y_tres_preguntas(curso):
     assert "Excel para datos y Word para textos" in pedido
     assert "La evaluación tiene 3 preguntas" in pedido
     assert "Sesión 1: Agilidad y fundamentos de Scrum: manifiesto, pilares y valores" in pedido
+
+
+def test_la_propuesta_ordena_como_la_fuente_y_no_prohibe_sus_terminos(curso):
+    """Decisión 31: el vocabulario va en el orden de la fuente y un término de la fuente no es variante."""
+    ficha_curso_confirmada(curso)
+    pedido = flujo.pedido_de_propuesta(curso, "sesion", 1, almacen.cargar(curso, "sesion", 1))
+    assert "en el orden en que la fuente los presenta" in pedido
+    assert "No pongas como variante un término que la fuente usa" in pedido
+    assert "Los temas, los bloques y los pasos van en el orden de la fuente." in pedido
+
+
+def test_la_propuesta_decide_la_herramienta_por_el_tema_del_curso(curso):
+    """Decisión 36: la herramienta sale del tema del curso; los ejercicios, del tema de la sesión."""
+    pedido = flujo.pedido_de_propuesta(curso, "curso", None, almacen.cargar(curso, "curso"))
+    assert "herramientas.ejercicios: Herramienta de los ejercicios" in pedido
+    assert "[usa una de estas, tal cual: ninguna, Excel, IA, Excel e IA]" in pedido
+    assert "Los modelos de diseño no cuentan" in pedido
+    ficha_curso_confirmada(curso)                           # Scrum Master con IA: «Excel e IA»
+    pedido = flujo.pedido_de_propuesta(curso, "sesion", 1, almacen.cargar(curso, "sesion", 1))
+    assert flujo.DE_QUE_TRATAN_LOS_EJERCICIOS[frozenset({"excel", "ia"})] in pedido
+    ficha = almacen.cargar(curso, "curso")
+    ficha["campos"]["herramientas.ejercicios"] = {"valor": "ninguna", "origen": "profesor", "estado": ""}
+    almacen.guardar(curso, "curso", None, ficha)
+    pedido = flujo.pedido_de_propuesta(curso, "sesion", 1, almacen.cargar(curso, "sesion", 1))
+    assert "sin fórmulas ni prompts" in pedido and "Deja vacío «Si la herramienta debe preguntar algo»" in pedido

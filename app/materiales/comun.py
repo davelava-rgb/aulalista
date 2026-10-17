@@ -6,6 +6,9 @@ para que todos sigan el mismo ciclo de validación (PLAN.md §0, decisión 22).
 """
 
 import json
+import os
+import shutil
+import stat
 from datetime import datetime
 from pathlib import Path
 
@@ -15,11 +18,86 @@ from app.validacion import pasada2, revision, verificador
 from app.validacion.pasajes import FICHA_DE_LA_SESION, FICHA_DEL_CURSO, Corpus
 
 FICHAS = (FICHA_DEL_CURSO, FICHA_DE_LA_SESION)
+
+# Subcarpeta de materiales/ con lo que usa AulaLista y no el profesor: contenido, explicaciones, imágenes, el JSON
+# del verificador, el programa del diseñador (decisión 42). En materiales/ quedan solo los archivos para el profesor.
+TRABAJO = "_trabajo"
+MATERIALES = {"Lectura": "lectura", "Diapositivas": "diapositivas", "Laboratorio": "laboratorio"}
+
+
+def ordenar_materiales(carpeta: Path) -> None:
+    """Lleva una carpeta materiales/ de la forma anterior a la de la decisión 42: mueve los archivos de trabajo a
+    _trabajo/ y borra las entregas en Markdown, que la página ya muestra. Un archivo abierto que no se deja mover
+    queda donde está."""
+    trabajo = carpeta / TRABAJO
+    mudanzas = [(carpeta / clave, trabajo / clave) for clave in MATERIALES.values()]
+    mudanzas.append((carpeta / "practica", trabajo / "laboratorio" / "practica"))
+    for origen, destino in mudanzas:
+        if not origen.is_dir():
+            continue
+        destino.mkdir(parents=True, exist_ok=True)
+        for hijo in list(origen.iterdir()):
+            if not (destino / hijo.name).exists():
+                try:
+                    shutil.move(str(hijo), str(destino / hijo.name))
+                except OSError:
+                    pass
+        try:
+            os.chmod(origen, stat.S_IWRITE)     # OneDrive marca las carpetas como de solo lectura
+            origen.rmdir()
+        except OSError:
+            pass
+    for ruta in carpeta.glob("S*_*_Verificacion.json"):
+        clave = MATERIALES.get(ruta.stem.split("_")[1])
+        if clave and not (trabajo / clave / "verificacion.json").exists():
+            (trabajo / clave).mkdir(parents=True, exist_ok=True)
+            try:
+                shutil.move(str(ruta), str(trabajo / clave / "verificacion.json"))
+            except OSError:
+                pass
+    for ruta in carpeta.glob("S*_*_Entrega.md"):
+        try:
+            ruta.unlink()
+        except OSError:
+            pass
+    _quitar_entrega_md_del_estado(carpeta.parent / "estado.json")
+
+
+def _quitar_entrega_md_del_estado(ruta: Path) -> None:
+    """La entrega guardada de un material anterior nombra su Entrega.md, que ya no existe: la página lo mostraba
+    como un enlace que no abre."""
+    if not ruta.exists():
+        return
+    estado_ = json.loads(ruta.read_text(encoding="utf-8"))
+    cambio = False
+    for material in (estado_.get("materiales") or {}).values():
+        if (material.get("archivos") or {}).pop("entrega", None) is not None:
+            cambio = True
+        for seccion in (material.get("entrega") or {}).get("secciones", []):
+            lineas = [l for l in seccion["lineas"] if not l.endswith("_Entrega.md: esta entrega, en texto.")]
+            if len(lineas) != len(seccion["lineas"]):
+                seccion["lineas"], cambio = lineas, True
+    if cambio:
+        ruta.write_text(json.dumps(estado_, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def escribir_sistema(ruta: Path, texto: str) -> Path:
+    """Lo que no cambia entre las correcciones (contexto, formato y reglas) va en el mensaje de sistema, en un
+    archivo: el SDK lo guarda en caché y cada corrección siguiente lo paga mucho más barato (decisión 43)."""
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    ruta.write_text(texto, encoding="utf-8")
+    return ruta
+
+
+def ordenar_cursos(carpeta_cursos: Path) -> None:
+    for carpeta in carpeta_cursos.glob("*/sesiones/*/materiales"):
+        ordenar_materiales(carpeta)
 VUELTAS_DEL_VERIFICADOR = 3   # correcciones de fallas mecánicas antes de dejarlas abiertas (PLAN.md §0, decisión 22)
 
 # Avisos que se muestran en la hoja Hallazgos pero no obligan a corregir ni a explicar (PLAN.md §0, decisión 13).
-AVISOS_INFORMATIVOS = ("relleno", "palabra imprecisa")
-NOTA_INFORMATIVA = "Aviso informativo: no obliga a corregir ni a explicar (PLAN.md §0, decisión 13)."
+# Un término que la fuente usa con su sentido tampoco obliga, aunque la ficha lo liste como variante (decisión 31).
+AVISOS_INFORMATIVOS = ("relleno", "palabra imprecisa", "término de la fuente")
+NOTA_INFORMATIVA = "Aviso informativo: no obliga a corregir ni a explicar (PLAN.md §0, decisiones 13 y 31)."
 
 ESQUEMA_EXPLICACIONES = {"type": "array", "items": {
     "type": "object",

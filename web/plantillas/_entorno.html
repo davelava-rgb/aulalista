@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% from "_estado.html" import usd %}
+{# Páginas de un curso: el panel con las sesiones a la izquierda y la hoja de trabajo a la derecha (PLAN.md §0, decisiones 38 y 44). #}
+
+{# Dentro de un curso, el panel dice dónde estás: no hay ruta arriba del título. #}
+{% block navegacion %}{% endblock %}
+
+{% block cuerpo %}
+<div class="entorno">
+  <nav class="panel" id="panel" aria-label="Curso">
+    <div class="panel-curso">
+      <a href="/" class="panel-todos">Todos los cursos</a>
+      <a href="/cursos/{{ curso }}" class="panel-titulo"{% if panel.actual == "curso" %} aria-current="page"{% endif %}>{{ nombre }}</a>
+    </div>
+
+    <section class="panel-grupo" aria-labelledby="panel-sesiones">
+      <h2 id="panel-sesiones">Sesiones</h2>
+      {% if panel.sesiones %}
+      {# Cada material es un punto de color con su nombre; el estado va también en palabras para los lectores de pantalla. #}
+      {% for s in panel.sesiones %}
+      {% set base_s = "/cursos/" ~ curso ~ "/sesiones/" ~ s.numero %}
+      <div class="panel-sesion{{ ' abierta' if s.abierta }}">
+        <a class="panel-sesion-titulo" href="{{ base_s }}" title="{{ s.texto }}">
+          <span class="panel-num">{{ s.numero }}</span><span class="panel-sesion-nombre">{{ s.texto }}</span></a>
+        <ul class="panel-mats">
+          {% if s.abierta or s.ficha.clase != "bien" %}
+          <li><a class="panel-mat panel-ficha {{ s.ficha.clase }}" href="{{ base_s }}/ficha"{% if panel.actual == "ficha-" ~ s.numero %} aria-current="page"{% endif %}>
+            <i aria-hidden="true"></i>Ficha<span class="sr"> de la sesión: {{ s.ficha.texto }}</span></a></li>
+          {% endif %}
+          {% for m in s.materiales %}
+          <li><a class="panel-mat {{ m.situacion.clase }}{{ ' sigue' if m.sigue }}" href="{{ base_s }}/materiales/{{ m.clave }}"{% if panel.actual == m.clave ~ "-" ~ s.numero %} aria-current="page"{% endif %}>
+            <i aria-hidden="true"></i>{{ m.corto }}<span class="sr">: {{ m.situacion.texto }}{{ ". Es lo que sigue" if m.sigue }}</span></a></li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endfor %}
+      {% else %}
+      <p class="panel-vacio">Las sesiones aparecen al confirmar la ficha del curso. <a href="/cursos/{{ curso }}">Ir a la preparación</a></p>
+      {% endif %}
+    </section>
+
+    <p class="panel-gasto">Gasto del curso <b>{{ usd(panel.gasto.costo_usd) }}</b>
+      {{ panel.gasto.llamadas }} {{ "llamada" if panel.gasto.llamadas == 1 else "llamadas" }} a Claude. Es una estimación, no la factura.</p>
+  </nav>
+  <main class="hoja">{{ self.principal() }}</main>
+</div>
+{% endblock %}

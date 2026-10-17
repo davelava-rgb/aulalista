@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "aulalista",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "app.servidor:app", "--host", "127.0.0.1", "--port", "8765"],
+      "port": 8765
+    },
+    {
+      "name": "aulalista-prueba",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "app.servidor:app", "--host", "127.0.0.1", "--port", "8766"],
+      "port": 8766
+    }
+  ]
+}

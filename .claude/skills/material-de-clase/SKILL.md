@@ -27,6 +27,7 @@ Todo parte de dos fichas: la ficha del curso, que se llena una vez, y la ficha d
 5. Si dos archivos dicen cosas distintas sobre el mismo dato, no elijas: anota las dos versiones y pregunta cuál vale.
 6. Muestra la ficha llena. Pregunta solo por los datos marcados como "(propuesto)", "Falta definir" o en conflicto, en un máximo de cuatro preguntas. Si quedan más, pregunta primero por los obligatorios.
 7. Si no hay ningún archivo del que leer, haz hasta cuatro preguntas, llena tú la ficha con las respuestas y muéstrala para que la confirmen.
+   Con las horas, el número de sesiones y el público, propón las sesiones: una línea por sesión, con su número, su título y su alcance. Con el curso y el público, propón el caso ficticio. Con el curso, el público y el caso, propón los datos fijos del caso. Todo lo que propones va marcado "(propuesto)".
 8. Guarda la ficha confirmada en el proyecto con el nombre "Ficha del curso". Si no hay proyecto, entrégala como archivo y pide que la adjunten en la siguiente sesión.
 9. Si durante el trabajo se define un dato nuevo del caso (una cifra, una regla, un nombre), agrégalo a "Datos fijos del caso" y guarda la ficha de nuevo.
 10. Al empezar cada sesión, compara la ficha con los archivos del proyecto. Si hay archivos nuevos que la ficha no menciona, léelos y propón los cambios antes de seguir.
@@ -45,7 +46,9 @@ Revisa además los materiales de sesiones anteriores que haya en el proyecto y �
 
 ## Paso 3 · Vocabulario de la sesión
 
-Antes de la lectura, escribe la lista de conceptos clave de la sesión con un solo nombre y un solo orden para cada uno. Usa esos nombres iguales en todos los materiales. Si un concepto tiene partes numeradas, el número y los nombres no cambian entre materiales.
+Antes de la lectura, escribe la lista de conceptos clave de la sesión con un solo nombre y un solo orden para cada uno. El orden es el de la fuente. Usa esos nombres iguales en todos los materiales. Si un concepto tiene partes numeradas, el número y los nombres no cambian entre materiales.
+
+Una variante prohibida solo se prohíbe como nombre del concepto. Un término que la fuente usa con su sentido se puede usar, aunque se parezca a una variante: por ejemplo, el cargo que la fuente llama «jefe administrador de datos». No pongas como variante un término que la fuente usa.
 
 ## Paso 4 · Un material a la vez
 
@@ -70,7 +73,11 @@ Termina un material, haz la validación doble, entrégalo y espera la aprobació
 - Antes de redactar, abre las fuentes del curso y copia los pasajes que vas a usar. Redacta a partir de esos pasajes, no de memoria.
 - No afirmes sobre el contenido de una fuente nada que no esté en un pasaje copiado. Puedes decirlo con tus palabras si no cambias su sentido. Si la fuente no está en el proyecto, no la cites.
 - Si agrupas, resumes o cambias el orden de lo que dice una fuente, dilo en el texto: "en este curso".
-- Todos los datos del caso son ficticios y cuadran entre sí y con los datos fijos.
+- La fuente manda sobre las fichas. Si una ficha contradice una fuente (un orden, un paso, un dato), sigue la fuente y anota la diferencia en la entrega.
+- Sigue el orden en que la fuente presenta los temas, también dentro de cada bloque.
+- Copia tal cual las cifras de las fuentes y de las fichas. No las quites ni las cambies. Si una cifra te parece ambigua, mantenla y anota la duda en la entrega.
+- Un tema de una sesión posterior se puede nombrar en pocas oraciones si hace falta para entender la sesión o por razones pedagógicas. No lo desarrolles y anótalo en la entrega.
+- Todos los datos del caso son ficticios y cuadran entre sí y con los datos fijos. Un dato ficticio que hace falta, como un plazo o una cantidad, se puede agregar: va a los datos fijos.
 - Ningún material contiene datos personales reales. Nombra a las personas por su cargo. Si hace falta un nombre propio, usa uno ficticio.
 - Los casos se entienden sin conocer una profesión específica, salvo que el curso sea de esa profesión.
 
@@ -82,13 +89,17 @@ Termina un material, haz la validación doble, entrégalo y espera la aprobació
 
 ### Neutralidad de herramientas (si la ficha la pide)
 
-- No menciones marcas, botones, menús ni funciones exclusivas de un producto.
+- No menciones marcas, botones, menús ni funciones exclusivas de un producto, salvo los que nombran las fuentes del curso o las fichas: esos se nombran tal cual.
 - Explica cada concepto por lo que hace, no por cómo lo llama cada marca.
-- Si un ejercicio necesita un archivo, escribe "adjunta el archivo". Agrega una sola vez, al inicio de la guía, la alternativa: "Si tu herramienta no acepta archivos, copia el texto del archivo y pégalo en el mensaje".
+- Si los ejercicios usan IA y uno necesita un archivo, escribe "adjunta el archivo". Agrega una sola vez, al inicio de la guía, la alternativa: "Si tu herramienta no acepta archivos, copia el texto del archivo y pégalo en el mensaje".
 
 ### Ejercicios que se ejecutan
 
 Estas reglas valen para todo ejercicio que el alumno ejecuta en una herramienta: un prompt, una fórmula, una consulta, un comando.
+
+- Los ejercicios practican el tema de la sesión. La herramienta sale de "Herramienta de los ejercicios", en la ficha del curso, y esa respuesta sale del tema del curso. Los modelos dan la estructura de la guía, nunca la herramienta.
+- Usa prompts solo si el curso trata de IA. Usa fórmulas solo si el curso trata de Excel.
+- Con "ninguna", el alumno hace la acción a mano en su archivo de práctica, en Excel o en Word. Los pasos dicen qué revisar y dónde escribe su resultado. El ejercicio no lleva recuadros para copiar, salvo una plantilla si completarla es el tema.
 
 - Lo que el alumno copia funciona tal cual. No lleva espacios por llenar a mano, salvo que llenarlos sea el tema del ejercicio.
 - Todo insumo llega como archivo de práctica o ya está escrito en el ejercicio.
@@ -104,6 +115,7 @@ Estas reglas valen para todo ejercicio que el alumno ejecuta en una herramienta:
 - Usa la identidad visual de la ficha en todos los materiales. Máximo tres colores, más los fondos de recuadro.
 - Si no hay logo, deja las portadas sin logo y avísalo. Si no hay paleta, propón una sobria de tres colores y pide confirmación.
 - Si un color no alcanza el contraste mínimo de lectura como texto, oscurécelo solo en el texto.
+- El estilo de la ficha cambia el diseño y el tono, nunca las reglas de lenguaje claro ni las secciones de cada material. Si la ficha deja vacíos los colores o la tipografía, se toman de los modelos aprobados. Si hay un modelo, la portada sigue la disposición de su carátula (alineación, franja de color y lugar del logo) con los colores, la tipografía y el logo de la ficha: la identidad visual de la ficha manda. Los modelos guían el tono, nunca el contenido.
 - Recuadros sombreados con borde izquierdo de color para ejemplos listos para copiar, "Aplícalo así" y "Cuidado con". Mismo estilo en todos los materiales.
 - Tablas con encabezado en el color principal, filas alternas en gris muy claro y sin bordes verticales.
 - Nada de texto justificado con huecos, páginas casi vacías ni viñetas de más de dos niveles.
@@ -126,7 +138,7 @@ Estas reglas valen para todo ejercicio que el alumno ejecuta en una herramienta:
 - PowerPoint 16:9, de 14 a 18 diapositivas.
 - Portada, idea central, una diapositiva por concepto y cierre con "Aplícalo así" y "Cuidado con".
 - Una idea por diapositiva. Frases cortas, no párrafos.
-- Tablas, columnas comparativas o pasos numerados cuando ayuden a entender.
+- Recursos gráficos cuando ayuden a entender: tablas, columnas comparativas, pasos numerados, procesos, ciclos, organigramas, mapas mentales, matrices, tableros de tarjetas y gráficas de barras con cifras de las fuentes. Al menos la mitad de las diapositivas de concepto lleva uno.
 - Los ejemplos van en recuadros legibles a distancia. Si uno no cabe, divídelo en dos diapositivas o muestra una parte y remite a la lectura en las notas.
 - Notas del profesor en cada diapositiva: qué destacar y qué preguntar al grupo.
 - Mismo orden y mismos ejemplos que la lectura. No agregues contenido nuevo.
@@ -143,15 +155,15 @@ Estructura de cada ejercicio en la guía del alumno:
 2. Situación de 2 a 3 líneas que indica el área.
 3. Nombres exactos de los archivos de práctica.
 4. Instrucción en pasos numerados.
-5. Lo que el alumno copia, en uno o dos recuadros. Si es un prompt, usa rol, contexto, tarea, formato de salida y restricciones.
+5. Lo que el alumno copia, en uno o dos recuadros, solo si el ejercicio lo necesita. Si es un prompt, usa rol, contexto, tarea, formato de salida y restricciones.
 6. "Mejora el resultado (opcional)": un pedido de seguimiento que enseñe a iterar. El título lleva siempre la palabra "(opcional)".
 
 El ejercicio no lleva las secciones "Cómo se ve un buen resultado" ni "Criterio de calidad".
 
 Imágenes:
 
-- Agrega una imagen solo cuando hace más clara una indicación. Ejemplos: dónde está una columna o una celda en el archivo de práctica, qué parte de un documento se debe cambiar, o el orden de un proceso.
-- Si la indicación se entiende sin imagen, no pongas imagen. Ninguna imagen es decorativa.
+- Agrega una imagen solo cuando hace más clara una indicación. Como máximo una imagen por ejercicio. Ejemplos: dónde está una columna o una celda en el archivo de práctica, qué parte de un documento se debe cambiar, o el orden de un proceso.
+- Si un paso pide ubicar algo en el archivo (una columna, una celda, un rango o un apartado), pon la imagen. Si ningún paso lo pide, no pongas imagen. Ninguna imagen es decorativa.
 - Genera cada imagen con un programa a partir del archivo de práctica real. La imagen muestra los mismos datos que el alumno verá al abrir el archivo.
 - Marca en la imagen el lugar exacto con un recuadro o una flecha de color ámbar, y un número si hay más de una marca.
 - No dibujes pantallas, menús ni botones de una herramienta. No se pueden comprobar y cambian con cada versión.
@@ -339,6 +351,8 @@ FICHA DEL CURSO
 1. Curso
 - Nombre del curso (obligatorio):
 - Idioma del material:
+- Horas del curso:
+- Número de sesiones:
 - Sesiones (obligatorio). Una línea por sesión: número, título y alcance.
   1.
   2.
@@ -366,18 +380,20 @@ FICHA DEL CURSO
 - Fondos de recuadro:
 - Color del texto:
 - Tipografía:
+- Estilo (profesional, académico, moderno, corporativo, minimalista o cercano):
 
 6. Portada
 - Docente:
 - Enlaces o datos de contacto:
 
 7. Herramientas
+- Herramienta de los ejercicios (ninguna, Excel, IA o Excel e IA):
 - ¿Material neutral respecto a marcas? (sí o no):
 - Si no es neutral, herramienta y versión que usan los alumnos:
 - ¿La herramienta de los alumnos acepta archivos adjuntos? (sí, no o no sé):
 
 8. Materiales
-- Materiales por sesión (por defecto, los seis):
+- Materiales por sesión (por defecto, los cuatro):
 - Lo que nunca se incluye (por defecto: tiempos, puntajes, objetivos de aprendizaje, requisitos previos, glosarios, relleno, emojis y lenguaje publicitario):
 
 9. Modelos
@@ -421,11 +437,7 @@ FICHA DE LA SESIÓN
 - Respuesta correcta o resultado que debe salir:
 - Si la herramienta debe preguntar algo, respuesta exacta del alumno:
 
-5. Práctica interactiva
-- Estaciones (de 5 a 7): nombre y qué decide el alumno en cada una:
-- Última estación: qué arma el alumno para su propio trabajo:
-
-6. Evaluación práctica (PBQ)
+5. Evaluación práctica (PBQ)
 - Material que el alumno puede consultar durante la evaluación:
 - Forma de entrega de las respuestas:
 - Preguntas (por defecto, 3; repite este bloque por cada una)
@@ -435,6 +447,6 @@ FICHA DE LA SESIÓN
   Problema que el archivo trae a propósito:
   Respuesta correcta:
 
-7. Materiales de esta sesión
-- Cuáles se producen (por defecto, los seis):
+6. Materiales de esta sesión
+- Cuáles se producen (por defecto, los cuatro):
 ```

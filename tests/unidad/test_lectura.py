@@ -5,6 +5,7 @@ import copy
 import json
 import re
 import zipfile
+from pathlib import Path
 
 import openpyxl
 import pytest
@@ -194,6 +195,26 @@ def test_el_redactor_recibe_las_secciones_de_la_skill_sin_el_claude_md():
         skill.secciones("No existe")
 
 
+def test_el_redactor_recibe_las_reglas_de_la_decision_31():
+    """La fuente manda sobre las fichas: orden, cifras, marcas, términos y adelantos (PLAN.md §0, decisión 31)."""
+    reglas = skill.secciones(*lectura.SECCIONES_DE_LA_SKILL)
+    assert "La fuente manda sobre las fichas." in reglas
+    assert "Sigue el orden en que la fuente presenta los temas" in reglas
+    assert "Copia tal cual las cifras de las fuentes y de las fichas. No las quites ni las cambies." in reglas
+    assert "salvo los que nombran las fuentes del curso o las fichas" in reglas
+    assert "Una variante prohibida solo se prohíbe como nombre del concepto." in reglas
+    assert "Un tema de una sesión posterior se puede nombrar en pocas oraciones" in reglas
+    formato = lectura.instrucciones_de_formato(True)
+    assert "en su orden. No uses sus variantes." not in formato
+    assert "Dentro de cada bloque, los temas van en el orden de la fuente." in formato
+
+
+def test_la_revision_no_marca_lo_que_permite_la_decision_31():
+    from app.validacion import revision
+    assert "la fuente manda sobre las fichas" in revision.REGLAS
+    assert "Un término, una marca o una norma que la fuente nombra" in revision.REGLAS
+
+
 # ---------- Flujo: redactar, generar, verificar y corregir ----------
 
 def test_sin_fichas_confirmadas_no_empieza(entorno):
@@ -219,6 +240,12 @@ def test_lectura_limpia_queda_verificada_con_dos_llamadas(sesion):
     assert material["revision"] == {"bloques": 5, "errores": 0, "corregidos": 0, "pendientes": 0, "descartados": 0}
 
 
+def test_el_excel_de_la_lectura_dice_seccion_y_no_diapositiva(sesion):
+    generar(sesion, LIMPIA)
+    hoja = openpyxl.load_workbook(lectura.archivos(sesion, 1)["excel"])["Hallazgos"]
+    assert [c.value for c in hoja[1]][:2] == ["Nivel", "Sección"]
+
+
 def test_una_falla_se_corrige_y_se_verifica_de_nuevo(sesion):
     material, consulta = generar(sesion, con_error("Lee este bloque en 10 minutos."),
                                  cambios(("Lee este bloque en 10 minutos.", "")))
@@ -229,8 +256,10 @@ def test_una_falla_se_corrige_y_se_verifica_de_nuevo(sesion):
     assert (correccion.model, correccion.max_budget_usd, correccion.effort) == ("claude-sonnet-5-5", 0.60, "medium")
     contenido = lectura.archivos(sesion, 1)["contenido"].read_text(encoding="utf-8")
     assert "10 minutos" not in contenido
+    sistema = Path(correccion.system_prompt["path"]).read_text(encoding="utf-8")
+    assert sistema.startswith("REGLAS DE LA SKILL") and "REGLAS DE CORRECCIÓN" in sistema   # la parte fija, en caché
     pedido = consulta.llamadas[1]["prompt"]
-    assert pedido.startswith("REGLAS DE LA SKILL")  # la parte fija va primero
+    assert "REGLAS DE LA SKILL" not in pedido and "REGLAS DE CORRECCIÓN" not in pedido     # decisión 43
     assert pedido.rstrip().endswith("FALLA · tiempo · «Lee este bloque en 10 minutos.»: dice «minutos»")
 
 
@@ -281,7 +310,7 @@ def test_relleno_y_palabras_imprecisas_son_avisos_informativos(sesion):
     assert filas["palabra imprecisa"][5] == lectura.NOTA_INFORMATIVA
     assert filas["relleno"][5] == lectura.NOTA_INFORMATIVA
     valide = next(s["lineas"] for s in material["entrega"]["secciones"] if s["clave"] == "valide")
-    assert any(l.startswith("Avisos informativos de relleno o palabras imprecisas: 2.") for l in valide)
+    assert any(l.startswith("Avisos informativos (relleno, palabras imprecisas o términos de la fuente): 2.") for l in valide)
 
 
 def test_mas_de_seis_paginas_es_falla_y_se_pide_acortar(sesion):
@@ -289,7 +318,7 @@ def test_mas_de_seis_paginas_es_falla_y_se_pide_acortar(sesion):
     material, consulta = generar(sesion, LIMPIA, {"lectura": LIMPIA, "explicaciones": [], "datos_nuevos": []},
                                  contar_paginas=lambda _: next(paginas))
     assert "FALLA · páginas · S1_Lectura.docx: tiene 7 páginas; el máximo es 6" in consulta.llamadas[1]["prompt"]
-    assert consulta.llamadas[1]["options"].model == "claude-opus-5-5"   # corrección completa del documento
+    assert consulta.llamadas[1]["options"].model == "claude-sonnet-5-5"   # corrección completa del documento
     assert material["estado"] == "verificada"
 
 
@@ -331,14 +360,14 @@ def test_la_pagina_muestra_el_gasto_de_la_ultima_corrida_aunque_falle(sesion):
     assert lectura.estado(sesion, 1)["estado"] == "error"
     gasto = lectura.gasto_de_la_corrida(sesion, "scrum", 1)
     assert gasto["llamadas"] == tokens.total("scrum")["llamadas"] - antes == 1
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
-    assert "Gasto desde la última vez que pulsaste Generar: 1 llamada," in pagina
-    assert "Gasto total de este curso, con todas las corridas:" in pagina
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    assert "Desde que pulsaste Generar: 1 llamada," in pagina
+    assert "Gasto del curso <b>" in pagina   # el total va una sola vez, en el panel
 
 
 def test_sin_generar_no_muestra_gasto_de_corrida(sesion):
     assert lectura.gasto_de_la_corrida(sesion, "scrum", 1) is None
-    assert "Gasto desde la última vez" not in cliente.get("/cursos/scrum/sesiones/1").text
+    assert "Desde que pulsaste Generar" not in cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
 
 
 def test_el_word_real_cuenta_sus_paginas_con_word(sesion):
@@ -370,7 +399,7 @@ def test_detener_corta_la_generacion_en_curso(sesion, monkeypatch):
             break
         time.sleep(0.05)
     assert lectura.estado(sesion, 1)["estado"] == "trabajando"
-    assert "Detener</button>" in cliente.get("/cursos/scrum/sesiones/1").text
+    assert "Detener</button>" in cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura/detener", follow_redirects=False)
     assert r.status_code == 303 and "Deteniendo" in __import__("urllib.parse").parse.unquote(r.headers["location"])
     for hilo in [h for h in threading.enumerate() if h.daemon]:
@@ -379,7 +408,7 @@ def test_detener_corta_la_generacion_en_curso(sesion, monkeypatch):
     assert estado["estado"] == "detenida"
     assert "· Detenido por ti." in estado["avance"][-1]
     assert ("scrum", 1, lectura.CLAVE) not in servidor._TRABAJOS
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     assert "Detenida por ti. Puedes generarla de nuevo." in pagina and "Detener</button>" not in pagina
 
 
@@ -389,7 +418,7 @@ def test_detener_libera_una_lectura_que_quedo_trabajando(sesion):
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura/detener", follow_redirects=False)
     assert "Trabajo detenido" in __import__("urllib.parse").parse.unquote(r.headers["location"])
     assert lectura.estado(sesion, 1)["estado"] == "detenida"
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     assert "Generar de nuevo" in pagina and "disabled" not in pagina.split("Generar de nuevo")[0].rsplit("<button", 1)[1]
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura/detener", follow_redirects=False)
     assert "no estaba trabajando" in __import__("urllib.parse").parse.unquote(r.headers["location"])
@@ -409,8 +438,8 @@ def test_la_pagina_de_la_sesion_genera_y_permite_descargar(sesion, monkeypatch):
     servidor_hilos = [h for h in __import__("threading").enumerate() if h.daemon]
     for hilo in servidor_hilos:
         hilo.join(timeout=60)
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
-    assert "Verificada" in pagina and "S1_Lectura.docx" in pagina
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    assert "Para aprobar</span>" in pagina and "S1_Lectura.docx" in pagina
     descarga = cliente.get("/cursos/scrum/sesiones/1/descargar/S1_Lectura.docx")
     assert descarga.status_code == 200 and descarga.content[:2] == b"PK"
     assert cliente.get("/cursos/scrum/sesiones/1/descargar/..%5C..%5Cficha_del_curso.json").status_code == 404
@@ -422,9 +451,9 @@ def test_sin_fichas_el_boton_esta_desactivado(entorno):
     carpeta = entorno["cursos"] / "otro"
     almacen.guardar(carpeta, "curso", None, datos.ficha("curso", datos.CURSO))
     flujo.confirmar_curso(carpeta)
-    pagina = cliente.get("/cursos/otro/sesiones/1").text
-    assert "falta confirmar las fichas" in pagina
-    assert re.search(r"<button type=\"submit\"\s+disabled>", pagina)
+    pagina = cliente.get("/cursos/otro/sesiones/1/materiales/lectura").text
+    assert "Falta confirmar las fichas" in pagina
+    assert re.search(r"<button type=\"submit\"\s+disabled[\s>]", pagina)
 
 
 def test_una_configuracion_rota_se_detecta_antes_de_gastar_tokens(sesion):
@@ -492,8 +521,8 @@ def test_sin_bloques_la_lectura_no_empieza_y_la_pagina_dice_que_falta(sesion):
     almacen.guardar(sesion, "sesion", 1, ficha)          # la ficha sigue confirmada
     with pytest.raises(lectura.NoSePuedeEmpezar, match="La lectura necesita de 2 a 4 bloques"):
         asyncio.run(lectura.generar(sesion, "scrum", 1, consulta=consulta_en_secuencia()))
-    pagina = cliente.get("/cursos/scrum/sesiones/1").text
-    assert "Para generar la lectura, completa en la" in pagina and "La lectura necesita de 2 a 4 bloques, o un material de referencia." in pagina
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    assert "Antes de generar la lectura:" in pagina and "La lectura necesita de 2 a 4 bloques, o un material de referencia." in pagina
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura", follow_redirects=True)
     assert "Falta en la ficha de la sesión: La lectura necesita de 2 a 4 bloques, o un material de referencia." in r.text
     assert lectura.estado(sesion, 1).get("estado") is None   # no empezó: no gastó tokens
@@ -620,3 +649,40 @@ def test_generar_borra_los_restos_de_la_generacion_anterior(sesion):
     assert not rutas["revision"].exists()
     assert not (rutas["contenido"].parent / "pasada1.json").exists()
     assert not rutas["explicaciones"].exists() or json.loads(rutas["explicaciones"].read_text(encoding="utf-8")) != {"x": "y"}
+
+
+def test_con_referencia_las_paginas_van_en_el_pedido_y_la_redaccion_no_busca(sesion):
+    ficha = almacen.cargar(sesion, "sesion", 1)
+    almacen.aplicar_formulario(ficha, {"sesion.referencia": "silabo.pdf: página 1"})
+    ficha["confirmada"] = True
+    almacen.guardar(sesion, "sesion", 1, ficha)
+    _, consulta = generar(sesion, LIMPIA)
+    redaccion = consulta.llamadas[0]
+    assert "[silabo.pdf · página 1] Scrum Master con IA" in redaccion["prompt"]
+    assert "busca con Grep" not in redaccion["prompt"]
+    assert redaccion["options"].tools == [] and not redaccion["options"].allowed_tools
+    # Sin referencia, la redacción sigue buscando en las fuentes con herramientas.
+    almacen.aplicar_formulario(ficha, {"sesion.referencia": ""})
+    ficha["confirmada"] = True
+    almacen.guardar(sesion, "sesion", 1, ficha)
+    _, consulta = generar(sesion, LIMPIA)
+    assert "busca con Grep" in consulta.llamadas[0]["prompt"] and "Read" in consulta.llamadas[0]["options"].allowed_tools
+
+
+# ---------- Reanudar desde lo guardado (PLAN.md §0, decisión 40) ----------
+
+def test_la_lectura_se_reanuda_desde_lo_guardado_sin_redactar_de_nuevo(sesion):
+    generar(sesion, LIMPIA)
+    guardado = lectura._leer_json(lectura.archivos(sesion, 1)["contenido"])
+    assert not lectura.se_puede_reanudar(sesion, 1)          # quedó bien: no hay nada que reanudar
+    lectura._actualizar(sesion, 1, estado="con fallas")
+    assert lectura.se_puede_reanudar(sesion, 1)
+    consulta = consulta_en_secuencia(SIN_ERRORES)
+    material = asyncio.run(lectura.reanudar(sesion, "scrum", 1, consulta=consulta, contar_paginas=una_pagina))
+    assert material["estado"] == "verificada", material.get("problemas")
+    assert len(consulta.llamadas) == 1                       # solo la revisión del contenido
+    assert lectura._leer_json(lectura.archivos(sesion, 1)["contenido"]) == guardado
+    no_pude = {s["clave"]: s["lineas"] for s in material["entrega"]["secciones"]}["no_pude"]
+    assert any("Reanudé desde lo generado el" in l and "decisión 40" in l for l in no_pude)
+    lectura._actualizar(sesion, 1, estado="con fallas", desactualizado=True)
+    assert not lectura.se_puede_reanudar(sesion, 1)          # las fichas cambiaron: hay que generar de nuevo

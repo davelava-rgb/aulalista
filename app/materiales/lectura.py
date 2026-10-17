@@ -59,13 +59,15 @@ def carpeta_materiales(carpeta_curso: Path, sesion: int) -> Path:
 
 def archivos(carpeta_curso: Path, sesion: int) -> dict[str, Path]:
     carpeta = carpeta_materiales(carpeta_curso, sesion)
+    trabajo = carpeta / comun.TRABAJO / "lectura"  # lo que usa AulaLista; en materiales/ queda solo lo del profesor
     return {
         "word": carpeta / f"S{sesion}_Lectura.docx",
         "excel": carpeta / f"S{sesion}_Lectura_Verificacion.xlsx",
-        "entrega": carpeta / f"S{sesion}_Lectura_Entrega.md",
-        "revision": carpeta / "lectura" / "revisor",
-        "contenido": carpeta / "lectura" / "contenido.json",
-        "explicaciones": carpeta / "lectura" / "explicaciones.json",
+        "verificacion_json": trabajo / "verificacion.json",
+        "revision": trabajo / "revisor",
+        "contenido": trabajo / "contenido.json",
+        "explicaciones": trabajo / "explicaciones.json",
+        "sistema": trabajo / "sistema_correccion.txt",
     }
 
 
@@ -91,8 +93,8 @@ def _referencia(carpeta_curso: Path, sesion: int) -> tuple[list[referencia.Tramo
     return referencia.interpretar(carpeta_curso, ficha)[0], referencia.exclusiones(ficha)
 
 
-def _contexto(carpeta_curso: Path, sesion: int) -> str:
-    ficha_curso = almacen.ruta_ficha(carpeta_curso, "curso", extension=".md").read_text(encoding="utf-8")
+def _contexto(carpeta_curso: Path, sesion: int, paginas: list[str] | None = None) -> str:
+    ficha_curso = almacen.texto_para_materiales(carpeta_curso, "curso")
     ficha_sesion = almacen.ruta_ficha(carpeta_curso, "sesion", sesion, ".md").read_text(encoding="utf-8")
     fuentes = verificacion.fuentes_utilizables(carpeta_curso)
     tramos, excluir = _referencia(carpeta_curso, sesion)
@@ -110,9 +112,11 @@ def _contexto(carpeta_curso: Path, sesion: int) -> str:
         "",
         "FICHA DEL CURSO (confirmada):", ficha_curso,
         "FICHA DE LA SESIÓN (confirmada):", ficha_sesion,
+        estilo.guia_de_tono(carpeta_curso),
         "FUENTES DEL CURSO que puedes citar (archivos .jsonl de esta carpeta, un pasaje por línea con su ubicación):",
         *([f"- {f}" for f in fuentes] or ["- (ninguna: no cites fuentes)"]),
         *lineas_referencia,
+        *(referencia.texto_de_paginas(paginas) if paginas else []),
     ])
 
 
@@ -139,7 +143,8 @@ CÓMO ENTREGAR LA LECTURA
 - agrupacion: si hubo más temas que bloques, cómo los agrupaste. Si no, texto vacío.
 {extension}
 - Una idea por oración.
-- Usa los nombres del vocabulario de la sesión tal cual y en su orden. No uses sus variantes.
+- Usa los nombres del vocabulario de la sesión tal cual. No uses sus variantes como nombre del concepto.
+  Un término que la fuente usa con su sentido sí se puede usar (PLAN.md §0, decisión 31).
 - Usa comillas solo para copiar texto tal cual de una fuente.
 - Si agrupas, resumes o cambias el orden de lo que dice una fuente, escribe «en este curso».
 - Para afirmar algo de una fuente, apóyate en su pasaje: di lo mismo, con sus palabras o con otras más claras.
@@ -147,12 +152,15 @@ CÓMO ENTREGAR LA LECTURA
 """
 
 SIN_REFERENCIA = {
-    "bloques": "- bloques: de 2 a 4, en el orden de la ficha de la sesión. Cada uno con subtítulo, párrafos breves y un ejemplo.",
+    "bloques": ("- bloques: de 2 a 4, en el orden de la ficha de la sesión. Cada uno con subtítulo, párrafos breves y un ejemplo.\n"
+                "  Dentro de cada bloque, los temas van en el orden de la fuente."),
     "extension": f"- Unas {PALABRAS_MAX} palabras como máximo en total, para no pasar de seis páginas con portada.",
 }
 CON_REFERENCIA = {
     "bloques": ("- bloques: si la ficha de la sesión trae bloques, síguelos en su orden. Si no, agrupa los temas del\n"
                 "  material de referencia en bloques, en el orden de la referencia, y explica la agrupación en «agrupacion».\n"
+                "  Dentro de cada bloque, los temas van en el orden de la fuente. Si la ficha ordena distinto que la fuente,\n"
+                "  sigue la fuente y anótalo como «decisión».\n"
                 "  Cada bloque con subtítulo, párrafos breves y un ejemplo."),
     "extension": ("- Cubre todos los temas del material de referencia, menos las exclusiones. No hay un máximo de páginas:\n"
                   "  la extensión sale de esos temas. Explica cada tema con lo necesario para entenderlo y aplicarlo, sin relleno.\n"
@@ -171,13 +179,16 @@ def _formato(carpeta_curso: Path, sesion: int) -> str:
 # Los pedidos empiezan siempre con la misma parte fija (reglas, fichas y formato) y terminan con lo que
 # cambia. Claude guarda unos minutos el comienzo de cada pedido y releerlo cuesta un 10 %.
 
-def pedido_de_redaccion(carpeta_curso: Path, sesion: int) -> str:
+def pedido_de_redaccion(carpeta_curso: Path, sesion: int, paginas: list[str] | None = None) -> str:
+    buscar = (["Las páginas del material de referencia están arriba, ya copiadas. Toma de ahí los pasajes que uses, con",
+               "su fuente y su ubicación tal cual. No uses las exclusiones."] if paginas else
+              ["Antes de redactar, busca con Grep en las fuentes y lee con Read los pasajes que vas a usar.",
+               "Si la sesión tiene material de referencia, lee sus páginas y no uses las exclusiones."])
     return "\n".join([
-        _contexto(carpeta_curso, sesion),
+        _contexto(carpeta_curso, sesion, paginas),
         _formato(carpeta_curso, sesion),
         "TAREA: redacta la lectura de la sesión. Actúa como diseñador instruccional y editor senior.",
-        "Antes de redactar, busca con Grep en las fuentes y lee con Read los pasajes que vas a usar.",
-        "Si la sesión tiene material de referencia, lee sus páginas y no uses las exclusiones.",
+        *buscar,
         "Redacta a partir de esos pasajes, no de memoria. No afirmes sobre el contenido de una fuente nada que no esté en un pasaje copiado.",
         "Antes de entregar, revisa cada bloque: qué puede hacer el alumno con él y qué oración tiene dos lecturas.",
         "Define cada término la primera vez que aparece. Corrige lo que falle.",
@@ -187,12 +198,15 @@ def pedido_de_redaccion(carpeta_curso: Path, sesion: int) -> str:
 REGLAS_DE_CORRECCION = comun.REGLAS_DE_CORRECCION
 
 
-def pedido_de_cambios(carpeta_curso: Path, sesion: int, contenido: dict, problemas: list[str]) -> str:
+def sistema_de_correccion(carpeta_curso: Path, sesion: int) -> str:
+    """El mensaje de sistema de todas las correcciones: igual en cada una, se lee de caché (decisión 43)."""
+    return "\n".join([_contexto(carpeta_curso, sesion), _formato(carpeta_curso, sesion), REGLAS_DE_CORRECCION])
+
+
+def pedido_de_cambios(contenido: dict, problemas: list[str]) -> str:
     """Corrección barata: devuelve solo las oraciones que cambian."""
     return "\n".join([
-        _contexto(carpeta_curso, sesion),
-        _formato(carpeta_curso, sesion),
-        REGLAS_DE_CORRECCION,
+        "Corrige el material según el contexto, el formato y las reglas de tus instrucciones.",
         "CÓMO ENTREGAR LA CORRECCIÓN",
         "- En «cambios», una entrada por oración que cambias: «oracion» copiada tal cual de la lectura y «nueva» con el texto nuevo.",
         "- Para eliminar una oración, deja «nueva» vacío. No devuelvas las oraciones que no cambian.",
@@ -205,12 +219,10 @@ def pedido_de_cambios(carpeta_curso: Path, sesion: int, contenido: dict, problem
     ])
 
 
-def pedido_de_correccion(carpeta_curso: Path, sesion: int, contenido: dict, problemas: list[str]) -> str:
+def pedido_de_correccion(contenido: dict, problemas: list[str]) -> str:
     """Corrección completa: solo para problemas de estructura o de extensión, que no son de una oración."""
     return "\n".join([
-        _contexto(carpeta_curso, sesion),
-        _formato(carpeta_curso, sesion),
-        REGLAS_DE_CORRECCION,
+        "Corrige el material según el contexto, el formato y las reglas de tus instrucciones.",
         "Devuelve la lectura completa con el mismo esquema.",
         "",
         "LECTURA ACTUAL:",
@@ -246,21 +258,46 @@ def _portada(carpeta_curso: Path, sesion: int) -> docx.Portada:
         sesion=titulo if titulo.lower().startswith("sesión") else f"Sesión {titulo}",
         material=MATERIAL,
         docente=almacen.valor(ficha_curso, "portada.docente").strip(),
+        contacto=almacen.valor(ficha_curso, "portada.contacto").strip(),
     )
 
 
-async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.query, contar_paginas=None) -> dict:
+def se_puede_reanudar(carpeta_curso: Path, sesion: int) -> bool:
+    """Decisión 40: hay contenido guardado de una generación que no terminó bien, y las fichas no cambiaron."""
+    material = estado(carpeta_curso, sesion)
+    return (material.get("estado") in ("con fallas", "detenida", "error") and not material.get("desactualizado")
+            and archivos(carpeta_curso, sesion)["contenido"].exists() and almacen.puede_empezar_material(carpeta_curso, sesion)
+            and not almacen.faltantes_para(carpeta_curso, sesion, CLAVE))
+
+
+async def reanudar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.query, **opciones) -> dict:
+    """Sigue desde el contenido guardado, sin repetir la redacción ni sus correcciones (PLAN.md §0, decisión 40)."""
+    if not se_puede_reanudar(carpeta_curso, sesion):
+        raise NoSePuedeEmpezar("No se puede reanudar la lectura: no hay un trabajo guardado que siga a las fichas de ahora. "
+                               "Genérala de nuevo.")
+    return await generar(carpeta_curso, curso, sesion, consulta, desde_guardado=True, **opciones)
+
+
+def _guardado(carpeta_curso: Path, sesion: int, rutas: dict) -> dict:
+    return {"datos": _leer_json(rutas["contenido"]),
+            "explicaciones": _leer_json(rutas["explicaciones"]) if rutas["explicaciones"].exists() else {},
+            "fecha": _estado(carpeta_curso, sesion).get("fecha", "")}
+
+
+async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.query, contar_paginas=None,
+                  desde_guardado: bool = False) -> dict:
     if not almacen.puede_empezar_material(carpeta_curso, sesion):
-        raise NoSePuedeEmpezar("Confirma la ficha del curso y la ficha de la sesión antes de generar la lectura.")
+        raise NoSePuedeEmpezar("Guarda completas la ficha del curso y la ficha de la sesión antes de generar la lectura: así quedan confirmadas.")
     faltan = almacen.faltantes_para(carpeta_curso, sesion, CLAVE)
     if faltan:
         raise NoSePuedeEmpezar("Completa la ficha de la sesión antes de generar la lectura: " + " ".join(faltan))
     rutas = archivos(carpeta_curso, sesion)
+    guardado = _guardado(carpeta_curso, sesion, rutas) if desde_guardado else None
     rutas["contenido"].parent.mkdir(parents=True, exist_ok=True)
     _actualizar(carpeta_curso, sesion, estado="trabajando", previo="", avance=[], error="", desactualizado=False,
                 entrega={}, aprobada="", revisor={}, corrida_desde=tokens.lineas(curso))
     try:
-        return await _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas)
+        return await _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas, guardado)
     except asyncio.CancelledError:
         marcar_detenida(carpeta_curso, sesion)
         raise
@@ -358,7 +395,8 @@ class _Trabajo:
                 configuracion = verificador.configuracion_del_material(self.carpeta_sesion, MATERIAL, limites=self.limites)
                 docx.generar_lectura(contenido, self.identidad, self.portada, self.rutas["word"])
                 self.resultado = verificador.ejecutar(configuracion, [self.rutas["word"]], self.rutas["excel"],
-                                                      self.explicaciones, self.contar_paginas)
+                                                      self.explicaciones, self.contar_paginas,
+                                                      salida_json=self.rutas["verificacion_json"])
                 if self.con_referencia:
                     self.contar_paginas(self.rutas["word"])   # sin límite, pero la entrega dice cuántas son
                 if _explicar_literales(self.resultado, self.explicaciones, self.corpus()):
@@ -395,17 +433,18 @@ class _Trabajo:
 
     async def corregir(self, problemas: list[str], completa: bool) -> None:
         vuelta = self.vuelta
+        sistema = comun.escribir_sistema(self.rutas["sistema"], sistema_de_correccion(self.carpeta_curso, self.sesion))
         if completa:
             self.avance(f"Corrigiendo la lectura completa: {len(problemas)} problemas.")
-            respuesta = await agente.consultar(pedido_de_correccion(self.carpeta_curso, self.sesion, self.datos, problemas),
+            respuesta = await agente.consultar(pedido_de_correccion(self.datos, problemas),
                                                tarea="correccion", esquema=ESQUEMA_CORRECCION,
-                                               etapa=f"corrección completa {vuelta}", **self.comun)
+                                               etapa=f"corrección completa {vuelta}", sistema=sistema, **self.comun)
             self.datos = respuesta["lectura"]
         else:
             self.avance(f"Corrigiendo {_cuantos(len(problemas), 'problema')}.")
-            respuesta = await agente.consultar(pedido_de_cambios(self.carpeta_curso, self.sesion, self.datos, problemas),
+            respuesta = await agente.consultar(pedido_de_cambios(self.datos, problemas),
                                                tarea="correccion_oraciones", esquema=ESQUEMA_CAMBIOS,
-                                               etapa=f"corrección {vuelta}", **self.comun)
+                                               etapa=f"corrección {vuelta}", sistema=sistema, **self.comun)
             self.datos, no_encontradas = aplicar_cambios(self.datos, respuesta["cambios"])
             if no_encontradas:
                 self.avance(f"{_cuantos(len(no_encontradas), 'oración')} a cambiar no se encontraron en la lectura.")
@@ -424,8 +463,8 @@ def _limpiar(rutas: dict[str, Path]) -> None:
     """Borra lo que dejó la generación anterior, para que la carpeta muestre solo la lectura nueva (propuesta 6).
     Un archivo abierto en Word u OneDrive puede negar el borrado: se deja y la generación lo reescribe."""
     carpeta = rutas["contenido"].parent
-    for ruta in (rutas["word"], rutas["excel"], rutas["excel"].with_suffix(".json"), rutas["entrega"],
-                 rutas["contenido"], rutas["explicaciones"], carpeta / "pasada1.json"):
+    for ruta in (rutas["word"], rutas["excel"], rutas["verificacion_json"], rutas["contenido"],
+                 rutas["explicaciones"], carpeta / "pasada1.json"):
         try:
             ruta.unlink(missing_ok=True)
         except OSError:
@@ -433,7 +472,7 @@ def _limpiar(rutas: dict[str, Path]) -> None:
     shutil.rmtree(rutas["revision"], ignore_errors=True)
 
 
-async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas) -> dict:
+async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas, guardado=None) -> dict:
     inicio = tokens.lineas(curso)   # para sumar solo lo que gasta esta generación
     # Antes de gastar tokens: la skill tiene todo lo que se usará y la configuración del verificador se lee.
     skill.comprobar(secciones=SECCIONES_DE_LA_SKILL + pasada2.SECCIONES_DE_LA_SKILL + revisor.SECCIONES_DE_LA_SKILL,
@@ -443,9 +482,18 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
     verificador.verificar.leer_configuracion(configuracion)
     _limpiar(rutas)
 
-    trabajo.avance("Leyendo las fuentes y redactando la lectura.")
-    trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion), tarea="redaccion",
-                                           esquema=ESQUEMA_LECTURA, etapa="redacción", **trabajo.comun)
+    if guardado is not None:
+        # Decisión 40: el contenido ya redactado y corregido la vez anterior; no se pide de nuevo.
+        trabajo.datos, trabajo.explicaciones = guardado["datos"], guardado["explicaciones"]
+        trabajo.avance(f"Reanudo desde lo generado el {guardado['fecha'][:16].replace('T', ' ')}: "
+                       "no repito la redacción ni sus correcciones.")
+    else:
+        trabajo.avance("Leyendo las fuentes y redactando la lectura.")
+        # Con material de referencia, sus páginas van en el pedido y la redacción no necesita herramientas.
+        paginas = referencia.paginas(carpeta_curso, almacen.cargar(carpeta_curso, "sesion", sesion))
+        opciones = trabajo.comun if paginas is None else {**trabajo.comun, "cwd": None, "herramientas": ()}
+        trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion, paginas), tarea="redaccion",
+                                               esquema=ESQUEMA_LECTURA, etapa="redacción", **opciones)
 
     # Primera pasada: el verificador. La IA solo revisa una lectura sin fallas mecánicas (SPEC §9).
     errores: list[revision.Error] = []
@@ -461,7 +509,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
     sin_fuente = [f"Afirmación sin fuente: {d.texto}" for d in decisiones if d.tipo == "sin fuente"]
     estado_final = "con fallas" if trabajo.fallas else ("con pendientes" if pendientes or sin_fuente else "verificada")
     if trabajo.resultado is not None:
-        excel.solo_hallazgos(rutas["excel"])
+        excel.solo_hallazgos(rutas["excel"], "Sección")
         excel.agregar_historial(rutas["excel"], [
             {**h, "resolucion": f"Enviado a corrección en la vuelta {h['vuelta']}." + ("" if trabajo.fallas else " Resuelto.")}
             for h in trabajo.historial] + _filas_de_revision(errores, trabajo.descartados, rutas["word"].name)
@@ -475,6 +523,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
         revision={"bloques": revisados, "errores": len(errores), "corregidos": sum(e.estado == "corregido" for e in errores),
                   "pendientes": len(pendientes), "descartados": len(trabajo.descartados)},
         datos_agregados=trabajo.datos_agregados,
+        reanudada=guardado["fecha"] if guardado is not None else "",
         avisos_de_diseno=trabajo.identidad.avisos,
         avisos_explicados=sum(1 for h in (trabajo.resultado.hallazgos if trabajo.resultado else [])
                               if h.nivel == "AVISO" and h.regla not in AVISOS_INFORMATIVOS),
@@ -486,7 +535,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
         referencia=[t.describir() for t in trabajo.tramos],
         exclusiones=trabajo.exclusiones,
         agrupacion=(final.agrupacion if final else ""),
-        archivos={"word": rutas["word"].name, "excel": rutas["excel"].name, "entrega": rutas["entrega"].name},
+        archivos={"word": rutas["word"].name, "excel": rutas["excel"].name},
         costo=tokens.total(curso, sesion=f"S{sesion}", material=CLAVE, desde_linea=inicio),
         fecha=datetime.now().isoformat(timespec="seconds"),
     )
@@ -502,10 +551,7 @@ _filas_de_revision, _filas_de_decisiones = comun.filas_de_revision, comun.filas_
 
 
 def _escribir_entrega(carpeta_curso: Path, sesion: int, material: dict) -> dict:
-    material = _actualizar(carpeta_curso, sesion, entrega=_entrega(material))
-    archivos(carpeta_curso, sesion)["entrega"].write_text(
-        entrega.a_markdown(material["entrega"], f"Entrega · {MATERIAL} · Sesión {sesion}"), encoding="utf-8")
-    return material
+    return _actualizar(carpeta_curso, sesion, entrega=_entrega(material))
 
 
 # ---------- Revisor independiente opcional (PLAN.md §0, decisión 22) ----------
@@ -519,7 +565,7 @@ async def revisar_con_revisor(carpeta_curso: Path, curso: str, sesion: int, cons
         raise NoSePuedeRevisar("El revisor independiente revisa una lectura generada y sin fallas del verificador.")
     rutas = archivos(carpeta_curso, sesion)
     contenido = Lectura.model_validate(_leer_json(rutas["contenido"]))
-    oraciones = _leer_json(rutas["excel"].with_suffix(".json"))["oraciones"]
+    oraciones = _leer_json(rutas["verificacion_json"])["oraciones"]
     inicio = tokens.lineas(curso)
     _actualizar(carpeta_curso, sesion, estado="trabajando", previo=previo)
     _avance(carpeta_curso, sesion, "Revisor independiente: una sesión nueva lee la lectura final, las fuentes y las fichas.")
@@ -565,7 +611,6 @@ def _entrega(material: dict) -> dict:
         f"{archivos_['word']}: la lectura" + (f", {paginas} páginas" if paginas else "")
         + f", con {material['bloques']} bloques.",
         f"{archivos_['excel']}: el archivo de verificación, con la hoja Hallazgos.",
-        f"{archivos_['entrega']}: esta entrega, en texto.",
     ]
     if not paginas:
         conte = "No se pudieron contar las páginas con Word."
@@ -582,7 +627,7 @@ def _entrega(material: dict) -> dict:
     valide = [f"Verificador: {material['resumen']}." if material["resumen"] else "El verificador no llegó a correr.",
               *([f"Avisos explicados en la hoja Hallazgos: {material['avisos_explicados']}."]
                 if material.get("avisos_explicados") else []),
-              *([f"Avisos informativos de relleno o palabras imprecisas: {material['avisos_informativos']}. "
+              *([f"Avisos informativos (relleno, palabras imprecisas o términos de la fuente): {material['avisos_informativos']}. "
                  "Están en la hoja Hallazgos; no obligan a corregir."] if material.get("avisos_informativos") else []),
               f"Fallas del verificador corregidas: {c['verificador']}."]
     if r.get("bloques"):
@@ -602,6 +647,9 @@ def _entrega(material: dict) -> dict:
     valide.append(f"Costo de esta lectura: {costo['llamadas']} llamadas, {costo['costo_usd']:.2f} USD estimados.")
 
     no_pude = []
+    if material.get("reanudada"):
+        no_pude.append(f"Reanudé desde lo generado el {material['reanudada'][:16].replace('T', ' ')} "
+                       "(PLAN.md §0, decisión 40). El historial de las vueltas de esa vez no está en el Excel.")
     if not r.get("bloques"):
         no_pude.append("La revisión del contenido no corrió porque quedaron fallas del verificador.")
     if not paginas:

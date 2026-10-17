@@ -396,6 +396,12 @@ class Fuente:
     patron_referencia: re.Pattern | None
     indice: dict[str, str]
 
+    @property
+    def texto_normal(self) -> str:
+        if not hasattr(self, "_texto_normal"):
+            self._texto_normal = normalizar(self.texto_continuo)
+        return self._texto_normal
+
 
 @dataclass
 class Configuracion:
@@ -524,6 +530,7 @@ TIEMPOS_Y_PUNTAJES = [
 EMOJI = re.compile("[\U0001F000-\U0001FAFF☀-➿\U0001F1E6-\U0001F1FF⭐⭕⌚⌛⏩-⏺️]")
 CITA = re.compile(r"«([^»]+)»|“([^”]+)”|\"([^\"]+)\"")
 ARCHIVO = re.compile(r"\bS(\d+)_([EP])(\d+)_([A-Za-z0-9-]+)\.([A-Za-z0-9]{2,5})\b")
+MARCA_DE_FICHA = re.compile(r"\(\s*propuest[oa]s?\s*\)")   # se busca en el texto normalizado
 
 
 def _texto_sin_permitidos(normal: str, permitidos: list[str]) -> str:
@@ -534,6 +541,26 @@ def _texto_sin_permitidos(normal: str, permitidos: list[str]) -> str:
 
 def _dentro_de_cita(texto: str, inicio: int, fin: int) -> bool:
     return any(c.start() <= inicio and fin <= c.end() for c in CITA.finditer(normalizar(texto)))
+
+
+PALABRAS_DE_ENLACE = frozenset("el la los las lo un una unos unas de del al a y e o u en que por para con sin se su "
+                               "sus es son como mas muy este esta estos estas ese esa".split())
+
+
+def _termino_de_la_fuente(texto: str, inicio: int, fin: int, fuentes: list[Fuente]) -> bool:
+    """La variante va junto a la misma palabra con que la usa una fuente del curso («jefe administrador de datos»):
+    es un término de la fuente usado con su sentido, no otro nombre del concepto (PLAN.md §0, decisión 31).
+    Las palabras de enlace («el», «de»…) no cuentan como vecinas."""
+    variante = texto[inicio:fin]
+    antes = [p for p in re.findall(r"\w+", texto[:inicio]) if p not in PALABRAS_DE_ENLACE][-1:]
+    despues = [p for p in re.findall(r"\w+", texto[fin:]) if p not in PALABRAS_DE_ENLACE][:1]
+    if antes and not texto[:inicio].rstrip().endswith(antes[0]):
+        antes = []
+    if despues and not texto[fin:].lstrip().startswith(despues[0]):
+        despues = []
+    tramos = [f"{antes[0]} {variante}"] if antes else []
+    tramos += [f"{variante} {despues[0]}"] if despues else []
+    return any(patron_frase(t).search(f.texto_normal) for t in tramos for f in fuentes)
 
 
 UNIDADES = ["cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez",
@@ -627,6 +654,10 @@ def revisar_oracion(o: Oracion, cfg: Configuracion, hallazgos: list[Hallazgo]) -
             agregar(nivel, regla, f"dice «{m.group(0).strip()}»")
     if EMOJI.search(o.texto):
         agregar(FALLA, "emoji", f"tiene «{EMOJI.search(o.texto).group(0)}»")
+    # La marca «(propuesto)» de la ficha es para el profesor, nunca para el material.
+    m = MARCA_DE_FICHA.search(normal)
+    if m:
+        agregar(FALLA, "marca de la ficha", f"dice «{m.group(0)}»")
 
     for frase in cfg.nunca_se_incluye:
         if patron_frase(frase).search(normal):
@@ -635,7 +666,13 @@ def revisar_oracion(o: Oracion, cfg: Configuracion, hallazgos: list[Hallazgo]) -
     for concepto in cfg.vocabulario:
         sin_concepto = patron_frase(concepto["concepto"]).sub(" ", normal)
         for variante in concepto.get("variantes", []):
-            if patron_frase(variante).search(sin_concepto):
+            m = patron_frase(variante).search(sin_concepto)
+            if not m:
+                continue
+            if _termino_de_la_fuente(sin_concepto, m.start(), m.end(), cfg.fuentes):
+                agregar(AVISO, "término de la fuente",
+                        f"usa «{variante}» como lo usa la fuente; como nombre del concepto vale «{concepto['concepto']}»")
+            else:
                 agregar(FALLA, "variante de un concepto",
                         f"usa «{variante}»; el nombre único es «{concepto['concepto']}»")
 
@@ -729,7 +766,9 @@ def revisar_limites(cfg: Configuracion, ruta: Path, titulos: list[str], datos_pp
             for numero in datos_pptx["sin_notas"]:
                 agregar(FALLA, "notas del profesor", f"la diapositiva {numero} no tiene notas")
 
-    for conteo in limites.get("conteos", []):
+    # Los conteos son de la guía: un archivo de práctica no tiene ejercicios.
+    de_practica = cfg.carpeta_practica is not None and ruta.resolve().parent == cfg.carpeta_practica.resolve()
+    for conteo in [] if de_practica else limites.get("conteos", []):
         patron = re.compile(conteo["patron"], re.I)
         total = sum(1 for t in titulos if patron.search(t))
         if total < conteo.get("min", 0) or total > conteo.get("max", 10**6):

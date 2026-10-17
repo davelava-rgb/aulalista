@@ -10,6 +10,8 @@ Tipos de campo:
 
 from dataclasses import dataclass, field
 
+from app.fichas import controles
+
 MAX_EJERCICIOS = 5
 MAX_PREGUNTAS = 5
 
@@ -61,6 +63,8 @@ FICHA_DEL_CURSO = (
         Seccion("1. Curso", (
             _c("curso.nombre", "Nombre del curso (obligatorio)"),
             _c("curso.idioma", "Idioma del material"),
+            _c("curso.horas", "Horas del curso"),
+            _c("curso.numero_sesiones", "Número de sesiones"),
             _c("curso.sesiones", "Sesiones (obligatorio). Una línea por sesión: número, título y alcance.",
                tipo="lista", dos_puntos=False, vacio=("1.", "2.", "3.")),
         )),
@@ -87,18 +91,19 @@ FICHA_DEL_CURSO = (
             _c("visual.fondos", "Fondos de recuadro"),
             _c("visual.texto", "Color del texto"),
             _c("visual.tipografia", "Tipografía"),
+            _c("visual.estilo", "Estilo (profesional, académico, moderno, corporativo, minimalista o cercano)"),
         )),
         Seccion("6. Portada", (
             _c("portada.docente", "Docente"),
             _c("portada.contacto", "Enlaces o datos de contacto"),
         )),
         Seccion("7. Herramientas", (
+            _c("herramientas.ejercicios", "Herramienta de los ejercicios (ninguna, Excel, IA o Excel e IA)"),
             _c("herramientas.neutral", "¿Material neutral respecto a marcas? (sí o no)"),
             _c("herramientas.cual", "Si no es neutral, herramienta y versión que usan los alumnos"),
             _c("herramientas.adjuntos", "¿La herramienta de los alumnos acepta archivos adjuntos? (sí, no o no sé)"),
         )),
         Seccion("8. Materiales", (
-            _c("materiales.por_sesion", "Materiales por sesión (por defecto, los seis)"),
             _c("materiales.nunca", "Lo que nunca se incluye (por defecto: tiempos, puntajes, objetivos de "
                "aprendizaje, requisitos previos, glosarios, relleno, emojis y lenguaje publicitario)"),
         )),
@@ -143,11 +148,7 @@ FICHA_DE_LA_SESION = (
                 Campo("pregunta_herramienta", "Si la herramienta debe preguntar algo, respuesta exacta del alumno"),
             )),
         )),
-        Seccion("5. Práctica interactiva", (
-            _c("practica.estaciones", "Estaciones (de 5 a 7): nombre y qué decide el alumno en cada una", tipo="lineas"),
-            _c("practica.ultima", "Última estación: qué arma el alumno para su propio trabajo"),
-        )),
-        Seccion("6. Evaluación práctica (PBQ)", (
+        Seccion("5. Evaluación práctica (PBQ)", (
             _c("evaluacion.consulta", "Material que el alumno puede consultar durante la evaluación"),
             _c("evaluacion.entrega", "Forma de entrega de las respuestas"),
             Repetible("pregunta", MAX_PREGUNTAS, (
@@ -158,8 +159,8 @@ FICHA_DE_LA_SESION = (
                 Campo("respuesta", "Respuesta correcta"),
             ), encabezado="- Preguntas (por defecto, 3; repite este bloque por cada una)", sangria="  "),
         )),
-        Seccion("7. Materiales de esta sesión", (
-            _c("materiales.cuales", "Cuáles se producen (por defecto, los seis)"),
+        Seccion("6. Materiales de esta sesión", (
+            _c("materiales.cuales", "Cuáles se producen (por defecto, los cuatro)"),
         )),
     ),
 )
@@ -248,19 +249,23 @@ def renderizar(tipo: str, valores: dict, anotar=lambda campo_id: "") -> str:
     return "\n".join(lineas) + "\n"
 
 
-def vista(tipo: str, campos: dict) -> list[dict]:
-    """Estructura para el formulario de la página: secciones con sus campos y bloques repetidos."""
+def vista(tipo: str, campos: dict, ocultos: tuple[str, ...] = ()) -> list[dict]:
+    """Estructura para el formulario de la página: secciones con sus campos y bloques repetidos.
+    `ocultos`: campos de los bloques repetidos que no se muestran (por ejemplo, «pregunta_herramienta» si el curso
+    no usa IA)."""
     def dato(campo: Campo, campo_id: str, seccion: Seccion, etiqueta: str | None = None) -> dict:
         guardado = campos.get(campo_id) or {}
+        control = controles.vista(campo_id, guardado.get("valor", ""))
         return {
             "id": campo_id,
-            "etiqueta": etiqueta or campo.etiqueta,
+            "etiqueta": (control or {}).get("titulo") or etiqueta or campo.etiqueta,
             "multilinea": campo.tipo in ("lista", "lineas"),
             "obligatorio": campo.obligatorio or seccion.obligatoria,
             "valor": guardado.get("valor", ""),
             "origen": guardado.get("origen", ""),
             "estado": guardado.get("estado", ""),
             "versiones": guardado.get("versiones", []),
+            "control": control,
         }
 
     secciones = []
@@ -272,7 +277,7 @@ def vista(tipo: str, campos: dict) -> list[dict]:
                 for numero in range(1, elemento.maximo + 1):
                     bloques.append({"numero": numero, "campos": [
                         dato(c, f"{elemento.prefijo}.{numero}.{c.id}", seccion, c.etiqueta.replace("[número]", str(numero)))
-                        for c in elemento.campos
+                        for c in elemento.campos if c.id not in ocultos
                     ]})
                 elementos.append({"repetible": True, "nombre": elemento.prefijo, "encabezado": elemento.encabezado.lstrip("- "), "bloques": bloques})
             elif elemento.tipo == "grupo":

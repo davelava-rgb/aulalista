@@ -56,6 +56,8 @@ QUÉ NO ES UN ERROR:
 - Decir lo mismo que la fuente con otras palabras, con sinónimos, en otro orden o en un resumen.
 - Un ejemplo ficticio del caso que no contradice las fichas.
 - Una regla que dice «en este curso»: es del curso, no de una fuente.
+- Seguir la fuente donde una ficha dice otra cosa (un orden, un paso, un dato): la fuente manda sobre las fichas.
+- Un término, una marca o una norma que la fuente nombra, o un tema de otra sesión nombrado en pocas oraciones.
 - El estilo, una preferencia o una mejora posible. Si dudas, no lo reportes.
 
 CÓMO RESPONDER: un elemento por error en «errores». Si no hay errores, devuelve la lista vacía.

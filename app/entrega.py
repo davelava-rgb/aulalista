@@ -22,11 +22,3 @@ def componer(*, archivos: list[str], probe: list[str], valide: list[str], pendie
     secciones = [{"clave": clave, "titulo": TITULOS[clave], "lineas": list(lineas)}
                  for clave, lineas in partes.items() if lineas or clave != "pendientes"]
     return {"secciones": secciones, "pregunta": PREGUNTA}
-
-
-def a_markdown(entrega: dict, titulo: str) -> str:
-    lineas = [f"# {titulo}", ""]
-    for seccion in entrega["secciones"]:
-        lineas += [f"## {seccion['titulo']}", "", *[f"- {l}" for l in seccion["lineas"]], ""]
-    lineas.append(entrega["pregunta"])
-    return "\n".join(lineas) + "\n"

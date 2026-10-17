@@ -1,16 +1,94 @@
-{% extends "base.html" %}
+{% extends "_entorno.html" %}
+{% from "_estado.html" import costo, icono, gasta %}
+{% set terminos = namespace(tokens=false) %}
 
-{% block titulo %}{{ titulo }} · AulaLista{% endblock %}
-{% block ruta %} › <a href="/cursos/{{ curso }}">{{ nombre }}</a> › {{ titulo }}{% endblock %}
+{% block titulo %}{{ titulo }} | AulaLista{% endblock %}
+
+{% macro control(c) %}
+{% set k = c.control %}
+{% if k.tipo == "lista" %}
+  <select id="{{ c.id }}" name="{{ c.id }}" data-otro="{{ c.id }}.otro">
+    {% if k.por_omision %}
+    <option value="" {% if k.elegida == "" %}selected{% endif %}>{{ k.por_omision[:1] | upper }}{{ k.por_omision[1:] }} (por defecto){% if k.descripciones %}: {{ k.descripciones[k.por_omision] }}{% endif %}</option>
+    {% else %}
+    <option value="" {% if k.elegida == "" %}selected{% endif %}>Sin elegir</option>
+    {% endif %}
+    {% for o in k.opciones %}
+    <option value="{{ o }}" {% if k.elegida == o %}selected{% endif %}>{{ o[:1] | upper }}{{ o[1:] }}{% if k.descripciones %}: {{ k.descripciones[o] }}{% endif %}</option>
+    {% endfor %}
+    {% if k.otro %}<option value="__otro" {% if k.es_otro %}selected{% endif %}>Otro…</option>{% endif %}
+  </select>
+  {% if k.otro %}
+  <input type="text" class="texto otro" name="{{ c.id }}.otro" value="{{ c.valor if k.es_otro else '' }}"
+         aria-label="Escribe otra opción" placeholder="Escribe otra opción" {% if not k.es_otro %}hidden{% endif %}>
+  {% endif %}
+{% elif k.tipo == "opciones" %}
+  <div role="radiogroup" aria-labelledby="t-{{ c.id }}" id="{{ c.id }}">
+    {% for valor, texto in k.opciones %}
+    <label class="opcion"><input type="radio" name="{{ c.id }}" value="{{ valor }}" {% if k.elegida == valor %}checked{% endif %}> {{ texto }}</label>
+    {% endfor %}
+  </div>
+{% elif k.tipo == "casillas" %}
+  <input type="hidden" name="{{ c.id }}.casillas" value="1">
+  <div role="group" aria-labelledby="t-{{ c.id }}" id="{{ c.id }}" class="casillas">
+    {% for o in k.opciones %}
+    <label class="opcion"><input type="checkbox" name="{{ c.id }}" value="{{ o }}" {% if o in k.marcadas %}checked{% endif %}> {{ o | capitalize }}</label>
+    {% endfor %}
+  </div>
+  {% if k.otros %}
+  <label class="opcion">Otros <input type="text" class="texto" name="{{ c.id }}.otros" value="{{ k.texto_otros }}"></label>
+  {% endif %}
+{% elif k.tipo == "color" %}
+  {% if k.paletas %}
+  <div class="paletas" role="radiogroup" aria-label="Paletas listas">
+    {% for nombre, p in k.paletas.items() %}
+    <label class="paleta"><input type="radio" name="paleta" value="{{ nombre }}" data-colores='{{ p | tojson }}'>
+      <span class="muestras" aria-hidden="true">{% for clave in ["principal", "acento", "advertencia", "fondo", "texto"] %}<span style="background:#{{ p[clave] }}"></span>{% endfor %}</span>
+      {{ nombre }}</label>
+    {% endfor %}
+    <label class="paleta"><input type="radio" name="paleta" value=""> Personalizada</label>
+  </div>
+  {% endif %}
+  <div class="color">
+    <input type="color" data-para="{{ c.id }}" value="{{ k.hex or '#ffffff' }}" aria-label="Elegir {{ c.etiqueta | lower }}">
+    <input type="text" class="texto" id="{{ c.id }}" name="{{ c.id }}" value="{{ c.valor }}" placeholder="Ejemplo: #0F4C5C">
+  </div>
+{% elif k.tipo == "logo" %}
+  <div class="fila">
+    <input type="text" class="texto" id="{{ c.id }}" name="{{ c.id }}" value="{{ c.valor }}" placeholder="sin logo">
+    <button type="button" class="secundario" data-sin-logo="{{ c.id }}">Sin logo</button>
+  </div>
+  <input type="file" name="{{ c.id }}.archivo" accept=".png,.jpg,.jpeg" aria-label="Subir logo">
+{% elif k.tipo == "archivos" %}
+  <input type="hidden" name="{{ c.id }}.casillas" value="1">
+  <input type="hidden" name="{{ c.id }}" value="{{ c.valor }}">
+  {% if k.archivos %}
+  <ul class="archivos">
+    {% for a in k.archivos %}<li>{{ a }} <label class="opcion"><input type="checkbox" name="{{ c.id }}.quitar" value="{{ a }}"> Quitar</label></li>{% endfor %}
+  </ul>
+  {% endif %}
+  <input type="file" id="{{ c.id }}" name="{{ c.id }}.archivos" accept=".pdf" multiple>
+{% elif k.tipo == "numero" %}
+  <input type="number" class="texto numero" id="{{ c.id }}" name="{{ c.id }}" value="{{ c.valor }}" min="1" step="1" inputmode="numeric">
+{% else %}
+  <textarea id="{{ c.id }}" name="{{ c.id }}" rows="1" class="corto">{{ c.valor }}</textarea>
+{% endif %}
+{% if k.ayuda %}<p class="ayuda">{{ k.ayuda }}</p>{% endif %}
+{% endmacro %}
 
 {% macro campo(c) %}
-<div class="campo{% if c.estado %} estado-{{ c.estado | replace(' ', '-') }}{% endif %}" id="campo-{{ c.id }}">
+<div class="campo{% if c.estado %} estado-{{ c.estado | replace(' ', '-') }}{% endif %}" id="campo-{{ c.id }}"
+     {% if c.control and c.control.depende %}data-depende-de="{{ c.control.depende[0] }}" data-depende-valor="{{ c.control.depende[1] }}"{% endif %}>
+  {% if c.control and c.control.tipo in ("opciones", "casillas") %}
+  <p class="titulo-campo" id="t-{{ c.id }}">{{ c.etiqueta }}</p>
+  {% else %}
   <label for="{{ c.id }}">{{ c.etiqueta }}</label>
+  {% endif %}
   <p class="marcas">
     {% if c.estado == "propuesto" %}<span class="marca">Propuesto</span>{% endif %}
     {% if c.estado == "falta definir" %}<span class="marca alerta">Falta definir</span>{% endif %}
     {% if c.estado == "conflicto" %}<span class="marca alerta">Dos versiones</span>{% endif %}
-    {% if c.origen and c.origen != "profesor" %}<span class="origen">Fuente: {{ c.origen }}</span>{% endif %}
+    {% if c.origen_visible %}<span class="origen">Fuente: {{ c.origen_visible }}</span>{% endif %}
   </p>
   {% if c.estado == "conflicto" %}
   <fieldset class="versiones">
@@ -20,7 +98,9 @@
     {% endfor %}
   </fieldset>
   {% endif %}
-  {% if c.multilinea %}
+  {% if c.control %}
+  {{ control(c) }}
+  {% elif c.multilinea %}
   <textarea id="{{ c.id }}" name="{{ c.id }}" rows="{{ [3, (c.valor.count('\n') + 2)] | max }}">{{ c.valor }}</textarea>
   {% else %}
   <textarea id="{{ c.id }}" name="{{ c.id }}" rows="{{ 1 if c.valor | length < 80 else 3 }}" class="corto">{{ c.valor }}</textarea>
@@ -29,24 +109,39 @@
 {% endmacro %}
 
 {% block contenido %}
+<p class="volver"><a href="/cursos/{{ curso }}">{{ "Volver a las sesiones del curso" if sesion else "Volver al curso" }}</a></p>
+<p class="donde">{{ "Sesión " ~ sesion if sesion else "Preparación del curso" }}</p>
 <h1>{{ titulo }}</h1>
 
 <p class="estado-ficha {{ 'confirmada' if ficha.confirmada else 'pendiente' }}">
-  {% if ficha.confirmada %}Confirmada.{% if desactualizados %} Los materiales {{ desactualizados | join(', ') }} quedaron desactualizados.{% endif %}
-  {% else %}Sin confirmar. Ningún material empieza sin las dos fichas confirmadas.{% endif %}
+  {{ icono('bien' if ficha.confirmada else 'error') }}
+  {% if ficha.confirmada %}Confirmada.{% if desactualizados %} Hay que generar de nuevo {{ desactualizados }}, porque las fichas cambiaron.{% endif %}
+  {% else %}Sin confirmar. Queda confirmada al guardarla completa. Ningún material empieza sin las dos fichas confirmadas.{% endif %}
 </p>
 
 {% if propuesta.estado == "trabajando" %}
-<p class="mensaje" role="status" id="propuesta-en-curso">Leyendo las fuentes y proponiendo la ficha. Puede tardar unos minutos.
-  La página se actualiza sola. No hace falta que hagas nada.</p>
+<div class="mensaje" role="status" id="propuesta-en-curso" data-url="{{ url_propuesta }}">
+  <p>Leyendo las fuentes y proponiendo la ficha. Puede tardar unos minutos. Te aviso aquí cuando termine;
+    la página no se recarga sola.</p>
+</div>
 {% elif propuesta.mensaje and not ficha.confirmada %}
 <p class="mensaje" role="status">{{ propuesta.mensaje }}</p>
 {% endif %}
 
 {% if errores %}
 <section class="mensaje" role="alert">
-  <h2>Antes de confirmar</h2>
+  <h2>Para confirmarla falta</h2>
   <ul>{% for e in errores %}<li>{{ e }}</li>{% endfor %}</ul>
+  {% if corregibles %}
+  <div class="completar">
+    <button type="submit" form="form-ficha" name="accion" value="corregir_ejercicios"
+            {% if propuesta.estado == "trabajando" %}disabled{% endif %}>Corregir los ejercicios</button>
+    <p class="ayuda">AulaLista corrige los ejercicios marcados, los revisa de nuevo y, si cumplen, confirma la ficha.
+      Lo cambiado queda marcado «Propuesto». {{ gasta(terminos) }}. {{ costo(costos.corregir) }}</p>
+  </div>
+  {% else %}
+  <p>Corrige esos campos y guarda de nuevo. Puedes salir de la ficha cuando quieras: lo guardado no se pierde.</p>
+  {% endif %}
 </section>
 {% endif %}
 
@@ -59,16 +154,67 @@
 </section>
 {% endif %}
 
-<form method="post" id="form-ficha">
+{% set total_alertas = secciones | sum(attribute="alertas") %}
+{# Barra fija con las secciones de esta ficha y su estado (decisión 45): el panel dice dónde estás en el curso; esta
+   barra, dónde estás en el formulario. #}
+<nav class="indice" aria-label="Secciones de la ficha">
+  <p class="plegar-todas" hidden><button type="button" class="enlace" data-plegar-todas="1">Plegar todas</button>
+    <button type="button" class="enlace" data-plegar-todas="0">Desplegar todas</button></p>
+  {% if total_alertas %}<p class="titulo-indice alerta">{{ total_alertas }} {{ "campo" if total_alertas == 1 else "campos" }} en «Falta definir» o con dos versiones.</p>{% endif %}
+  <ul>
+    {% for s in secciones %}
+    {% set estado_texto = {"completa": "completa", "vacia": "vacía", "alerta": "con campos por definir", "no_se_usa": "no se usa"}[s.estado] %}
+    <li><a class="pildora estado-{{ s.estado }}" href="#{{ s.ancla }}" title="{{ s.titulo }}"><i aria-hidden="true"></i>{{ s.titulo.split(" (")[0] }}{% if s.estado == "no_se_usa" %}: no se usa{% endif %}<span class="sr">, {{ estado_texto }}</span></a>{% if s.alertas %} <span class="marca alerta">{{ s.alertas }} por definir</span>{% endif %}</li>
+    {% endfor %}
+  </ul>
+</nav>
+
+<form method="post" id="form-ficha" enctype="multipart/form-data"{% if modo_lectura %} class="ficha-lectura"{% endif %}>
   {% for s in secciones %}
-  <section class="seccion">
-    <h2>{{ s.titulo }}</h2>
+  {# Cada sección se dibuja dos veces: un resumen para leer y sus campos para editar (decisión 45). Sin JavaScript
+     se ven solo los campos, como antes. Una sección con alertas se abre siempre en edición. #}
+  {% set leer = modo_lectura and s.estado != "alerta" %}
+  <section class="seccion tarjeta estado-{{ s.estado }}{{ ' leer' if leer }}{{ ' apagada' if s.estado == 'no_se_usa' }}" id="{{ s.ancla }}" aria-labelledby="t-{{ s.ancla }}">
+    <div class="sec-cabeza">
+      <button type="button" class="sec-plegar" aria-expanded="true" aria-controls="cuerpo-{{ s.ancla }}">
+        <span class="sec-flecha" aria-hidden="true"></span><span class="sr">Plegar o desplegar </span></button>
+      <h2 id="t-{{ s.ancla }}">{{ s.titulo }}</h2>
+      {% if s.origen_comun %}<span class="sec-fuente">De {{ s.origen_comun }}</span>{% endif %}
+      <span class="sec-estado estado-{{ s.estado }}">{{ {"completa": "Completa", "vacia": "Vacía", "alerta": "Por definir", "no_se_usa": "No se usa"}[s.estado] }}</span>
+      <button type="button" class="secundario sec-editar" data-editar="{{ s.ancla }}">{{ "Ver lo escrito" if s.estado == "no_se_usa" else "Editar" }}<span class="sr"> {{ s.titulo.split(" (")[0] }}</span></button>
+    </div>
+    <div class="sec-cuerpo" id="cuerpo-{{ s.ancla }}">
+    <div class="sec-resumen">
+      {% if s.estado == "no_se_usa" %}<p class="nota">No se usa: AulaLista no genera la evaluación (decisión 37). Lo escrito se guarda.</p>
+      {% else %}
+      {% if s.resumen %}
+      <dl class="resumen-ficha">
+        {% for r in s.resumen %}<dt{% if r.completa != r.etiqueta %} title="{{ r.completa }}"{% endif %}>{{ r.etiqueta }}</dt><dd>{% if r.valor %}<span>{{ r.valor }}</span>{% else %}<span class="vacio">Ninguno</span>{% endif %}</dd>{% endfor %}
+      </dl>
+      {% endif %}
+      {% if s.filas %}
+      <table class="filas-ficha">
+        <thead><tr><th scope="col">N.º</th><th scope="col">{{ s.filas[0].nombre }}</th><th scope="col"><span class="sr">Acción</span></th></tr></thead>
+        <tbody>
+          {% for f in s.filas %}
+          <tr><td class="num">{{ f.numero }}</td><td><b>{{ f.titulo or "Sin título" }}</b>{% if f.detalle %}<span>{{ f.detalle }}</span>{% endif %}</td>
+            <td class="ed"><button type="button" class="enlace" data-editar="{{ s.ancla }}" data-bloque="bloque-{{ s.ancla }}-{{ f.numero }}">Editar<span class="sr"> {{ f.nombre | lower }} {{ f.numero }}</span></button></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+      {% if s.vacios and s.filas %}<p><button type="button" class="secundario" data-editar="{{ s.ancla }}" data-bloque="vacio">Agregar {{ s.filas[0].nombre | lower }}</button></p>{% endif %}
+      {% endif %}
+    </div>
+    <div class="sec-campos">
+    {% if s.titulo.split(". ", 1)[-1].startswith("Evaluación") %}<p class="mensaje">AulaLista no genera la evaluación (decisión 37). Lo que escribas aquí se guarda, pero no se usa. PBQ quiere decir «Performance Based Question»: una pregunta que se responde haciendo una tarea, no eligiendo una opción.</p>{% endif %}
     {% for e in s.elementos %}
       {% if e.repetible %}
         {% if e.encabezado %}<p class="nota">{{ e.encabezado }}</p>{% endif %}
         {% for b in e.bloques %}
-        <details class="bloque" {% if b.campos | selectattr('valor') | list or b.campos | selectattr('estado') | list or b.numero <= 3 %}open{% endif %}>
-          <summary>{{ 'Ejercicio' if e.nombre == 'ejercicio' else 'Pregunta' }} {{ b.numero }}</summary>
+        <details class="bloque" id="bloque-{{ s.ancla }}-{{ b.numero }}" data-situacion="{{ b.situacion }}" {% if b.situacion == "alerta" or (b.situacion == "vacio" and b.numero <= 3) %}open{% endif %}>
+          <summary>{{ 'Ejercicio' if e.nombre == 'ejercicio' else 'Pregunta' }} {{ b.numero }}
+            <span class="estado-bloque {{ b.situacion }}">{{ {"alerta": "con campos por definir", "lleno": "con datos", "vacio": "vacío"}[b.situacion] }}</span></summary>
           {% for c in b.campos %}{{ campo(c) }}{% endfor %}
         </details>
         {% endfor %}
@@ -79,47 +225,252 @@
         {{ campo(e) }}
       {% endif %}
     {% endfor %}
+    {% set extra = completar.get(s.titulo) %}
+    {% if extra %}
+    <div class="completar">
+      <button type="submit" name="accion" value="completar.{{ extra.clave }}" class="secundario" {% if propuesta.estado == "trabajando" %}disabled{% endif %}>{{ extra.boton }}</button>
+      <p class="ayuda">{{ extra.ayuda }} {{ gasta(terminos) }}. {{ costo(costos["completar." ~ extra.clave]) }}</p>
+    </div>
+    {% endif %}
+    </div>
+    </div>
   </section>
   {% endfor %}
 
   {% set ocupada = propuesta.estado == "trabajando" %}
   <div class="acciones">
     {% if hay_propuestos and not ficha.confirmada %}
-    <button type="submit" name="accion" value="aceptar" {% if ocupada %}disabled{% endif %}>Aceptar lo propuesto y confirmar</button>
+    <button type="submit" name="accion" value="aceptar" {% if ocupada %}disabled{% endif %}>Aceptar lo propuesto y guardar</button>
     {% endif %}
-    <button type="submit" name="accion" value="guardar" {% if hay_propuestos and not ficha.confirmada %}class="secundario"{% endif %} {% if ocupada %}disabled{% endif %}>Guardar</button>
+    <button type="submit" name="accion" value="guardar" id="guardar-ficha" {% if hay_propuestos and not ficha.confirmada %}class="secundario"{% endif %} {% if ocupada %}disabled{% endif %}
+            {% if ficha.confirmada and generados %}data-confirmar="Esta ficha está confirmada. Si guardas el cambio, hay que generar de nuevo {{ generados_texto }}, con gasto de tokens. ¿Guardar?"{% endif %}>Guardar</button>
+    {% if modo_lectura %}<button type="button" class="secundario" id="cancelar-seccion">Cancelar</button>{% endif %}
     <button type="submit" name="accion" value="proponer" class="secundario" {% if ocupada %}disabled{% endif %}>Proponer desde las fuentes</button>
-    <button type="submit" name="accion" value="confirmar" class="secundario" {% if ocupada %}disabled{% endif %}>Confirmar ficha</button>
+    <p class="sin-guardar" id="sin-guardar" role="status" hidden>Hay cambios sin guardar.</p>
+    {% if ficha.confirmada and generados %}
+    <p class="aviso-guardar">Ficha confirmada: guardar un cambio desactualiza {{ generados_texto }}.</p>
+    {% endif %}
   </div>
-  <p class="nota">Con fuentes convertidas, la ficha se propone sola la primera vez que la abres. «Proponer desde las fuentes»
-    solo llena campos vacíos y gasta tokens. «Aceptar lo propuesto y confirmar» guarda lo que corregiste, acepta lo
-    marcado «Propuesto» y confirma.</p>
+  <p class="nota">«Guardar» guarda la ficha y, si está completa, la confirma. «Proponer desde las fuentes» y
+    «Completar» solo llenan campos vacíos y {{ gasta(terminos, "gastan") }}. {{ costo(costos.proponer, "La última propuesta") }}</p>
 </form>
 
 {% if versiones %}
-<section>
-  <h2>Versiones guardadas</h2>
-  <form method="post" action="{{ url_restaurar }}" class="fila">
+<details class="versiones-ficha">
+  <summary>Versiones guardadas: {{ versiones | length }}. Ver o recuperar una versión anterior</summary>
+  <form method="post" action="{{ url_restaurar }}" class="fila"
+        data-confirmar="La ficha vuelve a la versión elegida y lo que ves ahora se reemplaza.{% if ficha.confirmada and generados %} Lo ya generado puede quedar desactualizado.{% endif %} ¿Recuperar esta versión?">
     <label for="version">Versión</label>
     <select id="version" name="version">
-      {% for v in versiones %}<option value="{{ v.archivo }}">{{ v.fecha }} · {{ v.motivo }}</option>{% endfor %}
+      {% for v in versiones %}<option value="{{ v.archivo }}">{{ v.fecha }}, {{ v.motivo }}</option>{% endfor %}
     </select>
     <button type="submit" class="secundario">Recuperar esta versión</button>
   </form>
-</section>
+</details>
 {% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script>
-  // Mientras la ficha se propone sola, la página se actualiza cada 5 segundos.
-  if (document.getElementById("propuesta-en-curso")) {
-    setTimeout(() => location.reload(), 5000);
+  // Mientras la ficha se propone sola, la página pregunta cada 5 segundos si terminó, sin recargarse: el foco y
+  // lo que estés escribiendo no se pierden. Al terminar, avisa y ofrece mostrar la ficha propuesta.
+  const enCurso = document.getElementById("propuesta-en-curso");
+  if (enCurso) {
+    const consultar = async () => {
+      let estado = {};
+      try { estado = await (await fetch(enCurso.dataset.url)).json(); } catch (error) { estado = { estado: "trabajando" }; }
+      if (estado.estado === "trabajando") { setTimeout(consultar, 5000); return; }
+      enCurso.replaceChildren();
+      const texto = document.createElement("p");
+      texto.textContent = (estado.estado === "error" ? "La propuesta se detuvo. " : "La propuesta terminó. ") + (estado.mensaje || "");
+      const boton = document.createElement("button");
+      boton.type = "button";
+      boton.textContent = "Mostrar la ficha propuesta";
+      boton.addEventListener("click", () => location.reload());
+      enCurso.append(texto, boton);
+    };
+    setTimeout(consultar, 5000);
   }
-  document.getElementById("form-ficha").addEventListener("submit", (evento) => {
+  // Controles de la ficha (decisión 27).
+  const formulario = document.getElementById("form-ficha");
+  const COLORES = { principal: "visual.principal", acento: "visual.acento", advertencia: "visual.advertencia",
+                    fondo: "visual.fondos", texto: "visual.texto" };
+  const porId = (id) => document.getElementById(id);
+  const hexDe = (texto) => { const m = /#?\b([0-9a-f]{6})\b/i.exec(texto || ""); return m ? "#" + m[1].toUpperCase() : ""; };
+
+  formulario.querySelectorAll("select[data-otro]").forEach((lista) => {
+    const otro = formulario.querySelector(`[name="${lista.dataset.otro}"]`);
+    if (!otro) return;
+    lista.addEventListener("change", () => { otro.hidden = lista.value !== "__otro"; if (!otro.hidden) otro.focus(); });
+  });
+
+  formulario.querySelectorAll("input[type=color][data-para]").forEach((selector) => {
+    const texto = porId(selector.dataset.para);
+    selector.addEventListener("input", () => { texto.value = selector.value.toUpperCase(); marcarPaleta(); });
+    texto.addEventListener("input", () => { const hex = hexDe(texto.value); if (hex) selector.value = hex; marcarPaleta(); });
+  });
+
+  const paletas = formulario.querySelectorAll("input[name=paleta]");
+  function marcarPaleta() {
+    let elegida = null;
+    paletas.forEach((radio) => {
+      if (!radio.dataset.colores) return;
+      const colores = JSON.parse(radio.dataset.colores);
+      if (Object.entries(COLORES).every(([clave, id]) => hexDe(porId(id).value) === "#" + colores[clave])) elegida = radio;
+    });
+    const hayColores = Object.values(COLORES).some((id) => porId(id).value.trim());
+    paletas.forEach((radio) => { radio.checked = elegida ? radio === elegida : radio.value === "" && hayColores; });
+  }
+  paletas.forEach((radio) => radio.addEventListener("change", () => {
+    if (!radio.dataset.colores) return;
+    const colores = JSON.parse(radio.dataset.colores);
+    Object.entries(COLORES).forEach(([clave, id]) => {
+      porId(id).value = "#" + colores[clave];
+      formulario.querySelector(`input[type=color][data-para="${id}"]`).value = "#" + colores[clave];
+    });
+  }));
+  if (paletas.length) marcarPaleta();
+
+  formulario.querySelectorAll("[data-sin-logo]").forEach((boton) =>
+    boton.addEventListener("click", () => { porId(boton.dataset.sinLogo).value = "sin logo"; }));
+
+  formulario.querySelectorAll("[data-depende-de]").forEach((campo) => {
+    const radios = formulario.querySelectorAll(`input[name="${campo.dataset.dependeDe}"]`);
+    const actualizar = () => {
+      const elegido = [...radios].find((r) => r.checked);
+      campo.hidden = !elegido || elegido.value !== campo.dataset.dependeValor;
+    };
+    radios.forEach((r) => r.addEventListener("change", actualizar));
+    actualizar();
+  });
+
+  // Aviso de cambios sin guardar: junto a los botones y al salir de la página.
+  let sinGuardar = false;
+  const marcarCambio = () => { sinGuardar = true; porId("sin-guardar").hidden = false; };
+  formulario.addEventListener("input", marcarCambio);
+  formulario.addEventListener("change", marcarCambio);
+  window.addEventListener("beforeunload", (evento) => { if (sinGuardar) { evento.preventDefault(); evento.returnValue = ""; } });
+
+  // Secciones plegables: la ficha se recorre sin desplazarse por todos sus campos. Al abrir la página se pliegan las
+  // secciones que no piden nada: en una ficha confirmada, todas; en una sin confirmar, las completas. Sin JavaScript,
+  // todo queda desplegado.
+  const tarjetas = [...formulario.querySelectorAll("section.seccion.tarjeta")];
+  const plegar = (seccion, plegada) => {
+    seccion.classList.toggle("plegada", plegada);
+    seccion.querySelector(".sec-plegar").setAttribute("aria-expanded", String(!plegada));
+  };
+  document.documentElement.classList.add("plegable-js");
+  tarjetas.forEach((seccion) => {
+    const confirmada = formulario.classList.contains("ficha-lectura");
+    plegar(seccion, confirmada ? !seccion.classList.contains("estado-alerta") : seccion.classList.contains("estado-completa"));
+    seccion.querySelector(".sec-plegar").addEventListener("click", () => plegar(seccion, !seccion.classList.contains("plegada")));
+    seccion.querySelector("h2").addEventListener("click", () => plegar(seccion, !seccion.classList.contains("plegada")));
+  });
+  const todas = document.querySelector(".plegar-todas");
+  if (todas) {
+    todas.hidden = false;
+    todas.querySelectorAll("[data-plegar-todas]").forEach((boton) => boton.addEventListener("click", () =>
+      tarjetas.forEach((seccion) => { if (!seccion.classList.contains("editando")) plegar(seccion, boton.dataset.plegarTodas === "1"); })));
+  }
+  // Un enlace del índice despliega la sección a la que lleva.
+  document.querySelectorAll(".indice a.pildora").forEach((a) => a.addEventListener("click", () => {
+    const destino = document.querySelector(a.getAttribute("href"));
+    if (destino) plegar(destino, false);
+  }));
+
+  // Modo de lectura (decisión 45): una ficha confirmada muestra el resumen de cada sección; «Editar» abre una
+  // sección a la vez y «Cancelar» devuelve sus campos a lo guardado. El formulario sigue siendo uno solo.
+  if (formulario.classList.contains("ficha-lectura")) {
+    document.documentElement.classList.add("ficha-js");
+    let abierta = null;
+    const guardar = porId("guardar-ficha");
+    const nombre = (seccion) => seccion.querySelector("h2").textContent.trim();
+    const camposDe = (seccion) => seccion.querySelectorAll(".sec-campos input, .sec-campos textarea, .sec-campos select");
+    const cambio = (el) => el.type === "checkbox" || el.type === "radio" ? el.checked !== el.defaultChecked
+      : el.tagName === "SELECT" ? [...el.options].some((o) => o.selected !== o.defaultSelected)
+      : el.type === "file" ? el.value !== "" : el.value !== el.defaultValue;
+    const conCambios = (seccion) => [...camposDe(seccion)].some(cambio);
+    const marcarIndice = () => document.querySelectorAll(".indice a.pildora").forEach((a) =>
+      a.classList.toggle("actual", !!abierta && a.getAttribute("href") === "#" + abierta.id));
+
+    function cerrar(seccion) {
+      seccion.classList.add("leer");
+      seccion.classList.remove("editando");
+      const editar = seccion.querySelector(".sec-editar");
+      editar.firstChild.textContent = editar.dataset.texto || "Editar";
+      abierta = null;
+      formulario.classList.remove("editando-algo");
+      guardar.textContent = "Guardar";
+      marcarIndice();
+    }
+
+    function abrir(seccion, bloque) {
+      if (abierta && abierta !== seccion) {
+        if (conCambios(abierta)) {
+          window.alert(`Guarda o cancela los cambios de «${nombre(abierta)}» primero.`);
+          abierta.scrollIntoView({ block: "start" });
+          return;
+        }
+        cerrar(abierta);
+      }
+      seccion.classList.remove("leer");
+      seccion.classList.add("editando");
+      plegar(seccion, false);
+      const editar = seccion.querySelector(".sec-editar");
+      editar.dataset.texto = editar.dataset.texto || editar.firstChild.textContent;   // «Editar» o «Ver lo escrito»
+      editar.firstChild.textContent = "Cancelar";
+      abierta = seccion;
+      formulario.classList.add("editando-algo");
+      guardar.textContent = "Guardar esta sección";
+      marcarIndice();
+      let destino = seccion;
+      if (bloque) {
+        const detalle = bloque === "vacio" ? seccion.querySelector('details.bloque[data-situacion="vacio"]') : porId(bloque);
+        if (detalle) { detalle.open = true; destino = detalle; }
+      }
+      destino.scrollIntoView({ block: "start" });
+      const primero = destino.querySelector(".sec-campos textarea, .sec-campos input:not([type=hidden]), .sec-campos select, details.bloque textarea");
+      if (primero) primero.focus({ preventScroll: true });
+    }
+
+    // «Editar» abre la sección; en la sección abierta, el mismo botón dice «Cancelar» y revierte lo cambiado.
+    formulario.querySelectorAll("[data-editar]").forEach((boton) =>
+      boton.addEventListener("click", () => {
+        const seccion = porId(boton.dataset.editar);
+        if (boton.classList.contains("sec-editar") && seccion === abierta) cancelar();
+        else abrir(seccion, boton.dataset.bloque);
+      }));
+
+    porId("cancelar-seccion").addEventListener("click", () => cancelar());
+    function cancelar() {
+      if (!abierta) return;
+      camposDe(abierta).forEach((el) => {
+        if (el.type === "checkbox" || el.type === "radio") el.checked = el.defaultChecked;
+        else if (el.tagName === "SELECT") [...el.options].forEach((o) => { o.selected = o.defaultSelected; });
+        else el.value = el.type === "file" ? "" : el.defaultValue;
+      });
+      // Los campos que dependen de otro y los selectores de color se actualizan con su evento de cambio.
+      camposDe(abierta).forEach((el) => { if (el.type === "radio" || el.type === "color" || el.tagName === "SELECT") el.dispatchEvent(new Event("change", { bubbles: true })); });
+      const seccion = abierta;
+      cerrar(seccion);
+      sinGuardar = false;
+      porId("sin-guardar").hidden = true;
+      seccion.scrollIntoView({ block: "start" });
+    }
+  }
+
+  formulario.addEventListener("submit", (evento) => {
     const boton = evento.submitter;
-    if (boton && boton.value !== "guardar") {
-      boton.textContent = boton.value === "proponer" ? "Leyendo las fuentes… puede tardar" : "Revisando…";
+    // Guardar un cambio en una ficha confirmada deja desactualizado lo ya generado: se pregunta antes.
+    if (boton && boton.dataset.confirmar && sinGuardar && !window.confirm(boton.dataset.confirmar)) {
+      evento.preventDefault();
+      return;
+    }
+    sinGuardar = false;
+    if (boton) {
+      boton.textContent = boton.value === "proponer" ? "Leyendo las fuentes… puede tardar"
+        : boton.value.startsWith("completar.") ? "Completando… puede tardar"
+        : boton.value === "corregir_ejercicios" ? "Corrigiendo… puede tardar" : "Guardando…";
       setTimeout(() => document.querySelectorAll("#form-ficha button").forEach((b) => (b.disabled = true)), 0);
     }
   });

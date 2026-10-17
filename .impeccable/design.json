@@ -1,0 +1,509 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-17T01:54:06.512264+00:00",
+  "title": "Design System: AulaLista",
+  "extensions": {
+    "colorMeta": {
+      "magenta": {
+        "role": "primary",
+        "displayName": "Magenta FuturaSoft",
+        "canonical": "#c537a0",
+        "tonalRamp": [
+          "#3c1131",
+          "#641c51",
+          "#8c2771",
+          "#b33292",
+          "#d260b5",
+          "#e39bd0",
+          "#f1cbe7",
+          "#f9ebf6"
+        ]
+      },
+      "morado-marca": {
+        "role": "accent",
+        "displayName": "Morado FuturaSoft",
+        "canonical": "#1e0253",
+        "tonalRamp": [
+          "#1b024b",
+          "#2d037c",
+          "#3f04ae",
+          "#5105e0",
+          "#7b38fa",
+          "#ac83fc",
+          "#d4befd",
+          "#eee6fe"
+        ]
+      },
+      "gris-marca": {
+        "role": "neutral",
+        "displayName": "Gris de marca",
+        "canonical": "#e9e9e9",
+        "tonalRamp": [
+          "#262626",
+          "#404040",
+          "#595959",
+          "#737373",
+          "#999999",
+          "#bfbfbf",
+          "#dedede",
+          "#f2f2f2"
+        ]
+      },
+      "pizarra": {
+        "role": "neutral",
+        "displayName": "Pizarra",
+        "canonical": "#1f2933",
+        "tonalRamp": [
+          "#1d2630",
+          "#30404f",
+          "#43596f",
+          "#57738f",
+          "#8099b2",
+          "#b0bfcf",
+          "#d6dee6",
+          "#eff2f5"
+        ]
+      },
+      "papel": {
+        "role": "neutral",
+        "displayName": "Papel",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#262626",
+          "#404040",
+          "#595959",
+          "#737373",
+          "#999999",
+          "#bfbfbf",
+          "#dedede",
+          "#f2f2f2"
+        ]
+      },
+      "niebla": {
+        "role": "neutral",
+        "displayName": "Niebla",
+        "canonical": "#f2f4f5",
+        "tonalRamp": [
+          "#21282b",
+          "#374348",
+          "#4e5d65",
+          "#647882",
+          "#8c9da6",
+          "#b7c2c8",
+          "#dadfe2",
+          "#f1f3f4"
+        ]
+      },
+      "borde": {
+        "role": "neutral",
+        "displayName": "Borde",
+        "canonical": "#d5dade",
+        "tonalRamp": [
+          "#22272b",
+          "#384147",
+          "#4f5a64",
+          "#657481",
+          "#8d9aa5",
+          "#b8c0c7",
+          "#dadee2",
+          "#f1f2f4"
+        ]
+      },
+      "verde-aprobado": {
+        "role": "semantic",
+        "displayName": "Verde aprobado",
+        "canonical": "#1e6b3a",
+        "tonalRamp": [
+          "#113c20",
+          "#1c6436",
+          "#278b4c",
+          "#32b361",
+          "#60d289",
+          "#9be3b5",
+          "#cbf0d9",
+          "#ebf9f0"
+        ]
+      },
+      "rojo-correccion": {
+        "role": "semantic",
+        "displayName": "Rojo corrección",
+        "canonical": "#a3261f",
+        "tonalRamp": [
+          "#400f0c",
+          "#6b1914",
+          "#96231d",
+          "#c12d25",
+          "#de5b54",
+          "#eb9894",
+          "#f4cac7",
+          "#fbeaea"
+        ]
+      },
+      "magenta-noche": {
+        "role": "primary",
+        "displayName": "Magenta FuturaSoft (noche)",
+        "canonical": "#cd53ad",
+        "tonalRamp": [
+          "#3b1130",
+          "#631d50",
+          "#8a2871",
+          "#b23491",
+          "#d161b4",
+          "#e29cd0",
+          "#f0cce7",
+          "#f9ebf6"
+        ]
+      },
+      "pizarra-noche": {
+        "role": "neutral",
+        "displayName": "Pizarra (noche)",
+        "canonical": "#e4e7ea",
+        "tonalRamp": [
+          "#21262b",
+          "#384048",
+          "#4e5964",
+          "#647381",
+          "#8c99a6",
+          "#b7bfc7",
+          "#dadee2",
+          "#f1f2f4"
+        ]
+      },
+      "papel-noche": {
+        "role": "neutral",
+        "displayName": "Papel (noche)",
+        "canonical": "#14181b",
+        "tonalRamp": [
+          "#21272c",
+          "#364149",
+          "#4c5b67",
+          "#627584",
+          "#8a9ba8",
+          "#b6c1c9",
+          "#d9dfe3",
+          "#f0f3f4"
+        ]
+      },
+      "niebla-noche": {
+        "role": "neutral",
+        "displayName": "Niebla (noche)",
+        "canonical": "#1f2529",
+        "tonalRamp": [
+          "#21272c",
+          "#374249",
+          "#4d5c66",
+          "#637683",
+          "#8b9ca7",
+          "#b6c1c8",
+          "#d9dfe2",
+          "#f0f3f4"
+        ]
+      },
+      "borde-noche": {
+        "role": "neutral",
+        "displayName": "Borde (noche)",
+        "canonical": "#333b41",
+        "tonalRamp": [
+          "#22272b",
+          "#384147",
+          "#4e5b64",
+          "#657581",
+          "#8d9ba5",
+          "#b8c0c7",
+          "#dadee2",
+          "#f1f2f4"
+        ]
+      },
+      "verde-aprobado-noche": {
+        "role": "semantic",
+        "displayName": "Verde aprobado (noche)",
+        "canonical": "#7fd19b",
+        "tonalRamp": [
+          "#143821",
+          "#225e36",
+          "#2f834c",
+          "#3da962",
+          "#69c98a",
+          "#a1ddb6",
+          "#ceedd9",
+          "#ecf8f0"
+        ]
+      },
+      "rojo-correccion-noche": {
+        "role": "semantic",
+        "displayName": "Rojo corrección (noche)",
+        "canonical": "#f08c84",
+        "tonalRamp": [
+          "#440d08",
+          "#72150e",
+          "#9f1e13",
+          "#cd2619",
+          "#e95549",
+          "#f1958d",
+          "#f8c8c4",
+          "#fceae8"
+        ]
+      },
+      "magenta-suave": {
+        "role": "primary",
+        "displayName": "Magenta suave",
+        "canonical": "#f8e6f3",
+        "tonalRamp": [
+          "#3c1130",
+          "#641c50",
+          "#8b2770",
+          "#b3328f",
+          "#d260b2",
+          "#e39bcf",
+          "#f0cbe6",
+          "#f9ebf5"
+        ]
+      },
+      "magenta-texto": {
+        "role": "primary",
+        "displayName": "Magenta para texto",
+        "canonical": "#9c2a7f",
+        "tonalRamp": [
+          "#3c1031",
+          "#641b52",
+          "#8d2672",
+          "#b53193",
+          "#d45eb6",
+          "#e49bd1",
+          "#f1cbe7",
+          "#faebf6"
+        ]
+      },
+      "verde-suave": {
+        "role": "semantic",
+        "displayName": "Verde suave",
+        "canonical": "#e6f2ea",
+        "tonalRamp": [
+          "#1a3222",
+          "#2c5439",
+          "#3d7550",
+          "#4f9767",
+          "#79b98e",
+          "#abd3b9",
+          "#d3e8da",
+          "#eef6f1"
+        ]
+      },
+      "rojo-suave": {
+        "role": "semantic",
+        "displayName": "Rojo suave",
+        "canonical": "#fbeceb",
+        "tonalRamp": [
+          "#40100d",
+          "#6a1b15",
+          "#95251e",
+          "#bf3026",
+          "#dd5e55",
+          "#ea9a95",
+          "#f4cbc8",
+          "#fbebea"
+        ]
+      },
+      "magenta-suave-noche": {
+        "role": "primary",
+        "displayName": "Magenta suave (noche)",
+        "canonical": "#3a1d33",
+        "tonalRamp": [
+          "#331a2d",
+          "#552b4b",
+          "#773c69",
+          "#994d87",
+          "#bb77ab",
+          "#d4aaca",
+          "#e9d3e4",
+          "#f6eef4"
+        ]
+      },
+      "magenta-texto-noche": {
+        "role": "primary",
+        "displayName": "Magenta para texto (noche)",
+        "canonical": "#e07cc4",
+        "tonalRamp": [
+          "#3e0f31",
+          "#671851",
+          "#902271",
+          "#ba2c92",
+          "#d85ab5",
+          "#e798d1",
+          "#f2c9e7",
+          "#faeaf6"
+        ]
+      },
+      "verde-suave-noche": {
+        "role": "semantic",
+        "displayName": "Verde suave (noche)",
+        "canonical": "#1b3324",
+        "tonalRamp": [
+          "#1a3223",
+          "#2c533b",
+          "#3e7552",
+          "#4f966a",
+          "#7ab891",
+          "#acd3ba",
+          "#d4e8db",
+          "#eef6f1"
+        ]
+      },
+      "rojo-suave-noche": {
+        "role": "semantic",
+        "displayName": "Rojo suave (noche)",
+        "canonical": "#3d1f1d",
+        "tonalRamp": [
+          "#341a19",
+          "#562c29",
+          "#793d3a",
+          "#9c4f4a",
+          "#bd7975",
+          "#d6aba9",
+          "#ead4d2",
+          "#f7eeee"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Título de página",
+        "purpose": "h1 de cada página, en pizarra y negrita."
+      },
+      "title": {
+        "displayName": "Título de sección",
+        "purpose": "h2 de cada sección, en pizarra y negrita."
+      },
+      "body": {
+        "displayName": "Texto",
+        "purpose": "Texto, campos y botones."
+      },
+      "label": {
+        "displayName": "Nota",
+        "purpose": "Ayudas, ubicación sobre el título, costos y avance."
+      }
+    },
+    "shadows": [],
+    "motion": [],
+    "breakpoints": [
+      {
+        "name": "celular",
+        "value": "30rem"
+      },
+      {
+        "name": "angosto",
+        "value": "40rem"
+      },
+      {
+        "name": "sin panel lateral",
+        "value": "52rem"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Botón principal",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "La única acción principal de cada recuadro: Generar, Aprobar, Ir a lo que sigue.",
+      "html": "<button class=\"ds-btn\">Generar diapositivas</button>",
+      "css": ".ds-btn { font-family: Arial, sans-serif; min-height: 44px; padding: 0 1.25rem; border: 0; border-radius: 6px; background: #c537a0; color: #fff; font-size: 1rem; }"
+    },
+    {
+      "name": "Botón secundario",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Acciones que no son la principal: Generar de nuevo, Pedir revisor, Detener.",
+      "html": "<button class=\"ds-btn2\">Pedir revisor independiente</button>",
+      "css": ".ds-btn2 { font-family: Arial, sans-serif; min-height: 44px; padding: 0 1.25rem; border: 1px solid #c537a0; border-radius: 6px; background: #fff; color: #c537a0; font-size: 1rem; }"
+    },
+    {
+      "name": "Campo de texto",
+      "kind": "input",
+      "refersTo": "input-text",
+      "description": "Campos de las fichas, con borde pizarra y anillo de foco magenta.",
+      "html": "<input class=\"ds-in\" value=\"Gestión y gobierno de datos\">",
+      "css": ".ds-in { font-family: Arial, sans-serif; min-height: 44px; padding: 0 .75rem; border: 1px solid #1f2933; border-radius: 6px; font-size: 1rem; } .ds-in:focus { outline: 3px solid #c537a0; outline-offset: 2px; }"
+    },
+    {
+      "name": "Lo que sigue",
+      "kind": "card",
+      "refersTo": "sigue-caja",
+      "description": "La caja de arriba del tablero: el paso pendiente, su motivo y el botón.",
+      "html": "<div class=\"ds-sigue\"><small>Lo que sigue</small><b>Sesión 1: genera la lectura de nuevo.</b><span>La ficha cambió después de generarla: ya no la sigue.</span></div>",
+      "css": ".ds-sigue { font-family: Arial, sans-serif; display: grid; gap: .25rem; padding: 1.25rem 1.5rem; border-left: 6px solid #c537a0; border-radius: 10px; background: #f8e6f3; color: #1f2933; } .ds-sigue small { color: #9c2a7f; font-weight: bold; } .ds-sigue b { font-size: 1.25rem; }"
+    },
+    {
+      "name": "Ficha de material",
+      "kind": "card",
+      "refersTo": "ficha-material",
+      "description": "Cada material en el tablero; cambia de forma según su estado (aprobada, desactualizada, sin generar).",
+      "html": "<div class=\"ds-fm ok\"><b>Laboratorio</b><span>Aprobado el 13 de octubre</span><em>Aprobado</em></div><div class=\"ds-fm mal\"><b>Lectura</b><span>Aprobada el 12 de octubre</span><em>Desactualizada</em></div><div class=\"ds-fm vacia\"><b>Laboratorio</b><span>Todavía no se generó</span><em>Generar</em></div>",
+      "css": ".ds-fm { font-family: Arial, sans-serif; display: inline-grid; gap: .1rem; margin: .25rem; padding: .75rem .875rem; border: 1px solid #d5dade; border-radius: 8px; font-size: .8125rem; } .ds-fm b { font-size: .9375rem; } .ds-fm em { font-style: normal; font-weight: bold; } .ds-fm.ok em { color: #1e6b3a; } .ds-fm.mal { border-color: #a3261f; background: #fbeceb; } .ds-fm.mal em { color: #a3261f; } .ds-fm.vacia { border-style: dashed; background: #f2f4f5; } .ds-fm.vacia em { color: #9c2a7f; }"
+    },
+    {
+      "name": "Sesión en el panel",
+      "kind": "nav",
+      "refersTo": "panel-sesion",
+      "description": "Número, título en una línea y materiales como puntos de color; el siguiente paso con anillo magenta.",
+      "html": "<div class=\"ds-ps\"><b>1 Quién decide sobre los datos</b><span class=\"mal\">Lectura</span><span class=\"mal\">Diapositivas</span><span class=\"ok\">Laboratorio</span></div>",
+      "css": ".ds-ps { font-family: Arial, sans-serif; padding: .5rem 1.25rem; background: #f2f4f5; font-size: .8125rem; } .ds-ps b { display: block; font-size: .9375rem; } .ds-ps span { margin-right: .75rem; } .ds-ps span::before { content: ''; display: inline-block; width: .6rem; height: .6rem; margin-right: .35rem; border-radius: 50%; } .ds-ps .ok::before { background: #1e6b3a; } .ds-ps .mal::before { background: #a3261f; }"
+    },
+    {
+      "name": "Recorrido del material",
+      "kind": "custom",
+      "refersTo": "recorrido",
+      "description": "Generar, Verificar, Revisar y Aprobar: cuatro pasos numerados unidos por una línea.",
+      "html": "<ol class=\"ds-rec\"><li class=\"h\">Generar</li><li class=\"h\">Verificar</li><li class=\"a\">Revisar</li><li>Aprobar</li></ol>",
+      "css": ".ds-rec { font-family: Arial, sans-serif; display: flex; gap: 1.5rem; padding: 0; list-style: none; counter-reset: p; } .ds-rec li { counter-increment: p; font-size: .875rem; } .ds-rec li::before { content: counter(p); display: inline-grid; place-items: center; width: 1.375rem; height: 1.375rem; margin-right: .4rem; border: 1.5px solid #d5dade; border-radius: 50%; font-weight: bold; font-size: .75rem; } .ds-rec .h::before { content: '✓'; background: #1e6b3a; border-color: #1e6b3a; color: #fff; } .ds-rec .a { color: #c537a0; font-weight: bold; } .ds-rec .a::before { border-color: #c537a0; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "El cuaderno del profesor",
+    "overview": "AulaLista se ve como un cuaderno de trabajo ordenado: hojas blancas, tinta oscura, un solo color para lo que se puede tocar y anotaciones al margen que dicen de dónde salió cada dato. Nada compite por la atención; lo importante es el texto y el estado de cada material.\n\nLa densidad es media. Dentro de un curso, la pantalla se divide en dos: a la izquierda, el panel del curso, como el índice del cuaderno; a la derecha, la hoja de trabajo, que se lee de arriba abajo. Cada material se trabaja en su propia hoja, uno a la vez (`PLAN.md` §0, decisión 38). No hay sombras, imágenes ni adornos. La jerarquía sale del tamaño y del peso del título y de recuadros con borde fino.\n\nLa interfaz lleva la marca FuturaSoft (logo y paleta oficiales entregados el 2026-10-15): una cabecera morada con el logo y el magenta como único color de acción. La estructura del cuaderno se mantiene.",
+    "keyCharacteristics": [
+      "Panel del curso a la izquierda y una hoja de trabajo a la derecha, de arriba abajo.",
+      "Un material por hoja, con su recorrido: Generar, Verificar, Revisar y Aprobar.",
+      "Un solo color de acción (magenta) más dos colores de estado (verde y rojo).",
+      "Recuadros planos con borde fino; sin sombras.",
+      "Anotaciones pequeñas de procedencia y costo junto a cada campo o acción.",
+      "Modo claro y oscuro con los mismos papeles de color."
+    ],
+    "rules": [
+      {
+        "name": "La regla de un solo acento",
+        "body": "El magenta es el único color de acción. Verde y rojo solo describen estados; nunca se usan para decorar ni para botones.",
+        "section": "colors"
+      },
+      {
+        "name": "La regla del color con palabra",
+        "body": "Un estado nunca se comunica solo con color: siempre va con su texto (\"Confirmada\", \"Con fallas\").",
+        "section": "colors"
+      },
+      {
+        "name": "La regla de la etiqueta en negrita",
+        "body": "El nombre de cada campo va en negrita sobre el campo; la ayuda va debajo, más pequeña.",
+        "section": "typography"
+      },
+      {
+        "name": "La regla de la hoja plana",
+        "body": "Ningún elemento flota. Si algo necesita destacarse, cambia su borde o su fondo, nunca su sombra.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "usar el magenta solo para lo que se puede tocar y para \"estás aquí\": enlaces, botones, encabezados de tabla, el paso actual y el elemento actual del panel.",
+      "poner junto a cada acción bloqueada una nota que diga qué falta.",
+      "acompañar cada color de estado con su palabra.",
+      "mantener 44px de alto en todo control que se pueda tocar.",
+      "definir cada color nuevo en `:root` y en su versión de noche."
+    ],
+    "donts": [
+      "agregar sombras, degradados ni imágenes decorativas.",
+      "usar verde o rojo en botones o adornos; solo describen estados.",
+      "cambiar Arial por otra fuente mientras el Excel modelo use Arial.",
+      "usar el morado de la marca fuera de la cabecera, ni otro logo que el de `web/estaticos/marca/`.",
+      "usar emojis ni lenguaje publicitario."
+    ]
+  }
+}

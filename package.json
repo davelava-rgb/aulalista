@@ -1,0 +1,12 @@
+{
+  "name": "aulalista-disenador",
+  "private": true,
+  "description": "Paquetes de Node para el agente diseñador de las diapositivas (PLAN.md §0, decisión 32).",
+  "dependencies": {
+    "pptxgenjs": "4.0.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-icons": "5.7.0",
+    "sharp": "0.35.5"
+  }
+}

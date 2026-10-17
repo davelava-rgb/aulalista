@@ -1,0 +1,20 @@
+{# Indicador de estado de un material: color, icono y palabra. El color nunca va solo (DESIGN.md). #}
+{% macro icono(clase) -%}
+<svg class="icono" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+  {% if clase == "bien" %}<circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.5 8.2l2.3 2.3 4.7-4.9" fill="none" stroke="var(--fondo)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  {% elif clase == "error" %}<circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M8 4.2v4.6" stroke="var(--fondo)" stroke-width="1.8" stroke-linecap="round"/><circle cx="8" cy="11.4" r="1.05" fill="var(--fondo)"/>
+  {% elif clase == "espera" %}<circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="8" r="2.6" fill="currentColor"/>
+  {% elif clase == "trabajando" %}<circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z" fill="currentColor"/>
+  {% else %}<circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+  {%- endif %}</svg>
+{%- endmacro %}
+
+{% macro indicador(s) %}<span class="indicador {{ s.clase }}">{{ icono(s.clase) }}{{ s.texto }}</span>{% endmacro %}
+
+{# «Gasta tokens», con la definición la primera vez que aparece en la página (CLAUDE.md: término definido la primera
+   vez). `ns` es un namespace de la página que recuerda si ya se definió. #}
+{% macro gasta(ns, verbo="Gasta") %}{{ verbo }} tokens{% if not ns.tokens %} (la unidad con que se paga el uso de Claude){% set ns.tokens = true %}{% endif %}{% endmacro %}
+
+{# «La última vez gastó 0.42 USD estimados» junto a un botón que gasta. #}
+{% macro usd(valor) %}{{ "menos de 0.01" if valor < 0.01 else "%.2f"|format(valor) }} USD{% endmacro %}
+{% macro costo(c, que="La última vez") %}{% if c %}{{ que }} gastó {{ usd(c.costo_usd) }} estimados ({{ c.llamadas }} {{ "llamada" if c.llamadas == 1 else "llamadas" }}).{% else %}Es la primera vez: todavía no hay con qué estimar el costo.{% endif %}{% endmacro %}

@@ -11,6 +11,7 @@ CURSO = {
     "caso.areas": "Ventas, Almacén, Recursos Humanos y Finanzas",
     "datos.fecha": "lunes 5 de octubre de 2026",
     "datos.fijos": "Duración de cada Sprint: dos semanas\nTienda principal: Sucursal Centro\nLos pedidos se recogen en tienda",
+    "herramientas.ejercicios": "Excel e IA",
     "materiales.nunca": "",
 }
 
@@ -21,8 +22,7 @@ SESION = {
     "lectura.bloque.2": "Pilares de Scrum",
     "lectura.cuidado": "Confundir pilares con valores",
     "vocabulario.conceptos": "1. Manifiesto Ágil (no usar: Agile, manifiesto agile)\n2. Pilares de Scrum\n3. Valores de Scrum",
-    "practica.estaciones": "Estación 1\nEstación 2\nEstación 3\nEstación 4\nEstación 5",
-    "materiales.cuales": "los seis",
+    "materiales.cuales": "los cuatro",
 }
 for _n in (1, 2, 3):
     SESION.update({
