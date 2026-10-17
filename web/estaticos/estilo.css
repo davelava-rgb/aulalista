@@ -284,9 +284,9 @@ h3.alerta { color: var(--error); }
 /* Índice de la ficha: una barra fija arriba de la hoja, con una sección por enlace (decisión 38). */
 .indice { position: sticky; top: 0; z-index: 2; margin: 1rem 0; padding: 0.25rem 0; background: var(--fondo); border-bottom: 1px solid var(--borde); }
 .titulo-indice { margin: 0.25rem 0; font-size: 0.875rem; font-weight: bold; }
-.indice ul { display: flex; gap: 0.25rem 1rem; margin: 0; padding: 0; overflow-x: auto; list-style: none; }
+.indice ul { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.25rem 0; padding: 0; list-style: none; }
 .indice li { flex: none; display: flex; align-items: center; gap: 0.35rem; max-width: none; }
-.indice a { display: inline-flex; align-items: center; min-height: 44px; max-width: 15rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.indice a { display: inline-flex; align-items: center; min-height: 36px; max-width: 18rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .indice .marca { font-size: 0.8125rem; white-space: nowrap; }
 .seccion { scroll-margin-top: 4.5rem; }
 .estado-bloque { margin-left: 0.5rem; font-weight: normal; font-size: 0.875rem; opacity: 0.85; }
@@ -492,3 +492,55 @@ main.hoja .material .cabeza h1 { margin: 0; }
 .situaciones { max-width: 75ch; }
 .situaciones dt { margin-top: 1rem; font-weight: bold; }
 .situaciones dd { margin: 0.25rem 0 0; }
+
+/* Ficha (decisión 45): tarjetas por sección; confirmada, se lee primero y se edita una a la vez. */
+.indice a.pildora { gap: 0.4rem; padding: 0 0.75rem; border: 1px solid var(--borde); border-radius: 999px; color: var(--texto); font-size: 0.875rem; text-decoration: none; }
+.indice a.pildora:hover { border-color: var(--principal); }
+.indice a.pildora i { flex: none; width: 0.55rem; height: 0.55rem; border: 1.5px solid var(--borde); border-radius: 50%; }
+.indice a.estado-completa i { border-color: var(--bien); background: var(--bien); }
+.indice a.estado-alerta i { border-color: var(--error); background: var(--error); }
+.indice a.estado-no_se_usa { border-style: dashed; opacity: 0.8; }
+.indice a.actual { border-color: var(--principal); background: var(--principal-suave); font-weight: bold; }
+
+.seccion.tarjeta { margin-top: 1.5rem; border: 1px solid var(--borde); border-radius: 10px; }
+.sec-cabeza { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--borde); }
+.sec-cabeza h2 { margin: 0; font-size: 1.125rem; }
+.sec-fuente { font-size: 0.8125rem; opacity: 0.85; overflow-wrap: anywhere; }
+.sec-editar { display: none; margin-left: auto; min-height: 40px; }
+.sec-campos { padding: 0.25rem 1.25rem 1rem; }
+.sec-resumen { display: none; padding: 0.5rem 1.25rem 1rem; }
+.seccion.tarjeta.apagada { border-style: dashed; background: var(--suave); }
+.seccion.tarjeta.apagada .sec-cabeza { border-bottom-style: dashed; }
+
+/* Con JavaScript (lo activa la página), una sección «leer» muestra su resumen y esconde sus campos. */
+.ficha-js .seccion.leer .sec-resumen { display: block; }
+.ficha-js .seccion.leer .sec-campos { display: none; }
+.ficha-js .seccion.leer .sec-editar { display: inline-flex; align-items: center; }
+.ficha-js .seccion.editando { border: 2px solid var(--principal); }
+.ficha-js .seccion.editando > .sec-cabeza { background: var(--principal-suave); border-radius: 8px 8px 0 0; }
+
+.resumen-ficha { display: grid; grid-template-columns: minmax(8rem, 13rem) minmax(0, 1fr); margin: 0; }
+.resumen-ficha dt { padding: 0.55rem 1rem 0.55rem 0; border-top: 1px solid var(--suave); font-size: 0.875rem; font-weight: bold; opacity: 0.85; }
+.resumen-ficha dd { margin: 0; padding: 0.55rem 0; border-top: 1px solid var(--suave); }
+.resumen-ficha dt:first-of-type, .resumen-ficha dd:first-of-type { border-top: 0; }
+.resumen-ficha dd span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.resumen-ficha .vacio { font-style: italic; opacity: 0.8; }
+
+.filas-ficha { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
+.filas-ficha th { padding: 0.5rem; text-align: left; font-size: 0.8125rem; border-bottom: 1px solid var(--borde); }
+.filas-ficha td { padding: 0.6rem 0.5rem; border-bottom: 1px solid var(--suave); vertical-align: top; }
+.filas-ficha td.num { width: 2.5rem; font-weight: bold; }
+.filas-ficha td b, .filas-ficha td span { display: block; }
+.filas-ficha td span { font-size: 0.875rem; opacity: 0.85; }
+.filas-ficha td.ed { width: 6rem; text-align: right; }
+button.enlace { min-height: 32px; padding: 0 0.25rem; border: 0; background: none; color: var(--principal); text-decoration: underline; font-size: 0.875rem; }
+
+.versiones-ficha { margin-top: 2rem; }
+.versiones-ficha > summary { min-height: 44px; display: list-item; padding: 0.6rem 0; cursor: pointer; }
+
+@media (max-width: 40rem) {
+  .resumen-ficha { grid-template-columns: minmax(0, 1fr); }
+  .resumen-ficha dt { padding-bottom: 0; }
+  .resumen-ficha dd { border-top: 0; padding-top: 0.15rem; }
+  .indice ul { flex-wrap: nowrap; overflow-x: auto; }
+}

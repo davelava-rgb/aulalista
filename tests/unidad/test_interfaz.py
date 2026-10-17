@@ -433,3 +433,20 @@ def test_los_ejercicios_se_resumen_en_una_fila_cada_uno():
     assert seccion["filas"] == [{"nombre": "Ejercicio", "numero": 1, "situacion": "lleno",
                                  "titulo": "Registro de actas", "detalle": "Revisa cada fila."}]
     assert seccion["vacios"] == 1 and seccion["resumen"] == []
+
+
+def test_la_ficha_confirmada_trae_resumen_y_campos_en_cada_seccion(sesion):  # noqa: F811
+    pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
+    assert '<section class="seccion tarjeta estado-completa leer" id="seccion-1"' in pagina
+    assert '<dl class="resumen-ficha">' in pagina and '<div class="sec-campos">' in pagina
+    assert '<button type="button" class="secundario sec-editar" data-editar="seccion-1">Editar</button>' in pagina
+    assert 'class="pildora estado-completa" href="#seccion-1"' in pagina
+    assert '<table class="filas-ficha">' in pagina and 'data-bloque="bloque-seccion-4-1"' in pagina   # ejercicios
+    assert 'id="bloque-seccion-4-1"' in pagina
+
+
+def test_una_ficha_sin_confirmar_se_abre_en_edicion(sesion):  # noqa: F811
+    ficha = almacen.cargar(sesion, "sesion", 1)
+    almacen.guardar(sesion, "sesion", 1, {**ficha, "confirmada": False})
+    pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
+    assert 'class="seccion tarjeta' in pagina and " leer\"" not in pagina
