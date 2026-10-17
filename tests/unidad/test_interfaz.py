@@ -439,7 +439,7 @@ def test_la_ficha_confirmada_trae_resumen_y_campos_en_cada_seccion(sesion):  # n
     pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
     assert '<section class="seccion tarjeta estado-completa leer" id="seccion-1"' in pagina
     assert '<dl class="resumen-ficha">' in pagina and '<div class="sec-campos">' in pagina
-    assert '<button type="button" class="secundario sec-editar" data-editar="seccion-1">Editar</button>' in pagina
+    assert '<button type="button" class="secundario sec-editar" data-editar="seccion-1">Editar<span class="sr"> 1. Sesión</span></button>' in pagina
     assert 'class="pildora estado-completa" href="#seccion-1"' in pagina
     assert '<table class="filas-ficha">' in pagina and 'data-bloque="bloque-seccion-4-1"' in pagina   # ejercicios
     assert 'id="bloque-seccion-4-1"' in pagina
@@ -450,3 +450,14 @@ def test_una_ficha_sin_confirmar_se_abre_en_edicion(sesion):  # noqa: F811
     almacen.guardar(sesion, "sesion", 1, {**ficha, "confirmada": False})
     pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
     assert 'class="seccion tarjeta' in pagina and " leer\"" not in pagina
+
+
+def test_la_ficha_confirmada_trae_cancelar_y_activa_el_modo_de_lectura(sesion):  # noqa: F811
+    pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
+    assert '<form method="post" id="form-ficha" enctype="multipart/form-data" class="ficha-lectura">' in pagina
+    assert '<button type="button" class="secundario" id="cancelar-seccion">Cancelar</button>' in pagina
+    assert 'id="guardar-ficha"' in pagina and 'document.documentElement.classList.add("ficha-js")' in pagina
+    ficha = almacen.cargar(sesion, "sesion", 1)
+    almacen.guardar(sesion, "sesion", 1, {**ficha, "confirmada": False})
+    pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
+    assert 'class="ficha-lectura"' not in pagina and 'id="cancelar-seccion"' not in pagina

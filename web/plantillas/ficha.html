@@ -166,7 +166,7 @@
   </ul>
 </nav>
 
-<form method="post" id="form-ficha" enctype="multipart/form-data">
+<form method="post" id="form-ficha" enctype="multipart/form-data"{% if modo_lectura %} class="ficha-lectura"{% endif %}>
   {% for s in secciones %}
   {# Cada sección se dibuja dos veces: un resumen para leer y sus campos para editar (decisión 45). Sin JavaScript
      se ven solo los campos, como antes. Una sección con alertas se abre siempre en edición. #}
@@ -175,7 +175,7 @@
     <div class="sec-cabeza">
       <h2 id="t-{{ s.ancla }}">{{ s.titulo }}</h2>
       {% if s.origen_comun %}<span class="sec-fuente">De {{ s.origen_comun }}</span>{% endif %}
-      <button type="button" class="secundario sec-editar" data-editar="{{ s.ancla }}">{{ "Ver lo escrito" if s.estado == "no_se_usa" else "Editar" }}</button>
+      <button type="button" class="secundario sec-editar" data-editar="{{ s.ancla }}">{{ "Ver lo escrito" if s.estado == "no_se_usa" else "Editar" }}<span class="sr"> {{ s.titulo.split(" (")[0] }}</span></button>
     </div>
     <div class="sec-resumen">
       {% if s.estado == "no_se_usa" %}<p class="nota">No se usa: AulaLista no genera la evaluación (decisión 37). Lo escrito se guarda.</p>
@@ -234,8 +234,9 @@
     {% if hay_propuestos and not ficha.confirmada %}
     <button type="submit" name="accion" value="aceptar" {% if ocupada %}disabled{% endif %}>Aceptar lo propuesto y guardar</button>
     {% endif %}
-    <button type="submit" name="accion" value="guardar" {% if hay_propuestos and not ficha.confirmada %}class="secundario"{% endif %} {% if ocupada %}disabled{% endif %}
+    <button type="submit" name="accion" value="guardar" id="guardar-ficha" {% if hay_propuestos and not ficha.confirmada %}class="secundario"{% endif %} {% if ocupada %}disabled{% endif %}
             {% if ficha.confirmada and generados %}data-confirmar="Esta ficha está confirmada. Si guardas el cambio, hay que generar de nuevo {{ generados_texto }}, con gasto de tokens. ¿Guardar?"{% endif %}>Guardar</button>
+    {% if modo_lectura %}<button type="button" class="secundario" id="cancelar-seccion">Cancelar</button>{% endif %}
     <button type="submit" name="accion" value="proponer" class="secundario" {% if ocupada %}disabled{% endif %}>Proponer desde las fuentes</button>
     <p class="sin-guardar" id="sin-guardar" role="status" hidden>Hay cambios sin guardar.</p>
     {% if ficha.confirmada and generados %}
@@ -341,6 +342,75 @@
   formulario.addEventListener("input", marcarCambio);
   formulario.addEventListener("change", marcarCambio);
   window.addEventListener("beforeunload", (evento) => { if (sinGuardar) { evento.preventDefault(); evento.returnValue = ""; } });
+
+  // Modo de lectura (decisión 45): una ficha confirmada muestra el resumen de cada sección; «Editar» abre una
+  // sección a la vez y «Cancelar» devuelve sus campos a lo guardado. El formulario sigue siendo uno solo.
+  if (formulario.classList.contains("ficha-lectura")) {
+    document.documentElement.classList.add("ficha-js");
+    let abierta = null;
+    const guardar = porId("guardar-ficha");
+    const nombre = (seccion) => seccion.querySelector("h2").textContent.trim();
+    const camposDe = (seccion) => seccion.querySelectorAll(".sec-campos input, .sec-campos textarea, .sec-campos select");
+    const cambio = (el) => el.type === "checkbox" || el.type === "radio" ? el.checked !== el.defaultChecked
+      : el.tagName === "SELECT" ? [...el.options].some((o) => o.selected !== o.defaultSelected)
+      : el.type === "file" ? el.value !== "" : el.value !== el.defaultValue;
+    const conCambios = (seccion) => [...camposDe(seccion)].some(cambio);
+    const marcarIndice = () => document.querySelectorAll(".indice a.pildora").forEach((a) =>
+      a.classList.toggle("actual", !!abierta && a.getAttribute("href") === "#" + abierta.id));
+
+    function cerrar(seccion) {
+      seccion.classList.add("leer");
+      seccion.classList.remove("editando");
+      abierta = null;
+      formulario.classList.remove("editando-algo");
+      guardar.textContent = "Guardar";
+      marcarIndice();
+    }
+
+    function abrir(seccion, bloque) {
+      if (abierta && abierta !== seccion) {
+        if (conCambios(abierta)) {
+          window.alert(`Guarda o cancela los cambios de «${nombre(abierta)}» primero.`);
+          abierta.scrollIntoView({ block: "start" });
+          return;
+        }
+        cerrar(abierta);
+      }
+      seccion.classList.remove("leer");
+      seccion.classList.add("editando");
+      abierta = seccion;
+      formulario.classList.add("editando-algo");
+      guardar.textContent = "Guardar esta sección";
+      marcarIndice();
+      let destino = seccion;
+      if (bloque) {
+        const detalle = bloque === "vacio" ? seccion.querySelector('details.bloque[data-situacion="vacio"]') : porId(bloque);
+        if (detalle) { detalle.open = true; destino = detalle; }
+      }
+      destino.scrollIntoView({ block: "start" });
+      const primero = destino.querySelector(".sec-campos textarea, .sec-campos input:not([type=hidden]), .sec-campos select, details.bloque textarea");
+      if (primero) primero.focus({ preventScroll: true });
+    }
+
+    formulario.querySelectorAll("[data-editar]").forEach((boton) =>
+      boton.addEventListener("click", () => abrir(porId(boton.dataset.editar), boton.dataset.bloque)));
+
+    porId("cancelar-seccion").addEventListener("click", () => {
+      if (!abierta) return;
+      camposDe(abierta).forEach((el) => {
+        if (el.type === "checkbox" || el.type === "radio") el.checked = el.defaultChecked;
+        else if (el.tagName === "SELECT") [...el.options].forEach((o) => { o.selected = o.defaultSelected; });
+        else el.value = el.type === "file" ? "" : el.defaultValue;
+      });
+      // Los campos que dependen de otro y los selectores de color se actualizan con su evento de cambio.
+      camposDe(abierta).forEach((el) => { if (el.type === "radio" || el.type === "color" || el.tagName === "SELECT") el.dispatchEvent(new Event("change", { bubbles: true })); });
+      const seccion = abierta;
+      cerrar(seccion);
+      sinGuardar = false;
+      porId("sin-guardar").hidden = true;
+      seccion.scrollIntoView({ block: "start" });
+    });
+  }
 
   formulario.addEventListener("submit", (evento) => {
     const boton = evento.submitter;

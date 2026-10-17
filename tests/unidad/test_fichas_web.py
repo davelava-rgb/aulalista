@@ -207,7 +207,7 @@ def test_mientras_se_propone_los_botones_esperan(curso):
     flujo.marcar_propuesta_en_curso(curso, "curso")
     pagina = cliente.get("/cursos/scrum/ficha").text
     assert 'id="propuesta-en-curso"' in pagina
-    assert 'value="guardar"  disabled' in pagina
+    assert 'value="guardar" id="guardar-ficha"  disabled' in pagina
 
 
 def test_si_la_propuesta_falla_la_pagina_lo_dice(curso, monkeypatch):

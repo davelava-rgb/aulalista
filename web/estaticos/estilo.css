@@ -518,6 +518,11 @@ main.hoja .material .cabeza h1 { margin: 0; }
 .ficha-js .seccion.leer .sec-editar { display: inline-flex; align-items: center; }
 .ficha-js .seccion.editando { border: 2px solid var(--principal); }
 .ficha-js .seccion.editando > .sec-cabeza { background: var(--principal-suave); border-radius: 8px 8px 0 0; }
+/* En modo de lectura, la barra de guardar aparece solo cuando hay una sección abierta. */
+#cancelar-seccion { display: none; }
+.ficha-js .ficha-lectura .acciones { display: none; }
+.ficha-js .ficha-lectura.editando-algo .acciones { display: flex; }
+.ficha-js .ficha-lectura.editando-algo #cancelar-seccion { display: inline-flex; align-items: center; }
 
 .resumen-ficha { display: grid; grid-template-columns: minmax(8rem, 13rem) minmax(0, 1fr); margin: 0; }
 .resumen-ficha dt { padding: 0.55rem 1rem 0.55rem 0; border-top: 1px solid var(--suave); font-size: 0.875rem; font-weight: bold; opacity: 0.85; }
