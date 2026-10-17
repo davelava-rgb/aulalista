@@ -17,4 +17,4 @@
 
 {# «La última vez gastó 0.42 USD estimados» junto a un botón que gasta. #}
 {% macro usd(valor) %}{{ "menos de 0.01" if valor < 0.01 else "%.2f"|format(valor) }} USD{% endmacro %}
-{% macro costo(c, que="La última vez") %}{% if c %}{{ que }} gastó {{ usd(c.costo_usd) }} estimados ({{ c.llamadas }} {{ "llamada" if c.llamadas == 1 else "llamadas" }}).{% else %}Todavía no hay una corrida anterior para estimar el costo.{% endif %}{% endmacro %}
+{% macro costo(c, que="La última vez") %}{% if c %}{{ que }} gastó {{ usd(c.costo_usd) }} estimados ({{ c.llamadas }} {{ "llamada" if c.llamadas == 1 else "llamadas" }}).{% else %}Es la primera vez: todavía no hay con qué estimar el costo.{% endif %}{% endmacro %}

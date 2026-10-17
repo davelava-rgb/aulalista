@@ -72,6 +72,12 @@ def inicio(request: Request, mensaje: str = ""):
     )
 
 
+@app.get("/ayuda")
+def ayuda(request: Request):
+    """Cómo funciona AulaLista: el flujo completo en una página."""
+    return plantillas.TemplateResponse(request, "ayuda.html", {})
+
+
 @app.post("/api/probar-conexion")
 async def probar_conexion():
     try:
@@ -678,7 +684,7 @@ def _tablero(carpeta, curso: str, panel: dict) -> dict:
     if sigue and sigue.get("material"):
         gasto = MATERIALES[sigue["material"]]["modulo"].gasto_de_la_corrida(carpeta, curso, sigue["sesion"])
         if gasto and gasto["llamadas"]:
-            sigue["costo"] = f"La última corrida gastó {gasto['costo_usd']:.2f} USD estimados."
+            sigue["costo"] = f"La última vez gastó {gasto['costo_usd']:.2f} USD estimados."
     sesiones = [{**s, "frase": _frase_de_sesion(s),
                  "materiales": [{**m, "fecha": _fecha(m["aprobada"])} for m in s["materiales"]]}
                 for s in panel["sesiones"]]
@@ -793,7 +799,7 @@ def reanudar_material(curso: str, sesion: int, material: str):
     carpeta = _carpeta(curso)
     destino = _url_material(curso, sesion, material)
     if not hasattr(modulo, "reanudar") or not modulo.se_puede_reanudar(carpeta, sesion):
-        mensaje = "No hay una corrida guardada que se pueda reanudar. Genera el material de nuevo."
+        mensaje = "No hay un trabajo guardado que se pueda reanudar. Genera el material de nuevo."
         return RedirectResponse(destino + "?mensaje=" + quote(mensaje), status_code=303)
     _trabajo_en_segundo_plano(modulo.reanudar, carpeta, curso, sesion, clave=(curso, sesion, material))
     return RedirectResponse(destino, status_code=303)

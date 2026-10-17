@@ -692,9 +692,9 @@ def test_reanudar_sigue_desde_lo_guardado_sin_redactar_de_nuevo(con_lectura):
     assert material["estado"] == "verificada", material.get("problemas")
     assert len(consulta.llamadas) == 1                         # solo la revisión del contenido: no hubo redacción
     assert comun.leer_json(diapositivas.archivos(con_lectura, 1)["contenido"]) == guardado
-    assert any("Reanudo desde lo guardado" in a for a in material["avance"])
+    assert any("Reanudo desde lo generado el" in a for a in material["avance"])
     no_pude = {s["clave"]: s["lineas"] for s in material["entrega"]["secciones"]}["no_pude"]
-    assert any("Reanudé desde lo guardado" in l and "decisión 40" in l for l in no_pude)
+    assert any("Reanudé desde lo generado el" in l and "decisión 40" in l for l in no_pude)
     assert not diapositivas.se_puede_reanudar(con_lectura, 1)   # ya quedó bien: no hay nada que reanudar
 
 
@@ -704,7 +704,7 @@ def test_no_se_reanuda_si_las_fichas_cambiaron(con_lectura):
     assert not diapositivas.se_puede_reanudar(con_lectura, 1)
     assert "Reanudar desde lo guardado" not in cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/diapositivas/reanudar", follow_redirects=False)
-    assert "No hay una corrida guardada que se pueda reanudar" in unquote(r.headers["location"])
+    assert "No hay un trabajo guardado que se pueda reanudar" in unquote(r.headers["location"])
     with pytest.raises(diapositivas.NoSePuedeEmpezar):
         asyncio.run(diapositivas.reanudar(con_lectura, "scrum", 1, consulta=consulta_en_secuencia(),
                                           medir=medir_sin_desbordes, disenar=False))

@@ -986,7 +986,7 @@ async def reanudar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente
                    disenar: bool | None = None) -> dict:
     """Sigue desde el contenido guardado, sin repetir la redacción ni sus correcciones (PLAN.md §0, decisión 40)."""
     if not se_puede_reanudar(carpeta_curso, sesion):
-        raise NoSePuedeEmpezar("No se pueden reanudar las diapositivas: no hay una corrida guardada que siga a las "
+        raise NoSePuedeEmpezar("No se pueden reanudar las diapositivas: no hay un trabajo guardado que siga a las "
                                "fichas y a la lectura de ahora. Genéralas de nuevo.")
     return await generar(carpeta_curso, curso, sesion, consulta, medir, disenar, desde_guardado=True)
 
@@ -1032,7 +1032,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, medir, disenar
     if guardado is not None:
         # Decisión 40: el contenido ya redactado y corregido de la corrida anterior; no se pide de nuevo.
         trabajo.datos, trabajo.explicaciones = guardado["datos"], guardado["explicaciones"]
-        trabajo.avance(f"Reanudo desde lo guardado de la corrida del {guardado['fecha'][:16].replace('T', ' ')}: "
+        trabajo.avance(f"Reanudo desde lo generado el {guardado['fecha'][:16].replace('T', ' ')}: "
                        "no repito la redacción ni sus correcciones.")
     else:
         trabajo.avance("Leyendo la lectura aprobada y preparando las diapositivas.")
@@ -1210,8 +1210,8 @@ def _entrega(material: dict) -> dict:
 
     no_pude = []
     if material.get("reanudada"):
-        no_pude.append(f"Reanudé desde lo guardado de la corrida del {material['reanudada'][:16].replace('T', ' ')} "
-                       "(PLAN.md §0, decisión 40). El historial de las vueltas de esa corrida no está en el Excel.")
+        no_pude.append(f"Reanudé desde lo generado el {material['reanudada'][:16].replace('T', ' ')} "
+                       "(PLAN.md §0, decisión 40). El historial de las vueltas de esa vez no está en el Excel.")
     if not r.get("bloques"):
         no_pude.append("La revisión del contenido no corrió porque quedaron fallas.")
     if not material.get("medidas"):

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block titulo %}Cómo funciona | AulaLista{% endblock %}
+{% block navegacion %}<p class="donde"><a href="/">Cursos</a></p>{% endblock %}
+
+{% block contenido %}
+<h1>Cómo funciona AulaLista</h1>
+<p class="ayuda-intro">AulaLista prepara el material de cada sesión de un curso a partir de sus fuentes y de dos fichas, lo revisa y te lo entrega para que lo apruebes. Estos son los pasos, en orden.</p>
+
+{# El flujo es una secuencia de verdad: por eso lleva números. #}
+<ol class="flujo">
+  <li>
+    <h2>Crea el curso y sube sus fuentes</h2>
+    <p>Las fuentes son los documentos de donde sale todo: sílabos, libros, manuales, normas o materiales anteriores. Pueden ser PDF, Word, PowerPoint, Excel o imágenes.</p>
+  </li>
+  <li>
+    <h2>Convierte las fuentes a texto</h2>
+    <p>AulaLista divide cada fuente en <strong>pasajes</strong>: trozos cortos de texto, cada uno con su página. Los materiales citan pasajes como prueba de lo que dicen. Si una fuente es una imagen o una página escaneada, la lee Claude: revisa ese texto antes de usarlo.</p>
+  </li>
+  <li>
+    <h2>Confirma las fichas</h2>
+    <p>La <strong>ficha del curso</strong> dice de qué trata el curso, para quién es y cómo se ve. Al confirmarla aparecen las sesiones. La <strong>ficha de cada sesión</strong> dice qué se enseña y qué materiales lleva. Una ficha vacía se propone sola desde las fuentes; tú la revisas y la guardas. Queda confirmada cuando está completa.</p>
+  </li>
+  <li>
+    <h2>Genera cada material</h2>
+    <p>Cada material pasa por cuatro pasos, que ves en su página:</p>
+    <ul class="lista">
+      <li><strong>Generar:</strong> Claude redacta el material con los pasajes de las fuentes.</li>
+      <li><strong>Verificar:</strong> un programa, sin IA, revisa cada oración: sin tiempos ni puntajes, sin datos inventados, con su fuente.</li>
+      <li><strong>Revisar:</strong> Claude revisa el contenido por partes y corrige lo que contradice la fuente.</li>
+      <li><strong>Aprobar:</strong> lo decides tú.</li>
+    </ul>
+  </li>
+  <li>
+    <h2>Revisa la entrega y decide</h2>
+    <p>La entrega dice qué archivos se hicieron, qué se probó y qué quedó pendiente. Las <strong>decisiones pendientes</strong> son cosas que AulaLista no puede decidir sola, como una afirmación que no sale de ninguna fuente. Puedes aprobar igual o cambiar las fichas y generar de nuevo.</p>
+  </li>
+</ol>
+
+<h2>Situaciones frecuentes</h2>
+<dl class="situaciones">
+  <dt>Un material dice «Desactualizado»</dt>
+  <dd>Cambiaste una ficha después de generarlo. Ya no la sigue: genéralo de nuevo.</dd>
+  <dt>Un material quedó «Con fallas»</dt>
+  <dd>El verificador encontró algo que no pudo corregir. Si el material tiene la opción, pulsa «Reanudar desde lo guardado»: sigue desde lo ya redactado y gasta menos. Si no, genéralo de nuevo.</dd>
+  <dt>Quieres una segunda opinión</dt>
+  <dd>«Pedir revisor independiente» abre otra sesión de Claude que lee el material sin ver borradores. No corrige: lo que encuentra queda como pendiente.</dd>
+  <dt>Lo que cuesta</dt>
+  <dd>Cada llamada a Claude gasta <strong>tokens</strong>, la unidad con que se paga su uso. Antes de cada botón que gasta, AulaLista dice cuánto costó la última vez. El total del curso está al pie del panel. Es una estimación, no la factura.</dd>
+  <dt>Cerrar y volver a abrir</dt>
+  <dd>Abre AulaLista con <code>iniciar.cmd</code>. Si quedó una AulaLista abierta que no está trabajando, se cierra sola. Si algo se está generando, espera a que termine.</dd>
+</dl>
+{% endblock %}

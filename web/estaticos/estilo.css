@@ -96,12 +96,12 @@ a { color: var(--principal); }
 .cabecera .logo img { display: block; height: 36px; width: auto; }
 .cabecera .producto { padding-left: 1rem; border-left: 1px solid var(--marca-texto); font-size: 1.125rem; font-weight: bold; }
 .cabecera .logo:focus-visible, .cabecera button:focus-visible { outline: 3px solid var(--marca-texto); outline-offset: 2px; }
-button.tema { margin-left: auto; min-height: 40px; padding: 0 0.75rem; font-size: 0.8125rem;
+button.tema { min-height: 40px; padding: 0 0.75rem; font-size: 0.8125rem;
   background: transparent; color: var(--marca-texto); border: 1px solid var(--marca-texto); }
 @media (max-width: 30rem) {
   .cabecera .logo img { height: 30px; }
   .cabecera .producto { font-size: 1rem; }
-  button.tema { margin-left: 0; }
+  button.tema, .cabecera .ayuda-enlace { margin-left: 0; }
 }
 h1, h2, h3 { overflow-wrap: anywhere; }
 
@@ -477,3 +477,18 @@ main.hoja .material .cabeza h1 { margin: 0; }
   .sigue-icono { display: none; }
   .prep-cuerpo { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Ayuda: el flujo en cinco pasos numerados y las situaciones frecuentes. */
+.cabecera .ayuda-enlace { margin-left: auto; color: var(--marca-texto); font-size: 0.875rem; }
+.cabecera .ayuda-enlace:focus-visible { outline: 3px solid var(--marca-texto); outline-offset: 2px; }
+.ayuda-intro { font-size: 1.0625rem; }
+.flujo { margin: 1.5rem 0 2rem; padding: 0; list-style: none; counter-reset: paso; }
+.flujo > li { position: relative; max-width: 75ch; padding: 0 0 1.25rem 3.25rem; counter-increment: paso; }
+.flujo > li::before { content: counter(paso); position: absolute; left: 0; top: 0; display: grid; place-items: center; width: 2.25rem; height: 2.25rem;
+  border-radius: 50%; background: var(--principal-suave); color: var(--principal-texto); font-weight: bold; }
+.flujo > li:not(:last-child)::after { content: ""; position: absolute; left: 1.075rem; top: 2.5rem; bottom: 0.25rem; width: 2px; background: var(--borde); }
+.flujo h2 { margin: 0.35rem 0 0.25rem; font-size: 1.125rem; }
+.flujo p { margin: 0 0 0.5rem; }
+.situaciones { max-width: 75ch; }
+.situaciones dt { margin-top: 1rem; font-weight: bold; }
+.situaciones dd { margin: 0.25rem 0 0; }

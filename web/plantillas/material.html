@@ -133,7 +133,7 @@
     {% if m.reanudable %}
     <form method="post" action="{{ base }}/reanudar" class="accion">
       <button type="submit" aria-describedby="reanudar-{{ m.clave }}">Reanudar desde lo guardado</button>
-      <span class="nota" id="reanudar-{{ m.clave }}">Usa el texto ya redactado y corregido de la corrida anterior: no repite la redacción y gasta menos. Tarda unos minutos.</span>
+      <span class="nota" id="reanudar-{{ m.clave }}">Usa el texto ya redactado y corregido la vez anterior: no repite la redacción y gasta menos. Tarda unos minutos.</span>
     </form>
     {% endif %}
     {% set bloqueado = not puede_empezar or m.faltan.ficha or m.faltan.otros or e.estado == "trabajando" %}
@@ -146,8 +146,8 @@
         {% if not puede_empezar %}Espera a que las dos fichas estén confirmadas.
         {% elif m.faltan.ficha or m.faltan.otros %}Espera a que se complete lo de arriba.
         {% elif e.estado == "trabajando" %}Ya está en curso.
-        {% elif m.gasto_corrida and m.costo_ref and m.costo_ref.sesion == sesion %}{{ gasta(terminos) }}, como la corrida de arriba. Tarda unos minutos.
-        {% else %}{{ gasta(terminos) }}. {{ costo(m.costo_ref, "La última corrida" ~ ("" if not m.costo_ref or m.costo_ref.sesion == sesion else " (sesión " ~ m.costo_ref.sesion ~ ")")) }} Tarda unos minutos.{% endif %}
+        {% elif m.gasto_corrida and m.costo_ref and m.costo_ref.sesion == sesion %}{{ gasta(terminos) }}, como la vez anterior (arriba). Tarda unos minutos.
+        {% else %}{{ gasta(terminos) }}. {{ costo(m.costo_ref, "La última vez" ~ ("" if not m.costo_ref or m.costo_ref.sesion == sesion else " (sesión " ~ m.costo_ref.sesion ~ ")")) }} Tarda unos minutos.{% endif %}
       </span>
     </form>
     {% if generado %}

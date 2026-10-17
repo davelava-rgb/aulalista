@@ -117,7 +117,7 @@ def test_generar_de_nuevo_un_material_aprobado_pide_confirmacion(sesion):  # noq
 
 def test_el_boton_generar_dice_lo_que_gasto_la_ultima_corrida(sesion):  # noqa: F811
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
-    assert "Todavía no hay una corrida anterior para estimar el costo." in pagina
+    assert "Es la primera vez: todavía no hay con qué estimar el costo." in pagina
     _poner(sesion, "lectura", estado="verificada", corrida_desde=tokens.lineas("scrum"))
     with open(sesion / "tokens.jsonl", "a", encoding="utf-8") as archivo:
         archivo.write(json.dumps({"fecha": "x", "curso": "scrum", "sesion": "S1", "material": "lectura",
@@ -125,7 +125,7 @@ def test_el_boton_generar_dice_lo_que_gasto_la_ultima_corrida(sesion):  # noqa: 
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     # El costo se dice una sola vez: en «Desde que pulsaste Generar» y el botón remite a esa línea.
     assert "Desde que pulsaste Generar: 1 llamada, 0.42 USD estimados." in pagina
-    assert "Gasta tokens (la unidad con que se paga el uso de Claude), como la corrida de arriba." in pagina
+    assert "Gasta tokens (la unidad con que se paga el uso de Claude), como la vez anterior (arriba)." in pagina
 
 
 def test_la_pagina_del_curso_es_un_tablero_con_lo_que_sigue_las_sesiones_y_la_preparacion(sesion):  # noqa: F811
@@ -382,3 +382,21 @@ def test_el_tablero_trae_lo_que_sigue_con_motivo_boton_y_costo(sesion):  # noqa:
     assert sigue["boton"] == "Ir a la lectura" and sigue["url"] == "/cursos/scrum/sesiones/1/materiales/lectura"
     assert sigue["motivo"] == "La ficha cambió después de generarla: ya no la sigue."
     assert tablero["preparacion_lista"] and tablero["sesiones"][0]["materiales"][0]["fecha"] == "15 de octubre"
+
+
+def test_la_ayuda_explica_el_flujo_y_se_enlaza_desde_todas_las_paginas(sesion):  # noqa: F811
+    for url in ("/", "/cursos/scrum", "/cursos/scrum/sesiones/1/materiales/lectura"):
+        assert '<a class="ayuda-enlace" href="/ayuda">Cómo funciona</a>' in cliente.get(url).text, url
+    pagina = cliente.get("/ayuda").text
+    pasos = pagina.split('<ol class="flujo">')[1].split("</ol>")[0]
+    assert pasos.count("<h2>") == 5 and "Convierte las fuentes a texto" in pasos
+    assert "<strong>pasajes</strong>: trozos cortos de texto" in pagina and "<strong>tokens</strong>" in pagina
+    for situacion in ("Desactualizado", "Con fallas", "revisor independiente", "iniciar.cmd"):
+        assert situacion in pagina
+
+
+def test_corrida_no_aparece_en_la_interfaz(sesion):  # noqa: F811
+    _registro(sesion, ("redacción", "S1", 0.4))
+    for url in ("/", "/cursos/scrum", "/cursos/scrum/sesiones/1/materiales/lectura", "/ayuda"):
+        cuerpo = cliente.get(url).text.split("<body>")[1]
+        assert "corrida" not in cuerpo.lower(), url
