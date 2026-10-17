@@ -1,6 +1,7 @@
 """Servidor local. Responde solo a esta computadora (127.0.0.1)."""
 
 import asyncio
+import re
 import threading
 from pathlib import Path
 from urllib.parse import quote
@@ -237,7 +238,7 @@ def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, m
         "curso": curso, "nombre": _nombre(curso), "titulo": titulo, "sesion": sesion, "ficha": ficha,
         "propuesta": flujo.estado_propuesta(carpeta, tipo, sesion),
         "hay_propuestos": any((d or {}).get("estado") == almacen.PROPUESTO for d in ficha["campos"].values()),
-        "secciones": secciones, "generados": generados, "generados_texto": _y(generados), "costos": costos,
+        "secciones": secciones, "modo_lectura": ficha["confirmada"], "generados": generados, "generados_texto": _y(generados), "costos": costos,
         "url_propuesta": _url_ficha(curso, sesion) + "/propuesta",
         "preguntas": almacen.preguntas_pendientes(ficha),
         "errores": errores or [], "mensaje": mensaje, "corregibles": corregibles,
@@ -277,7 +278,35 @@ def _indice_de_secciones(secciones: list[dict]) -> list[dict]:
         s["origen_comun"] = comun
         for c in campos:
             c["origen_visible"] = c["origen"] if c.get("origen") not in ("", None, "profesor", comun) else ""
+        _resumen_de_seccion(s, campos)
     return secciones
+
+
+def _etiqueta_corta(etiqueta: str) -> str:
+    """«Alcance (obligatorio)» → «Alcance». La etiqueta completa sigue en el campo de edición."""
+    return re.sub(r"\s*\(obligatorio[^)]*\)", "", etiqueta).strip()
+
+
+def _resumen_de_seccion(s: dict, campos: list[dict]) -> None:
+    """Lo que muestra la ficha en modo de lectura (PLAN.md §0, decisión 45): el estado de la sección, un resumen de
+    sus campos y, si repite bloques (ejercicios o preguntas), una fila por bloque con datos."""
+    no_se_usa = s.get("titulo", "").split(". ", 1)[-1].startswith("Evaluación")    # decisión 37
+    s["estado"] = ("no_se_usa" if no_se_usa else "alerta" if s["alertas"]
+                   else "completa" if any(c["valor"].strip() for c in campos) else "vacia")
+    s["resumen"], s["filas"], s["vacios"] = [], [], 0
+    for e in s["elementos"]:
+        if e.get("repetible"):
+            for b in e["bloques"]:
+                if b["situacion"] == "vacio":
+                    s["vacios"] += 1
+                    continue
+                valores = [" ".join(c["valor"].split()) for c in b["campos"]]
+                s["filas"].append({"nombre": "Pregunta" if e.get("nombre") == "pregunta" else "Ejercicio",
+                                   "numero": b["numero"], "situacion": b["situacion"],
+                                   "titulo": valores[0] if valores else "", "detalle": valores[1] if len(valores) > 1 else ""})
+        else:
+            for c in (e["campos"] if e.get("grupo") else [e]):
+                s["resumen"].append({"etiqueta": _etiqueta_corta(c["etiqueta"]), "valor": " ".join(c["valor"].split())})
 
 
 @app.get("/cursos/{curso}/ficha/propuesta")

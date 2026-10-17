@@ -400,3 +400,36 @@ def test_corrida_no_aparece_en_la_interfaz(sesion):  # noqa: F811
     for url in ("/", "/cursos/scrum", "/cursos/scrum/sesiones/1/materiales/lectura", "/ayuda"):
         cuerpo = cliente.get(url).text.split("<body>")[1]
         assert "corrida" not in cuerpo.lower(), url
+
+
+
+# ---------- Ficha en modo de lectura (PLAN.md §0, decisión 45) ----------
+
+def _seccion(titulo, *elementos):
+    return {"titulo": titulo, "elementos": list(elementos)}
+
+
+def _campo(id_, etiqueta, valor="", estado=""):
+    return {"id": id_, "etiqueta": etiqueta, "valor": valor, "estado": estado, "origen": "", "versiones": []}
+
+
+def test_cada_seccion_trae_su_estado_y_su_resumen():
+    secciones = servidor._indice_de_secciones([
+        _seccion("1. Sesión", _campo("a", "Alcance (obligatorio)", "Calidad de datos" + chr(10) + "y su ciclo.")),
+        _seccion("2. Lectura", _campo("b", "Bloque 1")),
+        _seccion("3. Vocabulario", _campo("c", "Conceptos", "", "falta definir")),
+        _seccion("5. Evaluación práctica (PBQ)", _campo("d", "Material", "La lectura.")),
+    ])
+    assert [s["estado"] for s in secciones] == ["completa", "vacia", "alerta", "no_se_usa"]
+    assert secciones[0]["resumen"] == [{"etiqueta": "Alcance", "valor": "Calidad de datos y su ciclo."}]
+
+
+def test_los_ejercicios_se_resumen_en_una_fila_cada_uno():
+    bloques = [{"numero": 1, "campos": [_campo("e1", "Ejercicio 1 · Área", "Registro de actas"),
+                                        _campo("e2", "Acción", "Revisa cada fila.")]},
+               {"numero": 2, "campos": [_campo("f1", "Ejercicio 2 · Área"), _campo("f2", "Acción")]}]
+    seccion = servidor._indice_de_secciones([_seccion("4. Laboratorio", {"repetible": True, "nombre": "ejercicio",
+                                                                          "bloques": bloques})])[0]
+    assert seccion["filas"] == [{"nombre": "Ejercicio", "numero": 1, "situacion": "lleno",
+                                 "titulo": "Registro de actas", "detalle": "Revisa cada fila."}]
+    assert seccion["vacios"] == 1 and seccion["resumen"] == []
