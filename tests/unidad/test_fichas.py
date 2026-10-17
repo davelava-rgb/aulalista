@@ -56,6 +56,8 @@ def revisor_sin_problemas():
 @pytest.mark.parametrize("tipo, indice", [("curso", 0), ("sesion", 1)])
 def test_la_ficha_vacia_es_igual_a_la_plantilla_de_la_skill(tipo, indice):
     plantilla = re.findall(r"```\n(FICHA DE.*?)```", SKILL, re.S)[indice]
+    # Decisión 49: la ficha del curso no pide los materiales; se eligen en la ficha de cada sesión.
+    plantilla = plantilla.replace("- Materiales por sesión (por defecto, los cuatro):\n", "")
     assert plantillas.renderizar(tipo, {}) == plantilla
 
 

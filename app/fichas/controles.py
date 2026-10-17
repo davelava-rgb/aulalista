@@ -81,8 +81,6 @@ CONTROLES = {
                      ("no sé", "No sé: se dan las dos formas")),
         "ayuda": "Decide cómo usan los ejercicios los archivos de práctica.",
     },
-    "materiales.por_sesion": {"tipo": "casillas", "titulo": "Materiales por sesión", "opciones": MATERIALES, "todos": TODOS_LOS_MATERIALES,
-                              "ayuda": "La evaluación no se genera (decisión 37)."},
     "materiales.nunca": {"tipo": "casillas", "titulo": "Lo que nunca se incluye", "opciones": NUNCA_POR_OMISION, "otros": True, "omision": True,
                          "ayuda": "Marcadas por defecto. Agrega otras en «Otros», separadas por comas."},
     "materiales.cuales": {"tipo": "casillas", "titulo": "Materiales que se producen en esta sesión", "opciones": MATERIALES, "todos": TODOS_LOS_MATERIALES,

@@ -78,7 +78,6 @@ def test_los_controles_escriben_el_texto_de_la_ficha(curso):
         "visual.principal": "#1F4E79",
         "herramientas.neutral": "no", "herramientas.cual": "Microsoft Copilot en Word 365",
         "herramientas.adjuntos": "no sé",
-        "materiales.por_sesion.casillas": "1", "materiales.por_sesion": ["lectura", "diapositivas"],
         "materiales.nunca.casillas": "1", "materiales.nunca": list(controles.NUNCA_POR_OMISION),
         "materiales.nunca.otros": "anexos",
     })
@@ -87,7 +86,6 @@ def test_los_controles_escriben_el_texto_de_la_ficha(curso):
     assert almacen.valor(ficha, "visual.estilo") == "académico"
     assert almacen.valor(ficha, "herramientas.neutral") == "no"
     assert almacen.valor(ficha, "herramientas.adjuntos") == "no sé"
-    assert almacen.valor(ficha, "materiales.por_sesion") == "lectura y diapositivas"
     assert almacen.valor(ficha, "materiales.nunca").endswith("lenguaje publicitario y anexos")
     md = almacen.ruta_ficha(curso, "curso", extension=".md").read_text(encoding="utf-8")
     assert "- Estilo (profesional, académico, moderno, corporativo, minimalista o cercano): académico" in md
@@ -97,11 +95,9 @@ def test_todas_las_casillas_por_defecto_dejan_el_valor_vacio(curso):
     cliente.post("/cursos/scrum/ficha", data={
         "accion": "guardar", "curso.nombre": "Scrum",
         "materiales.nunca.casillas": "1", "materiales.nunca": list(controles.NUNCA_POR_OMISION),
-        "materiales.por_sesion.casillas": "1", "materiales.por_sesion": list(controles.MATERIALES),
     })
     ficha = almacen.cargar(curso, "curso")
     assert almacen.valor(ficha, "materiales.nunca") == ""
-    assert almacen.valor(ficha, "materiales.por_sesion") == ""
 
 
 def test_las_casillas_leen_lo_que_ya_estaba_escrito():
@@ -283,6 +279,9 @@ def test_la_propuesta_conoce_las_opciones_de_los_controles(curso):
     pedido = flujo.pedido_de_propuesta(curso, "curso", None, almacen.cargar(curso, "curso"))
     assert "curso.idioma: Idioma del material [usa una de estas, tal cual: Español, Inglés, Portugués, Francés" in pedido
     assert "herramientas.adjuntos" in pedido and "[usa una de estas, tal cual: sí, no, no sé]" in pedido
+    assert "materiales.por_sesion" not in pedido          # decisión 49: los materiales van en la ficha de sesión
+    almacen.guardar(curso, "curso", None, almacen.cargar(curso, "curso"))   # la de sesión lee la ficha del curso
+    pedido = flujo.pedido_de_propuesta(curso, "sesion", 1, almacen.cargar(curso, "sesion", 1))
     assert "[usa las que correspondan, separadas por comas: lectura, diapositivas" in pedido
 
 
@@ -295,22 +294,18 @@ def test_una_ficha_propuesta_se_ve_en_los_controles_y_guardar_no_borra_la_marca(
         {"id": "curso.idioma", "valor": "español", "origen": "deducido", "literal": False},
         {"id": "herramientas.neutral", "valor": "Sí, el material es neutral", "origen": "deducido", "literal": False},
         {"id": "herramientas.adjuntos", "valor": "no sé", "origen": "deducido", "literal": False},
-        {"id": "materiales.por_sesion", "valor": "Lectura y diapositivas", "origen": "deducido", "literal": False},
     ], "conflictos": []})
     almacen.guardar(curso, "curso", None, ficha)
     pagina = cliente.get("/cursos/scrum/ficha").text
     assert '<option value="Español" selected>' in pagina
     assert 'name="herramientas.neutral" value="sí" checked' in pagina
     assert 'name="herramientas.adjuntos" value="no sé" checked' in pagina
-    assert 'name="materiales.por_sesion" value="lectura" checked' in pagina
-    assert 'name="materiales.por_sesion" value="laboratorio" >' in pagina   # sin marcar
-    assert pagina.count('<span class="marca">Propuesto</span>') == 4
+    assert pagina.count('<span class="marca">Propuesto</span>') == 3
     # Lo que el navegador envía al pulsar «Guardar» sin tocar nada
     cliente.post("/cursos/scrum/ficha", data={
         "accion": "guardar", "curso.idioma": "Español", "herramientas.neutral": "sí",
-        "herramientas.adjuntos": "no sé", "materiales.por_sesion.casillas": "1",
-        "materiales.por_sesion": ["lectura", "diapositivas"]})
+        "herramientas.adjuntos": "no sé"})
     campos = almacen.cargar(curso, "curso")["campos"]
-    for campo_id in ("curso.idioma", "herramientas.neutral", "herramientas.adjuntos", "materiales.por_sesion"):
+    for campo_id in ("curso.idioma", "herramientas.neutral", "herramientas.adjuntos"):
         assert campos[campo_id]["estado"] == "propuesto", campo_id
     assert campos["curso.idioma"]["valor"] == "español"

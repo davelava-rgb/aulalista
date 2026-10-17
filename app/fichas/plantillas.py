@@ -104,7 +104,6 @@ FICHA_DEL_CURSO = (
             _c("herramientas.adjuntos", "¿La herramienta de los alumnos acepta archivos adjuntos? (sí, no o no sé)"),
         )),
         Seccion("8. Materiales", (
-            _c("materiales.por_sesion", "Materiales por sesión (por defecto, los cuatro)"),
             _c("materiales.nunca", "Lo que nunca se incluye (por defecto: tiempos, puntajes, objetivos de "
                "aprendizaje, requisitos previos, glosarios, relleno, emojis y lenguaje publicitario)"),
         )),
