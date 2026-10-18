@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block titulo %}Curso nuevo | AulaLista{% endblock %}
+
+{# La página a la que lleva «Nuevo» en el panel (PLAN.md §0, decisión 50): solo el formulario para crear un curso. #}
+{% block navegacion %}{% if ultimo %}<p class="donde"><a href="/cursos/{{ ultimo }}">Volver al curso</a></p>{% endif %}{% endblock %}
+
+{% block contenido %}
+<h1>Curso nuevo</h1>
+<p>Escribe el nombre del curso. Después subes sus fuentes y llenas su ficha.</p>
+<form method="post" action="/cursos" class="fila">
+  <label for="nombre">Nombre del curso</label>
+  <input id="nombre" name="nombre" required maxlength="120" autofocus>
+  <button type="submit">Crear curso</button>
+</form>
+{% endblock %}

@@ -311,8 +311,7 @@ main.hoja { min-width: 0; max-width: 50rem; margin: 0; padding: 2rem 2.5rem 4rem
 .panel-cabeza h2 { margin: 0; color: var(--texto); font-size: 0.8125rem; font-weight: bold; opacity: 0.75; }
 .panel-nuevo { display: inline-flex; align-items: center; min-height: 32px; padding: 0 0.6rem; border: 1px solid var(--principal);
   border-radius: 6px; font-size: 0.8125rem; text-decoration: none; }
-.panel-todos { display: block; padding: 0 1.25rem 0.5rem; font-size: 0.8125rem; text-decoration: none; }
-.panel-cursos { margin-top: 0.25rem !important; }
+.panel-cursos { margin-top: 0.6rem !important; }
 .panel-linea { border-top: 1px solid var(--borde); }
 .panel-linea.abierto { background: var(--fondo); padding-bottom: 0.25rem; }
 .panel-titulo, .panel-otro { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; min-height: 40px;
@@ -359,7 +358,7 @@ main.hoja { min-width: 0; max-width: 50rem; margin: 0; padding: 2rem 2.5rem 4rem
   /* minmax(0, 1fr): sin esto, un texto largo sin cortes ensancha la columna y la página se sale de la pantalla. */
   .entorno { grid-template-columns: minmax(0, 1fr); }
   .panel { position: static; max-height: none; min-height: 0; padding: 0.75rem 0 0; border-right: 0; border-bottom: 1px solid var(--borde); }
-  .panel-cabeza, .panel-todos, .panel-linea:not(.abierto) { display: none; }
+  .panel-cabeza, .panel-linea:not(.abierto) { display: none; }
   .panel-linea { border-top: 0; }
   .panel-gasto, .panel-grupo > h2, .panel-sesion:not(.abierta), .panel-vacio { display: none; }
   .panel-grupo { border-top: 0; padding: 0; }

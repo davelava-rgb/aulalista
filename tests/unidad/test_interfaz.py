@@ -257,6 +257,7 @@ def test_el_panel_aparece_en_todas_las_paginas_del_curso_y_no_en_el_inicio(sesio
         pagina = cliente.get(url).text
         assert '<nav class="panel" id="panel" aria-label="Cursos">' in pagina, url
         assert '<main class="hoja">' in pagina, url
+    (sesion.parent / "_sistema" / "ultimo_curso.txt").unlink()           # sin último curso, el inicio es la lista
     assert 'id="panel"' not in cliente.get("/").text
 
 
@@ -339,7 +340,7 @@ def test_el_inicio_muestra_el_avance_de_cada_curso_y_enlaza_lo_que_sigue(sesion)
 
 
 def test_el_inicio_de_un_curso_nuevo_enlaza_las_fuentes(entorno):
-    cliente.post("/cursos", data={"nombre": "Curso vacío"})
+    cliente.post("/cursos", data={"nombre": "Curso vacío"}, follow_redirects=False)   # sin abrirlo: no es el último
     pagina = cliente.get("/").text
     assert '<a href="/cursos/curso-vacio#fuentes" data-atajo="s" aria-keyshortcuts="S">Sube las fuentes del curso.</a>' in pagina
     assert "Las sesiones aparecen al confirmar la ficha del curso." in pagina
@@ -610,3 +611,43 @@ def test_sin_javascript_el_panel_se_ve_entero(sesion):  # noqa: F811
     pagina = cliente.get("/cursos/scrum").text
     panel = _panel_de(pagina)
     assert "<script" not in panel and " hidden" not in panel                # nada se esconde con JavaScript
+
+
+# ---------- Diseño integrado: inicio y curso nuevo (decisión 50, fase 3) ----------
+
+def test_el_inicio_abre_el_ultimo_curso_usado(sesion):  # noqa: F811
+    cliente.post("/cursos", data={"nombre": "Excel"})                    # crear un curso lo abre: queda como último
+    r = cliente.get("/", follow_redirects=False)
+    assert (r.status_code, r.headers["location"]) == (303, "/cursos/excel")
+    cliente.get("/cursos/scrum/sesiones/1/materiales/lectura")
+    assert cliente.get("/", follow_redirects=False).headers["location"] == "/cursos/scrum"
+
+
+def test_sin_cursos_el_inicio_muestra_el_formulario(entorno):
+    pagina = cliente.get("/").text
+    assert "Todavía no hay cursos." in pagina and '<form method="post" action="/cursos"' in pagina
+
+
+def test_si_el_ultimo_curso_ya_no_existe_el_inicio_muestra_la_lista(entorno):
+    import shutil
+    cliente.post("/cursos", data={"nombre": "Excel"})
+    cliente.post("/cursos", data={"nombre": "Power BI"})
+    shutil.rmtree(entorno["cursos"] / "power-bi")
+    r = cliente.get("/", follow_redirects=False)
+    assert r.status_code == 200 and '<a href="/cursos/excel">Excel</a>' in r.text
+
+
+def test_nuevo_abre_la_pagina_corta_y_crear_lleva_al_tablero(sesion):  # noqa: F811
+    panel = cliente.get("/cursos/scrum").text
+    assert '<a href="/curso-nuevo" class="panel-nuevo">Nuevo</a>' in panel and "Todos los cursos" not in panel
+    pagina = cliente.get("/curso-nuevo").text
+    assert "<h1>Curso nuevo</h1>" in pagina and '<a href="/cursos/scrum">Volver al curso</a>' in pagina
+    r = cliente.post("/cursos", data={"nombre": "Excel"}, follow_redirects=False)
+    assert r.headers["location"] == "/cursos/excel"
+    cliente.get(r.headers["location"])
+    assert cliente.get("/", follow_redirects=False).headers["location"] == "/cursos/excel"
+
+
+def test_un_error_al_crear_vuelve_a_la_pagina_corta_con_el_aviso(sesion):  # noqa: F811
+    r = cliente.post("/cursos", data={"nombre": "Scrum"})
+    assert r.url.path == "/curso-nuevo" and "Ya existe un curso" in r.text

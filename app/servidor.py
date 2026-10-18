@@ -86,6 +86,11 @@ def _gasto_total(lista: list[dict]) -> dict:
 
 @app.get("/")
 def inicio(request: Request, mensaje: str = ""):
+    """Abre el último curso usado (PLAN.md §0, decisión 50). Sin cursos, o si el último ya no existe, muestra la
+    página de inicio con el formulario para crear uno."""
+    ultimo = cursos.ultimo()
+    if ultimo and not mensaje:
+        return _ir_al_curso(ultimo)
     lista = _cursos_del_panel()
     sistema = tokens.total(tokens.CURSO_SISTEMA)
     total = _gasto_total(lista)
@@ -121,12 +126,18 @@ def gasto():
 
 # ---------- Cursos y fuentes ----------
 
+@app.get("/curso-nuevo")
+def curso_nuevo(request: Request, mensaje: str = ""):
+    """La página corta a la que lleva «Nuevo» en el panel: solo el formulario para crear un curso (decisión 50)."""
+    return plantillas.TemplateResponse(request, "curso_nuevo.html", {"mensaje": mensaje, "ultimo": cursos.ultimo()})
+
+
 @app.post("/cursos")
 def crear_curso(nombre: str = Form(...)):
     try:
         curso = cursos.crear(nombre)
     except cursos.ErrorDeCurso as error:
-        return RedirectResponse(f"/?mensaje={quote(str(error))}", status_code=303)
+        return RedirectResponse(f"/curso-nuevo?mensaje={quote(str(error))}", status_code=303)
     return _ir_al_curso(curso)
 
 
