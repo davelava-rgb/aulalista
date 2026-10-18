@@ -608,9 +608,13 @@ def test_el_panel_muestra_el_gasto_del_curso_y_el_total(sesion):  # noqa: F811
 
 
 def test_sin_javascript_el_panel_se_ve_entero(sesion):  # noqa: F811
-    pagina = cliente.get("/cursos/scrum").text
-    panel = _panel_de(pagina)
-    assert "<script" not in panel and " hidden" not in panel                # nada se esconde con JavaScript
+    panel = _panel_de(cliente.get("/cursos/scrum").text)
+    assert "<script" not in panel
+    assert panel.count(" hidden") == 1 and '<div class="panel-barra" hidden>' in panel   # solo el botón, que pone JavaScript
+    css = (servidor.RAIZ / "web" / "estaticos" / "estilo.css").read_text(encoding="utf-8")
+    for regla in ("panel-cabeza", "panel-linea:not(.abierto)", "panel-gasto", "panel-sesion:not(.abierta)"):
+        assert f".panel.plegado .{regla}" in css                              # se pliega solo con la clase de JavaScript
+        assert f"  .{regla}" not in css.split("@media (max-width: 52rem)")[1].split("}")[0]
 
 
 # ---------- Diseño integrado: inicio y curso nuevo (decisión 50, fase 3) ----------
@@ -651,3 +655,18 @@ def test_nuevo_abre_la_pagina_corta_y_crear_lleva_al_tablero(sesion):  # noqa: F
 def test_un_error_al_crear_vuelve_a_la_pagina_corta_con_el_aviso(sesion):  # noqa: F811
     r = cliente.post("/cursos", data={"nombre": "Scrum"})
     assert r.url.path == "/curso-nuevo" and "Ya existe un curso" in r.text
+
+
+# ---------- Diseño integrado: el panel en pantallas angostas (decisión 50, fase 4) ----------
+
+def test_el_boton_cursos_abre_y_cierra_el_panel(sesion):  # noqa: F811
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    assert ('<button type="button" class="panel-boton secundario" aria-expanded="false" '
+            'aria-controls="panel-cursos-lista">Cursos</button>') in pagina
+    assert '<ul class="panel-cursos" id="panel-cursos-lista"' in pagina
+    script = pagina[pagina.index("Panel plegable en pantallas angostas"):]
+    assert 'panel.classList.toggle("plegado", !abierto);' in script
+    assert 'boton.setAttribute("aria-expanded", String(abierto));' in script
+    assert 'boton.textContent = abierto ? "Cerrar" : "Cursos";' in script
+    assert 'barra.hidden = false;' in script and "poner(false);" in script     # empieza plegado
+    assert 'if (evento.target.closest("a")) poner(false);' in script           # elegir un enlace lo cierra

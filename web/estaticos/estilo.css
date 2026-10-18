@@ -325,8 +325,6 @@ main.hoja { min-width: 0; max-width: 50rem; margin: 0; padding: 2rem 2.5rem 4rem
 .panel-avance.completo { color: var(--bien); opacity: 1; }
 .panel-alerta { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--error); }
 .panel-total { display: block; margin-top: 0.35rem; }
-.panel-grupo { padding: 0.75rem 0 0.25rem; border-top: 1px solid var(--borde); }
-.panel-grupo > h2 { margin: 0 1.25rem 0.25rem; color: var(--texto); font-size: 0.8125rem; font-weight: bold; opacity: 0.75; }
 /* Sesiones del panel (decisión 44): número y título en una línea; sus materiales como puntos de color con su nombre. */
 .panel-sesion { padding: 0.5rem 1.25rem 0.6rem; }
 .panel-sesion.abierta { background: var(--suave); }
@@ -353,18 +351,25 @@ main.hoja { min-width: 0; max-width: 50rem; margin: 0; padding: 2rem 2.5rem 4rem
 .panel-gasto b { display: block; font-size: 1rem; }
 .panel a:focus-visible, .panel summary:focus-visible { outline: 3px solid var(--principal); outline-offset: -3px; }
 
-/* Bajo 52rem el panel pasa arriba: solo el curso y la sesión abierta, con sus materiales en una fila que se desliza. */
+/* Bajo 52rem el panel pasa arriba (decisión 50 f). Con JavaScript queda plegado: el botón «Cursos», el curso abierto y la
+   sesión abierta con sus materiales en una fila que se desliza; el botón lo despliega entero. Sin JavaScript se ve entero. */
+.panel-barra { display: none; }
 @media (max-width: 52rem) {
   /* minmax(0, 1fr): sin esto, un texto largo sin cortes ensancha la columna y la página se sale de la pantalla. */
   .entorno { grid-template-columns: minmax(0, 1fr); }
-  .panel { position: static; max-height: none; min-height: 0; padding: 0.75rem 0 0; border-right: 0; border-bottom: 1px solid var(--borde); }
-  .panel-cabeza, .panel-linea:not(.abierto) { display: none; }
-  .panel-linea { border-top: 0; }
-  .panel-gasto, .panel-grupo > h2, .panel-sesion:not(.abierta), .panel-vacio { display: none; }
-  .panel-grupo { border-top: 0; padding: 0; }
-  .panel-sesion.abierta { padding-top: 0.25rem; }
-  .panel-mats { flex-wrap: nowrap; overflow-x: auto; margin-left: 0 !important; }
-  .panel-mat { flex: none; white-space: nowrap; }
+  .panel { position: static; max-height: none; min-height: 0; padding: 0.75rem 0 0.5rem; border-right: 0; border-bottom: 1px solid var(--borde); }
+  .panel-barra { display: flex; padding: 0 1.25rem 0.5rem; }
+  .panel-barra[hidden] { display: none; }
+  .panel-boton { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 44px; }
+  .panel-boton::after { content: ""; width: 0.45rem; height: 0.45rem; border: solid currentColor; border-width: 0 2px 2px 0;
+    transform: translateY(-2px) rotate(45deg); transition: transform 150ms ease-out; }
+  .panel:not(.plegado) .panel-boton::after { transform: translateY(2px) rotate(-135deg); }
+  .panel.plegado .panel-cabeza, .panel.plegado .panel-linea:not(.abierto), .panel.plegado .panel-gasto,
+  .panel.plegado .panel-sesion:not(.abierta), .panel.plegado .panel-vacio { display: none; }
+  .panel.plegado .panel-linea { border-top: 0; }
+  .panel.plegado .panel-sesion.abierta { padding-top: 0.25rem; }
+  .panel.plegado .panel-mats { flex-wrap: nowrap; overflow-x: auto; margin-left: 0 !important; }
+  .panel.plegado .panel-mat { flex: none; white-space: nowrap; }
   main.hoja { padding: 1.5rem 1rem 3rem; }
 }
 
@@ -583,7 +588,7 @@ kbd { display: inline-block; min-width: 1.4em; padding: 0 0.35em; border: 1px so
 .sec-estado.estado-alerta { color: var(--error); }
 .sec-estado.estado-vacia, .sec-estado.estado-no_se_usa { opacity: 0.8; font-weight: normal; }
 .plegar-todas { display: flex; gap: 0.75rem; margin: 0.25rem 0 0; }
-@media (prefers-reduced-motion: reduce) { .sec-flecha { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .sec-flecha, .panel-boton::after { transition: none; } }
 
 /* Enlace para volver al tablero del curso desde un material, una ficha o una fuente. */
 .volver { margin: 0 0 0.75rem; font-size: 0.875rem; }

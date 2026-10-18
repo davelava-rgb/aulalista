@@ -8,13 +8,17 @@
 {% block cuerpo %}
 <div class="entorno">
   <nav class="panel" id="panel" aria-label="Cursos">
+    {# En pantallas angostas, el botón despliega el panel entero; sin JavaScript queda escondido y el panel se ve entero. #}
+    <div class="panel-barra" hidden>
+      <button type="button" class="panel-boton secundario" aria-expanded="false" aria-controls="panel-cursos-lista">Cursos</button>
+    </div>
     <div class="panel-cabeza">
       <h2 id="panel-cursos">Cursos</h2>
       <a href="/curso-nuevo" class="panel-nuevo">Nuevo</a>
     </div>
 
     {# Cada curso en una línea que lleva a su tablero, nunca a una ficha (decisión 50 c). Solo el abierto muestra sus sesiones. #}
-    <ul class="panel-cursos" aria-labelledby="panel-cursos">
+    <ul class="panel-cursos" id="panel-cursos-lista" aria-labelledby="panel-cursos">
       {% for c in panel.cursos %}
       {% set abierto = c.curso == curso %}
       <li class="panel-linea{{ ' abierto' if abierto }}">
@@ -56,6 +60,23 @@
       {% if panel.gasto_total %}<span class="panel-total">Gasto total de AulaLista: {{ usd(panel.gasto_total.costo_usd) }}.</span>{% endif %}
       Es una estimación, no la factura.</p>
   </nav>
+  <script>
+    // Panel plegable en pantallas angostas (decisión 50 f): el botón «Cursos» lo abre y lo cierra; elegir un enlace lo cierra.
+    (function () {
+      const panel = document.getElementById("panel");
+      const barra = panel.querySelector(".panel-barra");
+      const boton = panel.querySelector(".panel-boton");
+      const poner = (abierto) => {
+        panel.classList.toggle("plegado", !abierto);
+        boton.setAttribute("aria-expanded", String(abierto));
+        boton.textContent = abierto ? "Cerrar" : "Cursos";
+      };
+      barra.hidden = false;
+      poner(false);
+      boton.addEventListener("click", () => poner(panel.classList.contains("plegado")));
+      panel.addEventListener("click", (evento) => { if (evento.target.closest("a")) poner(false); });
+    })();
+  </script>
   <main class="hoja">{{ self.principal() }}</main>
 </div>
 {% endblock %}
