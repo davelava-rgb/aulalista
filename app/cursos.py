@@ -66,6 +66,33 @@ def listar() -> list[dict]:
     ]
 
 
+def _ruta_ultimo() -> Path:
+    return _base() / "_sistema" / "ultimo_curso.txt"
+
+
+def guardar_ultimo(curso: str) -> None:
+    """Anota el último curso abierto, al que lleva la dirección de inicio (PLAN.md §0, decisión 50).
+    Solo escribe si cambió: la carpeta puede estar en OneDrive."""
+    ruta = _ruta_ultimo()
+    if ruta.exists() and ruta.read_text(encoding="utf-8").strip() == curso:
+        return
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    ruta.write_text(curso, encoding="utf-8")
+
+
+def ultimo() -> str | None:
+    """El último curso abierto, o None si no hay ninguno anotado o ya no existe."""
+    ruta = _ruta_ultimo()
+    if not ruta.exists():
+        return None
+    curso = ruta.read_text(encoding="utf-8").strip()
+    try:
+        carpeta(curso)
+    except ErrorDeCurso:
+        return None
+    return curso
+
+
 def guardar_fuente(curso: str, nombre_archivo: str, datos: bytes) -> str:
     """Guarda un archivo en fuentes/. Si ya existe uno con ese nombre, lo reemplaza."""
     limpio = Path(nombre_archivo.replace("\\", "/")).name.strip()

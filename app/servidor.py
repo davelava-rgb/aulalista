@@ -50,19 +50,36 @@ def lector_de_imagenes(curso: str) -> convertir.LectorImagen:
 
 # ---------- Inicio y conexión ----------
 
+def _resumen_de_curso(curso: str) -> dict:
+    """Un curso en una línea, para la página de inicio y el panel de cursos (PLAN.md §0, decisión 50):
+    su avance en palabras («5 de 16», «Sin ficha», «Completo») y si tiene un material con problemas."""
+    panel = _panel(cursos.carpeta(curso), curso, "inicio")
+    materiales = [m for s in panel["sesiones"] for m in s["materiales"]]
+    aprobados = sum(1 for m in materiales if m["situacion"]["clase"] == "bien")
+    if panel["ficha_curso"]["clase"] != "bien":
+        avance = "Sin ficha"
+    elif not materiales:
+        avance = "Sin materiales"
+    elif aprobados == len(materiales):
+        avance = "Completo"
+    else:
+        avance = f"{aprobados} de {len(materiales)}"
+    con_problema = [f"Sesión {s['numero']}: {m['corto'].lower()} {m['situacion']['texto'].lower()}"
+                    for s in panel["sesiones"] for m in s["materiales"] if m["situacion"]["clase"] == "error"]
+    return {"curso": curso, "nombre": _nombre(curso), "avance": avance, "alerta": bool(con_problema),
+            "con_problema": con_problema, "aprobados": aprobados, "materiales": len(materiales),
+            "sesiones": len(panel["sesiones"]), "tramos": [m["situacion"]["clase"] for m in materiales],
+            "gasto": panel["gasto"], "sigue": _que_sigue(curso, panel)}
+
+
+def _cursos_del_panel() -> list[dict]:
+    """Todos los cursos, en el orden de sus carpetas, cada uno con su resumen."""
+    return [_resumen_de_curso(c["curso"]) for c in cursos.listar()]
+
+
 @app.get("/")
 def inicio(request: Request, mensaje: str = ""):
-    lista = []
-    for c in cursos.listar():
-        panel = _panel(cursos.carpeta(c["curso"]), c["curso"], "inicio")
-        materiales = [m for s in panel["sesiones"] for m in s["materiales"]]
-        lista.append({**c, "nombre": _nombre(c["curso"]), "gasto": panel["gasto"], "sigue": _que_sigue(c["curso"], panel),
-                      "sesiones": len(panel["sesiones"]), "materiales": len(materiales),
-                      "aprobados": sum(1 for m in materiales if m["situacion"]["clase"] == "bien"),
-                      "tramos": [m["situacion"]["clase"] for m in materiales],
-                      "con_problema": [f"Sesión {s['numero']}: {m['corto'].lower()} {m['situacion']['texto'].lower()}"
-                                       for s in panel["sesiones"] for m in s["materiales"]
-                                       if m["situacion"]["clase"] == "error"]})
+    lista = _cursos_del_panel()
     sistema = tokens.total(tokens.CURSO_SISTEMA)
     total = {"llamadas": sistema["llamadas"] + sum(c["gasto"]["llamadas"] for c in lista),
              "costo_usd": sistema["costo_usd"] + sum(c["gasto"]["costo_usd"] for c in lista)}
@@ -110,6 +127,7 @@ def crear_curso(nombre: str = Form(...)):
 @app.get("/cursos/{curso}")
 def ver_curso(request: Request, curso: str, mensaje: str = ""):
     carpeta = _carpeta(curso)
+    cursos.guardar_ultimo(curso)
     indice = convertir.leer_indice(carpeta)
     archivos = sorted(r.name for r in (carpeta / "fuentes").glob("*") if r.is_file())
     fuentes = [{"archivo": a, **indice.get(a, {"estado": "sin convertir"})} for a in archivos]
@@ -792,6 +810,7 @@ def ver_sesion(curso: str, sesion: int):
     """La sesión abre en el material del siguiente paso; sin fichas confirmadas, en la ficha de la sesión."""
     carpeta = _carpeta(curso)
     _exigir_ficha_del_curso(carpeta, curso)
+    cursos.guardar_ultimo(curso)
     vista = _vista_de_materiales(carpeta, curso, sesion)
     if not vista["puede_empezar"]:
         return RedirectResponse(_url_ficha(curso, sesion), status_code=303)
@@ -804,6 +823,7 @@ def ver_material(request: Request, curso: str, sesion: int, material: str, mensa
     _material(material)
     carpeta = _carpeta(curso)
     _exigir_ficha_del_curso(carpeta, curso)
+    cursos.guardar_ultimo(curso)
     vista = _vista_de_materiales(carpeta, curso, sesion, detalle=True)
     m = next(x for x in vista["materiales"] if x["clave"] == material)
     return plantillas.TemplateResponse(request, "material.html", {

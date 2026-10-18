@@ -500,3 +500,57 @@ def test_las_secciones_de_la_ficha_se_pliegan_y_editar_alterna_con_cancelar(sesi
     assert 'data-plegar-todas="1">Plegar todas</button>' in pagina
     assert 'editar.firstChild.textContent = "Cancelar"' in pagina                 # Editar se vuelve Cancelar
     assert "seccion === abierta) cancelar();" in pagina
+
+
+# ---------- Diseño integrado: datos del panel de cursos (PLAN.md §0, decisión 50, fase 1) ----------
+
+def test_el_resumen_de_un_curso_dice_su_avance_en_una_linea(sesion):  # noqa: F811
+    r = servidor._resumen_de_curso("scrum")
+    assert (r["avance"], r["alerta"]) == ("0 de 6", False)
+    _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00")
+    assert servidor._resumen_de_curso("scrum")["avance"] == "1 de 6"
+    _poner(sesion, "diapositivas", estado="con fallas")
+    assert servidor._resumen_de_curso("scrum")["alerta"] is True         # el punto rojo del panel
+    for n in (1, 2):
+        for clave in ("lectura", "diapositivas", "laboratorio"):
+            comun.actualizar(sesion, n, clave, estado="aprobada", aprobada="2026-10-15T10:00:00")
+    r = servidor._resumen_de_curso("scrum")
+    assert (r["avance"], r["alerta"]) == ("Completo", False)
+
+
+def test_el_resumen_de_un_curso_sin_ficha_confirmada_lo_dice(entorno):
+    cliente.post("/cursos", data={"nombre": "Curso vacío"})
+    r = servidor._resumen_de_curso("curso-vacio")
+    assert (r["nombre"], r["avance"], r["alerta"]) == ("Curso vacío", "Sin ficha", False)
+
+
+def test_el_panel_trae_todos_los_cursos_en_orden(entorno):
+    for nombre in ("Excel", "Ciberseguridad", "Power BI"):
+        cliente.post("/cursos", data={"nombre": nombre})
+    assert [c["curso"] for c in servidor._cursos_del_panel()] == ["ciberseguridad", "excel", "power-bi"]
+
+
+def test_abrir_un_curso_lo_anota_como_el_ultimo(sesion, entorno):  # noqa: F811
+    from app import cursos
+    ruta = entorno["cursos"] / "_sistema" / "ultimo_curso.txt"
+    assert cursos.ultimo() is None
+    cliente.post("/cursos", data={"nombre": "Excel"})
+    cliente.get("/cursos/excel")
+    assert cursos.ultimo() == "excel"
+    cliente.get("/cursos/scrum/sesiones/1/materiales/lectura")
+    assert ruta.read_text(encoding="utf-8") == "scrum"
+    cliente.get("/cursos/excel")
+    cliente.get("/cursos/scrum/sesiones/1", follow_redirects=False)
+    assert cursos.ultimo() == "scrum"
+    cliente.get("/")                                                     # el inicio no cambia el último
+    assert cursos.ultimo() == "scrum"
+
+
+def test_el_ultimo_curso_se_ignora_si_ya_no_existe(entorno):
+    from app import cursos
+    cliente.post("/cursos", data={"nombre": "Excel"})
+    cliente.get("/cursos/excel")
+    (entorno["cursos"] / "excel" / "curso.json").unlink()
+    assert cursos.ultimo() is None
+    (entorno["cursos"] / "_sistema" / "ultimo_curso.txt").write_text("../fuera", encoding="utf-8")
+    assert cursos.ultimo() is None
