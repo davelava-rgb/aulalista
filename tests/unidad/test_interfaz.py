@@ -255,7 +255,7 @@ def test_el_panel_aparece_en_todas_las_paginas_del_curso_y_no_en_el_inicio(sesio
     for url in ("/cursos/scrum", "/cursos/scrum/ficha", "/cursos/scrum/sesiones/1/ficha", "/cursos/scrum/sesiones/1",
                 f"/cursos/scrum/fuentes/{fuente}"):
         pagina = cliente.get(url).text
-        assert '<nav class="panel" id="panel" aria-label="Curso">' in pagina, url
+        assert '<nav class="panel" id="panel" aria-label="Cursos">' in pagina, url
         assert '<main class="hoja">' in pagina, url
     assert 'id="panel"' not in cliente.get("/").text
 
@@ -554,3 +554,59 @@ def test_el_ultimo_curso_se_ignora_si_ya_no_existe(entorno):
     assert cursos.ultimo() is None
     (entorno["cursos"] / "_sistema" / "ultimo_curso.txt").write_text("../fuera", encoding="utf-8")
     assert cursos.ultimo() is None
+
+
+# ---------- Diseño integrado: el panel con todos los cursos (decisión 50, fase 2) ----------
+
+def _panel_de(pagina):
+    return pagina[pagina.index('<nav class="panel"'):pagina.index("</nav>")]
+
+
+def test_el_panel_muestra_todos_los_cursos_y_solo_el_abierto_con_sesiones(sesion):  # noqa: F811
+    for nombre in ("Excel", "Ciberseguridad"):
+        cliente.post("/cursos", data={"nombre": nombre})
+    panel = _panel_de(cliente.get("/cursos/scrum").text)
+    nombres = [panel.index(f'<span class="panel-curso-nombre">{n}</span>') for n in ("Ciberseguridad", "Excel", "Scrum Master con IA")]
+    assert nombres == sorted(nombres)                                        # en el orden de sus carpetas
+    for n in ("Ciberseguridad", "Excel", "Scrum Master con IA"):
+        assert panel.count(f'<span class="panel-curso-nombre">{n}</span>') == 1
+    assert '<li class="panel-linea abierto">' in panel and panel.count('<li class="panel-linea">') == 2
+    assert panel.count('<div class="panel-sesiones">') == 1                  # solo el abierto
+    assert '<a href="/cursos/scrum" class="panel-titulo" aria-current="page">' in panel
+    assert '<a href="/cursos/excel" class="panel-otro">' in panel
+    assert '<span class="panel-avance">Sin ficha</span>' in panel
+    assert '<span class="panel-avance">0 de 6</span>' in panel
+    panel = _panel_de(cliente.get("/cursos/excel").text)                     # otro curso abierto
+    assert '<a href="/cursos/scrum" class="panel-otro">' in panel and '<div class="panel-sesiones">' not in panel
+    assert "Las sesiones aparecen al confirmar la ficha del curso." in panel
+
+
+def test_la_linea_de_cada_curso_lleva_a_su_tablero_y_nunca_a_una_ficha(sesion):  # noqa: F811
+    import re
+    cliente.post("/cursos", data={"nombre": "Excel"})
+    panel = _panel_de(cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text)
+    lineas = re.findall(r'<a href="([^"]+)" class="panel-(?:titulo|otro)"', panel)
+    assert lineas == ["/cursos/excel", "/cursos/scrum"]
+    assert '<a href="/cursos/excel/ficha"' not in panel
+    assert 'class="panel-mat panel-ficha bien" href="/cursos/scrum/sesiones/1/ficha"' in panel   # el abierto la conserva
+
+
+def test_el_punto_rojo_del_panel_sale_solo_con_problemas(sesion):  # noqa: F811
+    assert "panel-alerta" not in _panel_de(cliente.get("/cursos/scrum").text)
+    _poner(sesion, "lectura", estado="con fallas")
+    panel = _panel_de(cliente.get("/cursos/scrum").text)
+    assert panel.count('<i class="panel-alerta" aria-hidden="true"></i>') == 1
+    assert "Tiene un material con problemas." in panel
+
+
+def test_el_panel_muestra_el_gasto_del_curso_y_el_total(sesion):  # noqa: F811
+    _registro(sesion, ("redacción", "S1", 1.5))
+    panel = _panel_de(cliente.get("/cursos/scrum").text)
+    assert "Gasto del curso <b>" in panel
+    assert "Gasto total de AulaLista:" in panel and "Es una estimación, no la factura." in panel
+
+
+def test_sin_javascript_el_panel_se_ve_entero(sesion):  # noqa: F811
+    pagina = cliente.get("/cursos/scrum").text
+    panel = _panel_de(pagina)
+    assert "<script" not in panel and " hidden" not in panel                # nada se esconde con JavaScript

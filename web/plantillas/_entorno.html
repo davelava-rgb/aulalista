@@ -1,46 +1,61 @@
 {% extends "base.html" %}
 {% from "_estado.html" import usd %}
-{# Páginas de un curso: el panel con las sesiones a la izquierda y la hoja de trabajo a la derecha (PLAN.md §0, decisiones 38 y 44). #}
+{# Páginas de un curso: el panel con los cursos a la izquierda y la hoja de trabajo a la derecha (PLAN.md §0, decisiones 38, 44 y 50). #}
 
 {# Dentro de un curso, el panel dice dónde estás: no hay ruta arriba del título. #}
 {% block navegacion %}{% endblock %}
 
 {% block cuerpo %}
 <div class="entorno">
-  <nav class="panel" id="panel" aria-label="Curso">
-    <div class="panel-curso">
-      <a href="/" class="panel-todos">Todos los cursos</a>
-      <a href="/cursos/{{ curso }}" class="panel-titulo"{% if panel.actual == "curso" %} aria-current="page"{% endif %}>{{ nombre }}</a>
+  <nav class="panel" id="panel" aria-label="Cursos">
+    <div class="panel-cabeza">
+      <h2 id="panel-cursos">Cursos</h2>
+      <a href="/#nombre" class="panel-nuevo">Nuevo</a>
     </div>
+    <a href="/" class="panel-todos">Todos los cursos</a>
 
-    <section class="panel-grupo" aria-labelledby="panel-sesiones">
-      <h2 id="panel-sesiones">Sesiones</h2>
-      {% if panel.sesiones %}
-      {# Cada material es un punto de color con su nombre; el estado va también en palabras para los lectores de pantalla. #}
-      {% for s in panel.sesiones %}
-      {% set base_s = "/cursos/" ~ curso ~ "/sesiones/" ~ s.numero %}
-      <div class="panel-sesion{{ ' abierta' if s.abierta }}">
-        <a class="panel-sesion-titulo" href="{{ base_s }}" title="{{ s.texto }}">
-          <span class="panel-num">{{ s.numero }}</span><span class="panel-sesion-nombre">{{ s.texto }}</span></a>
-        <ul class="panel-mats">
-          {% if s.abierta or s.ficha.clase != "bien" %}
-          <li><a class="panel-mat panel-ficha {{ s.ficha.clase }}" href="{{ base_s }}/ficha"{% if panel.actual == "ficha-" ~ s.numero %} aria-current="page"{% endif %}>
-            <i aria-hidden="true"></i>Ficha<span class="sr"> de la sesión: {{ s.ficha.texto }}</span></a></li>
-          {% endif %}
-          {% for m in s.materiales %}
-          <li><a class="panel-mat {{ m.situacion.clase }}{{ ' sigue' if m.sigue }}" href="{{ base_s }}/materiales/{{ m.clave }}"{% if panel.actual == m.clave ~ "-" ~ s.numero %} aria-current="page"{% endif %}>
-            <i aria-hidden="true"></i>{{ m.corto }}<span class="sr">: {{ m.situacion.texto }}{{ ". Es lo que sigue" if m.sigue }}</span></a></li>
-          {% endfor %}
-        </ul>
-      </div>
+    {# Cada curso en una línea que lleva a su tablero, nunca a una ficha (decisión 50 c). Solo el abierto muestra sus sesiones. #}
+    <ul class="panel-cursos" aria-labelledby="panel-cursos">
+      {% for c in panel.cursos %}
+      {% set abierto = c.curso == curso %}
+      <li class="panel-linea{{ ' abierto' if abierto }}">
+        <a href="/cursos/{{ c.curso }}" class="{{ 'panel-titulo' if abierto else 'panel-otro' }}"{% if abierto and panel.actual == "curso" %} aria-current="page"{% endif %}>
+          <span class="panel-curso-nombre">{{ c.nombre }}</span>
+          <span class="panel-avance{{ ' completo' if c.avance == 'Completo' }}">{% if c.alerta %}<i class="panel-alerta" aria-hidden="true"></i><span class="sr">Tiene un material con problemas. </span>{% endif %}{{ c.avance }}</span></a>
+        {% if abierto %}
+        {% if panel.sesiones %}
+        {# Cada material es un punto de color con su nombre; el estado va también en palabras para los lectores de pantalla. #}
+        <div class="panel-sesiones">
+        {% for s in panel.sesiones %}
+        {% set base_s = "/cursos/" ~ curso ~ "/sesiones/" ~ s.numero %}
+        <div class="panel-sesion{{ ' abierta' if s.abierta }}">
+          <a class="panel-sesion-titulo" href="{{ base_s }}" title="{{ s.texto }}">
+            <span class="panel-num">{{ s.numero }}</span><span class="panel-sesion-nombre">{{ s.texto }}</span></a>
+          <ul class="panel-mats">
+            {% if s.abierta or s.ficha.clase != "bien" %}
+            <li><a class="panel-mat panel-ficha {{ s.ficha.clase }}" href="{{ base_s }}/ficha"{% if panel.actual == "ficha-" ~ s.numero %} aria-current="page"{% endif %}>
+              <i aria-hidden="true"></i>Ficha<span class="sr"> de la sesión: {{ s.ficha.texto }}</span></a></li>
+            {% endif %}
+            {% for m in s.materiales %}
+            <li><a class="panel-mat {{ m.situacion.clase }}{{ ' sigue' if m.sigue }}" href="{{ base_s }}/materiales/{{ m.clave }}"{% if panel.actual == m.clave ~ "-" ~ s.numero %} aria-current="page"{% endif %}>
+              <i aria-hidden="true"></i>{{ m.corto }}<span class="sr">: {{ m.situacion.texto }}{{ ". Es lo que sigue" if m.sigue }}</span></a></li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endfor %}
+        </div>
+        {% else %}
+        <p class="panel-vacio">Las sesiones aparecen al confirmar la ficha del curso. <a href="/cursos/{{ curso }}">Ir a la preparación</a></p>
+        {% endif %}
+        {% endif %}
+      </li>
       {% endfor %}
-      {% else %}
-      <p class="panel-vacio">Las sesiones aparecen al confirmar la ficha del curso. <a href="/cursos/{{ curso }}">Ir a la preparación</a></p>
-      {% endif %}
-    </section>
+    </ul>
 
     <p class="panel-gasto">Gasto del curso <b>{{ usd(panel.gasto.costo_usd) }}</b>
-      {{ panel.gasto.llamadas }} {{ "llamada" if panel.gasto.llamadas == 1 else "llamadas" }} a Claude. Es una estimación, no la factura.</p>
+      {{ panel.gasto.llamadas }} {{ "llamada" if panel.gasto.llamadas == 1 else "llamadas" }} a Claude.
+      {% if panel.gasto_total %}<span class="panel-total">Gasto total de AulaLista: {{ usd(panel.gasto_total.costo_usd) }}.</span>{% endif %}
+      Es una estimación, no la factura.</p>
   </nav>
   <main class="hoja">{{ self.principal() }}</main>
 </div>

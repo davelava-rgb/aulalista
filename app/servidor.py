@@ -77,12 +77,18 @@ def _cursos_del_panel() -> list[dict]:
     return [_resumen_de_curso(c["curso"]) for c in cursos.listar()]
 
 
+def _gasto_total(lista: list[dict]) -> dict:
+    """Lo que gastó AulaLista entera: los cursos de la lista más las pruebas de conexión."""
+    sistema = tokens.total(tokens.CURSO_SISTEMA)
+    return {"llamadas": sistema["llamadas"] + sum(c["gasto"]["llamadas"] for c in lista),
+            "costo_usd": sistema["costo_usd"] + sum(c["gasto"]["costo_usd"] for c in lista)}
+
+
 @app.get("/")
 def inicio(request: Request, mensaje: str = ""):
     lista = _cursos_del_panel()
     sistema = tokens.total(tokens.CURSO_SISTEMA)
-    total = {"llamadas": sistema["llamadas"] + sum(c["gasto"]["llamadas"] for c in lista),
-             "costo_usd": sistema["costo_usd"] + sum(c["gasto"]["costo_usd"] for c in lista)}
+    total = _gasto_total(lista)
     return plantillas.TemplateResponse(
         request,
         "inicio.html",
@@ -641,8 +647,13 @@ def _panel(carpeta, curso: str, actual: str) -> dict:
                 "van": len(incluidos),
                 "siguiente": vista["siguiente"], "puede_empezar": vista["puede_empezar"],
             })
+    # El panel lista todos los cursos (decisión 50). El resumen de cada curso se arma con un panel «inicio», que
+    # no los lista: así no se llama a sí mismo.
+    todos = [] if actual == "inicio" else _cursos_del_panel()
     return {
         "actual": actual,
+        "cursos": todos,
+        "gasto_total": _gasto_total(todos) if todos else None,
         "fuentes": _estado_de_fuentes(carpeta),
         "ficha_curso": _estado_de_ficha(ficha_curso["confirmada"], almacen.ruta_ficha(carpeta, "curso").exists()),
         "sesiones": sesiones,

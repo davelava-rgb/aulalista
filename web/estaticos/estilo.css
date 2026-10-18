@@ -306,16 +306,31 @@ html { scroll-padding-bottom: 6rem; }
 main.hoja { min-width: 0; max-width: 50rem; margin: 0; padding: 2rem 2.5rem 4rem; }
 .panel { position: sticky; top: 0; max-height: 100vh; overflow-y: auto; min-height: calc(100vh - 3.5rem); padding: 1.25rem 0 1rem; background: var(--suave); border-right: 1px solid var(--borde); }
 .panel ul { list-style: none; margin: 0; padding: 0; }
-.panel-curso { padding: 0 1.25rem 1rem; }
-.panel-todos { font-size: 0.8125rem; text-decoration: none; }
-.panel-titulo { display: block; margin-top: 0.25rem; color: var(--texto); font-size: 1.125rem; font-weight: bold; line-height: 1.3;
-  text-decoration: none; overflow-wrap: anywhere; }
-.panel-titulo[aria-current] { color: var(--principal); }
+/* Cursos del panel (decisión 50): cada curso en una línea con su avance; el abierto, con sus sesiones debajo. */
+.panel-cabeza { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0 1.25rem; }
+.panel-cabeza h2 { margin: 0; color: var(--texto); font-size: 0.8125rem; font-weight: bold; opacity: 0.75; }
+.panel-nuevo { display: inline-flex; align-items: center; min-height: 32px; padding: 0 0.6rem; border: 1px solid var(--principal);
+  border-radius: 6px; font-size: 0.8125rem; text-decoration: none; }
+.panel-todos { display: block; padding: 0 1.25rem 0.5rem; font-size: 0.8125rem; text-decoration: none; }
+.panel-cursos { margin-top: 0.25rem !important; }
+.panel-linea { border-top: 1px solid var(--borde); }
+.panel-linea.abierto { background: var(--fondo); padding-bottom: 0.25rem; }
+.panel-titulo, .panel-otro { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; min-height: 40px;
+  padding: 0.55rem 1.25rem; color: var(--texto); text-decoration: none; line-height: 1.3; }
+.panel-titulo { font-size: 1.0625rem; font-weight: bold; }
+.panel-titulo[aria-current] .panel-curso-nombre { color: var(--principal); }
+.panel-otro { font-size: 0.9375rem; }
+.panel-otro:hover .panel-curso-nombre, .panel-titulo:hover .panel-curso-nombre { text-decoration: underline; }
+.panel-curso-nombre { min-width: 0; overflow-wrap: anywhere; }
+.panel-avance { flex: none; display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8125rem; font-weight: normal; opacity: 0.8; white-space: nowrap; }
+.panel-avance.completo { color: var(--bien); opacity: 1; }
+.panel-alerta { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--error); }
+.panel-total { display: block; margin-top: 0.35rem; }
 .panel-grupo { padding: 0.75rem 0 0.25rem; border-top: 1px solid var(--borde); }
 .panel-grupo > h2 { margin: 0 1.25rem 0.25rem; color: var(--texto); font-size: 0.8125rem; font-weight: bold; opacity: 0.75; }
 /* Sesiones del panel (decisión 44): número y título en una línea; sus materiales como puntos de color con su nombre. */
 .panel-sesion { padding: 0.5rem 1.25rem 0.6rem; }
-.panel-sesion.abierta { background: var(--fondo); }
+.panel-sesion.abierta { background: var(--suave); }
 .panel-sesion-titulo { display: flex; gap: 0.5rem; min-height: 32px; align-items: center; color: var(--texto);
   font-size: 0.9375rem; font-weight: bold; text-decoration: none; }
 .panel-sesion-titulo:hover .panel-sesion-nombre { text-decoration: underline; }
@@ -344,7 +359,8 @@ main.hoja { min-width: 0; max-width: 50rem; margin: 0; padding: 2rem 2.5rem 4rem
   /* minmax(0, 1fr): sin esto, un texto largo sin cortes ensancha la columna y la página se sale de la pantalla. */
   .entorno { grid-template-columns: minmax(0, 1fr); }
   .panel { position: static; max-height: none; min-height: 0; padding: 0.75rem 0 0; border-right: 0; border-bottom: 1px solid var(--borde); }
-  .panel-curso { padding-bottom: 0.5rem; }
+  .panel-cabeza, .panel-todos, .panel-linea:not(.abierto) { display: none; }
+  .panel-linea { border-top: 0; }
   .panel-gasto, .panel-grupo > h2, .panel-sesion:not(.abierta), .panel-vacio { display: none; }
   .panel-grupo { border-top: 0; padding: 0; }
   .panel-sesion.abierta { padding-top: 0.25rem; }
