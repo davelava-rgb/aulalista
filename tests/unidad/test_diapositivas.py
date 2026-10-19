@@ -275,7 +275,8 @@ def test_un_desborde_se_corrige_solo_en_su_diapositiva(con_lectura):
     correccion = consulta.llamadas[1]["prompt"]
     assert "FALLA · desborde" in correccion and "Diapositiva 8 («Pilares de Scrum»)" in correccion
     assert "sobran 1.4 cm" in correccion and "Corrige solo las diapositivas 8." in correccion
-    assert consulta.llamadas[1]["options"].output_format["schema"] == diapositivas.ESQUEMA_POR_DIAPOSITIVAS
+    assert consulta.llamadas[1]["options"].output_format["schema"] == diapositivas.ESQUEMA_CORRECCIONES
+    assert "Llena solo «por_diapositivas»." in correccion
     final = comun.leer_json(diapositivas.archivos(con_lectura, 1)["contenido"])
     assert final["diapositivas"][5]["frases"] == ["Scrum tiene tres pilares."]
     assert final["diapositivas"][:5] == LIMPIAS["diapositivas"][:5]
@@ -560,7 +561,8 @@ def test_la_correccion_por_diapositivas_no_toca_las_demas():
 def test_la_cantidad_sigue_con_la_correccion_completa(con_lectura):
     cortas = con(diapositivas=LIMPIAS["diapositivas"][:9])
     _, consulta = generar(con_lectura, cortas, {"diapositivas": LIMPIAS, "explicaciones": [], "datos_nuevos": []})
-    assert consulta.llamadas[1]["options"].output_format["schema"] == diapositivas.ESQUEMA_CORRECCION
+    assert consulta.llamadas[1]["options"].output_format["schema"] == diapositivas.ESQUEMA_CORRECCIONES
+    assert "Llena solo «completa»." in consulta.llamadas[1]["prompt"]
 
 
 # ---------- Agente diseñador (PLAN.md §0, decisión 32) ----------

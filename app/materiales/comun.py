@@ -12,7 +12,7 @@ import stat
 from datetime import datetime
 from pathlib import Path
 
-from app import tokens
+from app import agente, tokens
 from app.fichas import almacen
 from app.validacion import pasada2, revision, verificador
 from app.validacion.pasajes import FICHA_DE_LA_SESION, FICHA_DEL_CURSO, Corpus
@@ -130,6 +130,28 @@ def esquema_de_correccion(clave: str, esquema_material: dict) -> dict:
         "required": [clave, "explicaciones", "datos_nuevos"],
         "additionalProperties": False,
     }
+
+
+def esquema_de_correcciones(**formas: dict) -> dict:
+    """Un solo esquema para todas las correcciones de un material: una parte por forma de corregir, y la corrección
+    llena solo la que se le pide. El SDK manda el esquema antes del mensaje de sistema; con un esquema distinto en
+    cada forma, ninguna corrección leía la caché (decisión 51)."""
+    return {
+        "type": "object",
+        "properties": {forma: {"anyOf": [esquema, {"type": "null"}]} for forma, esquema in formas.items()},
+        "required": list(formas),
+        "additionalProperties": False,
+    }
+
+
+async def consultar_correccion(pedido: str, forma: str, esquema: dict, **opciones) -> dict:
+    """Pide la corrección en una de las formas del esquema común y devuelve solo esa parte."""
+    otras = ", ".join(f"«{f}»" for f in esquema["properties"] if f != forma)
+    pedido = f"{pedido}\nLlena solo «{forma}». Deja en null {otras}."
+    respuesta = await agente.consultar(pedido, esquema=esquema, **opciones)
+    if not isinstance(respuesta.get(forma), dict):
+        raise agente.ErrorDeAgente(f"La corrección no devolvió «{forma}».")
+    return respuesta[forma]
 
 
 REGLAS_DE_CORRECCION = """REGLAS DE CORRECCIÓN

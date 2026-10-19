@@ -40,6 +40,7 @@ SECCIONES_DE_LA_SKILL = ("Reglas comunes", "Paso 3 · Vocabulario de la sesión"
 
 ESQUEMA_CORRECCION = comun.esquema_de_correccion("lectura", ESQUEMA_LECTURA)
 ESQUEMA_CAMBIOS = comun.ESQUEMA_CAMBIOS
+ESQUEMA_CORRECCIONES = comun.esquema_de_correcciones(completa=ESQUEMA_CORRECCION, oraciones=ESQUEMA_CAMBIOS)
 
 class NoSePuedeEmpezar(RuntimeError):
     """Faltan fichas confirmadas (SPEC §3: ningún material empieza sin la ficha de la sesión confirmada)."""
@@ -436,14 +437,14 @@ class _Trabajo:
         sistema = comun.escribir_sistema(self.rutas["sistema"], sistema_de_correccion(self.carpeta_curso, self.sesion))
         if completa:
             self.avance(f"Corrigiendo la lectura completa: {len(problemas)} problemas.")
-            respuesta = await agente.consultar(pedido_de_correccion(self.datos, problemas),
-                                               tarea="correccion", esquema=ESQUEMA_CORRECCION,
+            respuesta = await comun.consultar_correccion(pedido_de_correccion(self.datos, problemas), "completa",
+                                                         ESQUEMA_CORRECCIONES, tarea="correccion",
                                                etapa=f"corrección completa {vuelta}", sistema=sistema, **self.comun)
             self.datos = respuesta["lectura"]
         else:
             self.avance(f"Corrigiendo {_cuantos(len(problemas), 'problema')}.")
-            respuesta = await agente.consultar(pedido_de_cambios(self.datos, problemas),
-                                               tarea="correccion_oraciones", esquema=ESQUEMA_CAMBIOS,
+            respuesta = await comun.consultar_correccion(pedido_de_cambios(self.datos, problemas), "oraciones",
+                                                         ESQUEMA_CORRECCIONES, tarea="correccion_oraciones",
                                                etapa=f"corrección {vuelta}", sistema=sistema, **self.comun)
             self.datos, no_encontradas = aplicar_cambios(self.datos, respuesta["cambios"])
             if no_encontradas:

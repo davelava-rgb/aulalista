@@ -1,3 +1,4 @@
+import re
 import sys
 from pathlib import Path
 
@@ -56,6 +57,18 @@ def consulta_simulada(texto="Conexión correcta.", **cambios):
     return consulta
 
 
+_FORMA = re.compile(r"Llena solo «(\w+)»")
+
+
+def en_forma(salida, prompt, options):
+    """Una corrección pide una sola parte del esquema común (decisión 51). Si la prueba da solo esa parte, se pone
+    en su lugar y las demás quedan en null, como las devuelve Claude."""
+    forma = _FORMA.search(prompt) if isinstance(prompt, str) else None
+    if forma is None or not isinstance(salida, dict) or forma[1] in salida:
+        return salida
+    return {f: salida if f == forma[1] else None for f in options.output_format["schema"]["properties"]}
+
+
 def consulta_en_secuencia(*salidas):
     """Reemplaza a query() y devuelve una respuesta en JSON distinta en cada llamada."""
     llamadas = []
@@ -64,7 +77,8 @@ def consulta_en_secuencia(*salidas):
     async def consulta(*, prompt, options):
         llamadas.append({"prompt": prompt, "options": options})
         salida = pendientes.pop(0)
-        yield resultado_simulado(structured_output=salida(prompt) if callable(salida) else salida)
+        salida = salida(prompt) if callable(salida) else salida
+        yield resultado_simulado(structured_output=en_forma(salida, prompt, options))
 
     consulta.llamadas = llamadas
     return consulta

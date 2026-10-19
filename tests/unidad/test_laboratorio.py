@@ -167,7 +167,8 @@ def test_un_problema_de_un_ejercicio_antes_de_crear_los_archivos_se_corrige_solo
     llamada = consulta.llamadas[1]
     assert "«[nombre del cliente]» en lo que el alumno copia" in llamada["prompt"]
     assert "Los problemas son solo de los ejercicios 1" in llamada["prompt"]
-    assert llamada["options"].output_format["schema"] == laboratorio.ESQUEMA_CORRECCION_POR_EJERCICIO
+    assert llamada["options"].output_format["schema"] == laboratorio.ESQUEMA_CORRECCIONES
+    assert "Llena solo «por_ejercicios»." in llamada["prompt"]
     assert llamada["options"].model == "claude-sonnet-5-5"
 
 
@@ -177,7 +178,8 @@ def test_un_error_del_esquema_se_corrige_con_el_laboratorio_completo(sesion):  #
     corregido = {"laboratorio": sembrados.limpio(), "explicaciones": [], "datos_nuevos": []}
     material, consulta = generar(sesion, roto, corregido)
     assert material["estado"] == "verificada"
-    assert consulta.llamadas[1]["options"].output_format["schema"] == laboratorio.ESQUEMA_CORRECCION
+    assert consulta.llamadas[1]["options"].output_format["schema"] == laboratorio.ESQUEMA_CORRECCIONES
+    assert "Llena solo «completa»." in consulta.llamadas[1]["prompt"]
 
 
 # ---------- Página ----------
@@ -356,7 +358,8 @@ def test_una_falla_en_el_archivo_de_un_ejercicio_corrige_solo_ese_ejercicio(sesi
     material, consulta = generar(sesion, con_falla, correccion)
     assert material["estado"] == "verificada", material.get("problemas")
     llamada = consulta.llamadas[1]
-    assert llamada["options"].output_format["schema"] == laboratorio.ESQUEMA_CORRECCION_POR_EJERCICIO
+    assert llamada["options"].output_format["schema"] == laboratorio.ESQUEMA_CORRECCIONES
+    assert "Llena solo «por_ejercicios»." in llamada["prompt"]
     assert "Los problemas son solo de los ejercicios 2" in llamada["prompt"]
 
 

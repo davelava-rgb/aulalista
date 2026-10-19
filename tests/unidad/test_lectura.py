@@ -260,7 +260,9 @@ def test_una_falla_se_corrige_y_se_verifica_de_nuevo(sesion):
     assert sistema.startswith("REGLAS DE LA SKILL") and "REGLAS DE CORRECCIÓN" in sistema   # la parte fija, en caché
     pedido = consulta.llamadas[1]["prompt"]
     assert "REGLAS DE LA SKILL" not in pedido and "REGLAS DE CORRECCIÓN" not in pedido     # decisión 43
-    assert pedido.rstrip().endswith("FALLA · tiempo · «Lee este bloque en 10 minutos.»: dice «minutos»")
+    assert "FALLA · tiempo · «Lee este bloque en 10 minutos.»: dice «minutos»\n" in pedido
+    assert pedido.endswith("Llena solo «oraciones». Deja en null «completa».")                   # decisión 51
+    assert correccion.output_format["schema"] == lectura.ESQUEMA_CORRECCIONES
 
 
 LARGA = ("Cada viernes el equipo revisa su tablero, conversa con los clientes de la tienda, anota lo que aprendió "

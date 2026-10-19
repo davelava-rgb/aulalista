@@ -414,6 +414,8 @@ ESQUEMA_POR_DIAPOSITIVAS = {
     "required": ["reemplazos", "fijas", "cambios", "explicaciones", "datos_nuevos"],
     "additionalProperties": False,
 }
+ESQUEMA_CORRECCIONES = comun.esquema_de_correcciones(
+    completa=ESQUEMA_CORRECCION, por_diapositivas=ESQUEMA_POR_DIAPOSITIVAS, oraciones=comun.ESQUEMA_CAMBIOS)
 _DIAPOSITIVA = re.compile(r"\bdiapositiva (\d+)\b", re.I)
 _CAMPO = re.compile(r"^FALLA · estructura · (diapositivas\.(\d+)|portada|idea_central|aplicalo|cuidado|cierre)\b")
 _IDEA_O_CIERRE = re.compile(r"^FALLA · estructura · (idea central|cierre):")
@@ -838,23 +840,23 @@ class _Trabajo:
         if numeros:
             self.avance(f"Corrigiendo {comun.cuantos(len(numeros), 'diapositiva')} "
                         f"({', '.join(map(str, sorted(numeros)))}): {comun.cuantos(len(problemas), 'problema')}.")
-            respuesta = await agente.consultar(
-                pedido_por_diapositivas(self.datos, problemas, numeros),
-                tarea="correccion_diapositivas", esquema=ESQUEMA_POR_DIAPOSITIVAS,
+            respuesta = await comun.consultar_correccion(
+                pedido_por_diapositivas(self.datos, problemas, numeros), "por_diapositivas",
+                ESQUEMA_CORRECCIONES, tarea="correccion_diapositivas",
                 etapa=f"corrección de diapositivas {vuelta}", sistema=sistema, **self.comun)
             self.datos, no_encontradas = aplicar_por_diapositivas(self.datos, respuesta, numeros)
             if no_encontradas:
                 self.avance(f"{comun.cuantos(len(no_encontradas), 'frase')} a cambiar no se encontraron.")
         elif completa:
             self.avance(f"Corrigiendo las diapositivas completas: {comun.cuantos(len(problemas), 'problema')}.")
-            respuesta = await agente.consultar(
-                pedido_de_correccion(self.datos, problemas), tarea="correccion", esquema=ESQUEMA_CORRECCION,
+            respuesta = await comun.consultar_correccion(
+                pedido_de_correccion(self.datos, problemas), "completa", ESQUEMA_CORRECCIONES, tarea="correccion",
                 etapa=f"corrección completa {vuelta}", sistema=sistema, **self.comun)
             self.datos = respuesta[CLAVE]
         else:
             self.avance(f"Corrigiendo {comun.cuantos(len(problemas), 'problema')}.")
-            respuesta = await agente.consultar(
-                pedido_de_cambios(self.datos, problemas), tarea="correccion_oraciones", esquema=comun.ESQUEMA_CAMBIOS,
+            respuesta = await comun.consultar_correccion(
+                pedido_de_cambios(self.datos, problemas), "oraciones", ESQUEMA_CORRECCIONES, tarea="correccion_oraciones",
                 etapa=f"corrección {vuelta}", sistema=sistema, **self.comun)
             self.datos, no_encontradas = comun.aplicar_cambios(self.datos, respuesta["cambios"], CAMPOS_QUE_NO_SE_CORRIGEN)
             if no_encontradas:
