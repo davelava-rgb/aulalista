@@ -610,11 +610,39 @@ def test_el_panel_muestra_el_gasto_del_curso_y_el_total(sesion):  # noqa: F811
 def test_sin_javascript_el_panel_se_ve_entero(sesion):  # noqa: F811
     panel = _panel_de(cliente.get("/cursos/scrum").text)
     assert "<script" not in panel
-    assert panel.count(" hidden") == 1 and '<div class="panel-barra" hidden>' in panel   # solo el botón, que pone JavaScript
+    # Solo lo que pone JavaScript: el botón «Cursos», el de replegar y el buscador (decisiones 50 f y 52).
+    assert panel.count(" hidden") == 3 and '<div class="panel-barra" hidden>' in panel
+    assert 'class="panel-replegar" aria-expanded="true" aria-controls="panel-contenido" hidden>' in panel
+    assert '<div class="panel-buscar" hidden>' in panel
     css = (servidor.RAIZ / "web" / "estaticos" / "estilo.css").read_text(encoding="utf-8")
     for regla in ("panel-cabeza", "panel-linea:not(.abierto)", "panel-gasto", "panel-sesion:not(.abierta)"):
         assert f".panel.plegado .{regla}" in css                              # se pliega solo con la clase de JavaScript
         assert f"  .{regla}" not in css.split("@media (max-width: 52rem)")[1].split("}")[0]
+
+
+# ---------- Panel replegable y buscador de cursos (decisión 52) ----------
+
+def test_el_panel_tiene_buscador_de_cursos_con_etiqueta(sesion):  # noqa: F811
+    panel = _panel_de(cliente.get("/cursos/scrum").text)
+    assert '<label for="panel-buscador" class="sr">Buscar un curso</label>' in panel
+    assert '<input type="search" id="panel-buscador"' in panel
+    assert '<p class="panel-sin-resultados" role="status"></p>' in panel   # avisa cuando ningún curso coincide
+    pagina = cliente.get("/cursos/scrum").text
+    assert 'normalize("NFD")' in pagina and "Ningún curso coincide con la búsqueda." in pagina   # sin tildes ni mayúsculas
+
+
+def test_el_panel_se_repliega_en_pantallas_anchas_y_lo_recuerda(sesion):  # noqa: F811
+    pagina = cliente.get("/cursos/scrum").text
+    assert '<span class="sr">Replegar el panel de cursos</span>' in pagina
+    cabeza = pagina.split("</head>")[0]
+    assert 'localStorage.getItem("panel") === "replegado"' in cabeza   # antes de pintar: sin parpadeo
+    css = (servidor.RAIZ / "web" / "estaticos" / "estilo.css").read_text(encoding="utf-8")
+    anchas = css.split("@media (min-width: 52.0625rem)")[1].split("\n}")[0]
+    assert ".panel-replegado .entorno { grid-template-columns: 3.25rem minmax(0, 1fr); }" in anchas
+    assert ".panel-replegado #panel-contenido" in anchas
+    angostas = css.split("@media (max-width: 52rem)")[1].split("\n}")[0]
+    assert ".panel-replegar { display: none !important; }" in angostas   # en el teléfono manda el botón «Cursos»
+    assert ".panel.plegado .panel-buscar" in angostas
 
 
 # ---------- Diseño integrado: inicio y curso nuevo (decisión 50, fase 3) ----------

@@ -15,6 +15,17 @@
     <div class="panel-cabeza">
       <h2 id="panel-cursos">Cursos</h2>
       <a href="/curso-nuevo" class="panel-nuevo">Nuevo</a>
+      {# En pantallas anchas, el botón repliega el panel a una franja (decisión 52 a). Lo pone JavaScript. #}
+      <button type="button" class="panel-replegar" aria-expanded="true" aria-controls="panel-contenido" hidden>
+        <span class="sr">Replegar el panel de cursos</span></button>
+    </div>
+
+    <div id="panel-contenido">
+    {# El buscador filtra los cursos por su nombre, sin tildes ni mayúsculas (decisión 52 b). Lo pone JavaScript. #}
+    <div class="panel-buscar" hidden>
+      <label for="panel-buscador" class="sr">Buscar un curso</label>
+      <input type="search" id="panel-buscador" class="texto" placeholder="Buscar un curso" autocomplete="off">
+      <p class="panel-sin-resultados" role="status"></p>
     </div>
 
     {# Cada curso en una línea que lleva a su tablero, nunca a una ficha (decisión 50 c). Solo el abierto muestra sus sesiones. #}
@@ -59,6 +70,7 @@
       {{ panel.gasto.llamadas }} {{ "llamada" if panel.gasto.llamadas == 1 else "llamadas" }} a Claude.
       {% if panel.gasto_total %}<span class="panel-total">Gasto total de AulaLista: {{ usd(panel.gasto_total.costo_usd) }}.</span>{% endif %}
       Es una estimación, no la factura.</p>
+    </div>
   </nav>
   <script>
     // Panel plegable en pantallas angostas (decisión 50 f): el botón «Cursos» lo abre y lo cierra; elegir un enlace lo cierra.
@@ -75,6 +87,52 @@
       poner(false);
       boton.addEventListener("click", () => poner(panel.classList.contains("plegado")));
       panel.addEventListener("click", (evento) => { if (evento.target.closest("a")) poner(false); });
+
+      // Panel replegable en pantallas anchas (decisión 52 a). La elección se recuerda en este navegador; la clase va
+      // en <html> desde la cabecera de la página, para que el panel no parpadee al cargar.
+      const replegar = panel.querySelector(".panel-replegar");
+      const etiqueta = replegar.querySelector(".sr");
+      const raiz = document.documentElement;
+      const pintarReplegar = () => {
+        const replegado = raiz.classList.contains("panel-replegado");
+        replegar.setAttribute("aria-expanded", String(!replegado));
+        etiqueta.textContent = replegado ? "Mostrar el panel de cursos" : "Replegar el panel de cursos";
+        replegar.title = etiqueta.textContent;
+      };
+      replegar.hidden = false;
+      pintarReplegar();
+      replegar.addEventListener("click", () => {
+        const replegado = raiz.classList.toggle("panel-replegado");
+        try { localStorage.setItem("panel", replegado ? "replegado" : "abierto"); } catch (error) {}
+        pintarReplegar();
+      });
+
+      // Buscador de cursos (decisión 52 b): filtra por el nombre sin tildes ni mayúsculas. Enter abre el primero que
+      // coincide y Escape borra la búsqueda.
+      const caja = panel.querySelector(".panel-buscar");
+      const buscador = document.getElementById("panel-buscador");
+      const aviso = panel.querySelector(".panel-sin-resultados");
+      const lineas = [...panel.querySelectorAll(".panel-linea")];
+      const normal = (texto) => texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+      const filtrar = () => {
+        const buscado = normal(buscador.value);
+        let vistos = 0;
+        for (const linea of lineas) {
+          const coincide = normal(linea.querySelector(".panel-curso-nombre").textContent).includes(buscado);
+          linea.hidden = !coincide;
+          if (coincide) vistos += 1;
+        }
+        aviso.textContent = vistos ? "" : "Ningún curso coincide con la búsqueda.";
+      };
+      caja.hidden = false;
+      buscador.addEventListener("input", filtrar);
+      buscador.addEventListener("keydown", (evento) => {
+        if (evento.key === "Escape" && buscador.value) { evento.preventDefault(); buscador.value = ""; filtrar(); }
+        if (evento.key === "Enter") {
+          const primero = lineas.find((linea) => !linea.hidden);
+          if (primero) { evento.preventDefault(); primero.querySelector("a").click(); }
+        }
+      });
     })();
   </script>
   <main class="hoja">{{ self.principal() }}</main>

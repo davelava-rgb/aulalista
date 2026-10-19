@@ -351,6 +351,26 @@ main.hoja { min-width: 0; max-width: 50rem; margin: 0; padding: 2rem 2.5rem 4rem
 .panel-gasto b { display: block; font-size: 1rem; }
 .panel a:focus-visible, .panel summary:focus-visible { outline: 3px solid var(--principal); outline-offset: -3px; }
 
+/* Panel replegable y buscador de cursos (decisión 52). Los dos los pone JavaScript; sin él, el panel se ve entero. */
+.panel-cabeza .panel-nuevo { margin-left: auto; }
+.panel-replegar { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; min-height: 32px;
+  padding: 0; border: 1px solid var(--borde); background: var(--fondo); color: var(--texto); }
+.panel-replegar[hidden] { display: none; }
+.panel-replegar::before { content: ""; width: 0.45rem; height: 0.45rem; border: solid currentColor; border-width: 0 0 2px 2px;
+  transform: translateX(2px) rotate(45deg); transition: transform 150ms ease-out; }
+.panel-replegar:hover { border-color: var(--principal); color: var(--principal); }
+.panel-buscar { padding: 0.6rem 1.25rem 0; }
+.panel-buscar input { width: 100%; min-height: 36px; padding: 0.35rem 0.6rem; border-color: var(--borde); font-size: 0.9375rem; }
+.panel-buscar input:focus { border-color: var(--principal); }
+.panel-sin-resultados { margin: 0.5rem 0 0; font-size: 0.8125rem; opacity: 0.8; }
+.panel-sin-resultados:empty { display: none; }
+@media (min-width: 52.0625rem) {
+  .panel-replegado .entorno { grid-template-columns: 3.25rem minmax(0, 1fr); }
+  .panel-replegado #panel-contenido, .panel-replegado .panel-cabeza h2, .panel-replegado .panel-nuevo { display: none; }
+  .panel-replegado .panel-cabeza { justify-content: center; padding: 0; }
+  .panel-replegado .panel-replegar::before { transform: translateX(-2px) rotate(-135deg); }
+}
+
 /* Bajo 52rem el panel pasa arriba (decisión 50 f). Con JavaScript queda plegado: el botón «Cursos», el curso abierto y la
    sesión abierta con sus materiales en una fila que se desliza; el botón lo despliega entero. Sin JavaScript se ve entero. */
 .panel-barra { display: none; }
@@ -364,6 +384,8 @@ main.hoja { min-width: 0; max-width: 50rem; margin: 0; padding: 2rem 2.5rem 4rem
   .panel-boton::after { content: ""; width: 0.45rem; height: 0.45rem; border: solid currentColor; border-width: 0 2px 2px 0;
     transform: translateY(-2px) rotate(45deg); transition: transform 150ms ease-out; }
   .panel:not(.plegado) .panel-boton::after { transform: translateY(2px) rotate(-135deg); }
+  .panel-replegar { display: none !important; }
+  .panel.plegado .panel-buscar,
   .panel.plegado .panel-cabeza, .panel.plegado .panel-linea:not(.abierto), .panel.plegado .panel-gasto,
   .panel.plegado .panel-sesion:not(.abierta), .panel.plegado .panel-vacio { display: none; }
   .panel.plegado .panel-linea { border-top: 0; }
