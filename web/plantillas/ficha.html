@@ -108,6 +108,32 @@
 </div>
 {% endmacro %}
 
+{# Qué parte de las páginas de las fuentes cubren las sesiones. La calcula un programa (decisión 53). #}
+{% macro cobertura_de_sesiones() %}
+{% if cobertura %}
+<div class="cobertura" role="status">
+  {% if cobertura.vigente %}
+  <p><b>Las sesiones cubren el {{ cobertura.porcentaje }} % del material</b>: {{ cobertura.cubiertas }} de {{ cobertura.total }} páginas de las fuentes.</p>
+  <ul>
+    {% for f in cobertura.fuentes %}
+    <li>{{ f.fuente }}: {{ f.cubiertas }} de {{ f.total }} páginas.{% if f.fuera %} Quedan fuera las páginas {{ f.fuera }}.{% endif %}</li>
+    {% endfor %}
+  </ul>
+  <details>
+    <summary>Páginas de cada sesión</summary>
+    <ul>
+      {% for numero, tramos in cobertura.sesiones.items() %}
+      <li>Sesión {{ numero }}: {{ tramos | join("; ") if tramos else "ninguna página de las fuentes" }}.</li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% else %}
+  <p>Cambiaste las sesiones después de repartirlas, así que la cobertura ya no vale. Pulsa «Repartir las sesiones» para calcularla de nuevo.</p>
+  {% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
 {% block contenido %}
 <p class="volver"><a href="/cursos/{{ curso }}">{{ "Volver a las sesiones del curso" if sesion else "Volver al curso" }}</a></p>
 <p class="donde">{{ "Sesión " ~ sesion if sesion else "Preparación del curso" }}</p>
@@ -194,6 +220,7 @@
         {% for r in s.resumen %}<dt{% if r.completa != r.etiqueta %} title="{{ r.completa }}"{% endif %}>{{ r.etiqueta }}</dt><dd>{% if r.valor %}<span>{{ r.valor }}</span>{% else %}<span class="vacio">Ninguno</span>{% endif %}</dd>{% endfor %}
       </dl>
       {% endif %}
+      {% if (completar.get(s.titulo) or {}).clave == "sesiones" %}{{ cobertura_de_sesiones() }}{% endif %}
       {% if s.filas %}
       <table class="filas-ficha">
         <thead><tr><th scope="col">N.º</th><th scope="col">{{ s.filas[0].nombre }}</th><th scope="col"><span class="sr">Acción</span></th></tr></thead>
@@ -229,6 +256,7 @@
     {% endfor %}
     {% set extra = completar.get(s.titulo) %}
     {% if extra %}
+    {% if extra.clave == "sesiones" %}{{ cobertura_de_sesiones() }}{% endif %}
     <div class="completar">
       <button type="submit" name="accion" value="completar.{{ extra.clave }}" class="secundario" {% if propuesta.estado == "trabajando" %}disabled{% endif %}>{{ extra.boton }}</button>
       <p class="ayuda">{{ extra.ayuda }} {{ gasta(terminos) }}. {{ costo(costos["completar." ~ extra.clave]) }}</p>
@@ -343,7 +371,7 @@
     const radios = formulario.querySelectorAll(`input[name="${campo.dataset.dependeDe}"]`);
     const actualizar = () => {
       const elegido = [...radios].find((r) => r.checked);
-      campo.hidden = !elegido || elegido.value !== campo.dataset.dependeValor;
+      campo.hidden = !elegido || !campo.dataset.dependeValor.split("|").includes(elegido.value);
     };
     radios.forEach((r) => r.addEventListener("change", actualizar));
     actualizar();

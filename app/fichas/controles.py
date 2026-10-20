@@ -74,8 +74,10 @@ CONTROLES = {
     },
     "herramientas.cual": {"tipo": "texto", "titulo": "Herramienta y versión que usan los alumnos", "depende": ("herramientas.neutral", "no"),
                           "ayuda": "Por ejemplo: «Microsoft Copilot en Word 365». El laboratorio se escribe para ella."},
+    # Sin IA no hay adjuntos que pegar en un mensaje (decisión 36 c): la pregunta solo se muestra con IA.
     "herramientas.adjuntos": {
         "tipo": "opciones", "titulo": "¿La herramienta de los alumnos acepta archivos adjuntos?",
+        "depende": ("herramientas.ejercicios", ("IA", "Excel e IA")),
         "opciones": (("sí", "Sí: el ejercicio dice «adjunta el archivo»"),
                      ("no", "No: el alumno copia el texto del archivo y lo pega en el mensaje"),
                      ("no sé", "No sé: se dan las dos formas")),
@@ -157,12 +159,31 @@ def equivalente(campo_id: str, nuevo: str, anterior: str) -> bool:
     return False
 
 
+def valores_que_lo_muestran(campo_id: str) -> tuple[str, ...]:
+    """Las opciones del otro campo que muestran este. Vacío: el campo se muestra siempre."""
+    depende = (CONTROLES.get(campo_id) or {}).get("depende")
+    if not depende:
+        return ()
+    return (depende[1],) if isinstance(depende[1], str) else tuple(depende[1])
+
+
+def se_muestra(campo_id: str, valores: dict[str, str]) -> bool:
+    """Un campo que depende de otro se muestra solo si el otro tiene una de sus opciones."""
+    muestran = valores_que_lo_muestran(campo_id)
+    if not muestran:
+        return True
+    otro = CONTROLES[campo_id]["depende"][0]
+    return elegida(otro, valores.get(otro, "")) in muestran
+
+
 def vista(campo_id: str, valor: str) -> dict | None:
     """Datos que necesita la página para dibujar el control, o None si el campo sigue siendo texto."""
     control = CONTROLES.get(campo_id)
     if control is None:
         return None
     datos = dict(control)
+    if control.get("depende"):
+        datos["depende"] = (control["depende"][0], "|".join(valores_que_lo_muestran(campo_id)))
     if control["tipo"] in ("lista", "opciones"):
         datos["elegida"] = elegida(campo_id, valor)
         datos["es_otro"] = datos["elegida"] is None

@@ -66,30 +66,95 @@ def test_la_propuesta_no_inventa_horas_ni_numero_de_sesiones(curso):
 
 # ---------- Botones «Completar» ----------
 
-def test_completar_las_sesiones_usa_horas_numero_y_publico(curso):
+def _sesiones(*sesiones):
+    return consulta_simulada(structured_output={"sesiones": [
+        {"numero": n, "titulo": t, "alcance": a, "paginas": p} for n, t, a, p in sesiones]})
+
+
+def test_repartir_las_sesiones_usa_horas_numero_y_publico_y_reemplaza_lo_que_habia(curso):
     _ficha(curso, {"curso.nombre": "Excel para análisis", "curso.horas": "12", "curso.numero_sesiones": "3",
-                   "publico.quienes": "Asistentes administrativos"})
-    consulta = _respuesta(**{"curso.sesiones": "1. Tablas: orden y filtros\n2. Fórmulas: SUMAR.SI",
-                             "caso.empresa": "No debe entrar"})
+                   "publico.quienes": "Asistentes administrativos", "curso.sesiones": "1. Lo que había"})
+    consulta = _sesiones((2, "Fórmulas", "SUMAR.SI.", []), (1, "Tablas", "Orden y filtros.", []))
     mensaje = correr(flujo.completar(curso, "excel", "sesiones", consulta=consulta))
     ficha = almacen.cargar(curso, "curso")
-    assert ficha["campos"]["curso.sesiones"] == {"valor": "1. Tablas: orden y filtros\n2. Fórmulas: SUMAR.SI",
+    assert ficha["campos"]["curso.sesiones"] == {"valor": "1. Tablas: Orden y filtros.\n2. Fórmulas: SUMAR.SI.",
                                                  "origen": "deducido", "estado": "propuesto"}
-    assert almacen.valor(ficha, "caso.empresa") == ""          # solo llena los campos de su sección
     assert "Ojo: pediste 3 sesiones y la propuesta trae 2." in mensaje
+    assert "Sin fuentes convertidas no se calcula la cobertura." in mensaje
+    assert "cobertura_sesiones" not in ficha
     pedido = consulta.llamadas[0]["prompt"]
     assert "- Horas del curso: 12" in pedido and "Asistentes administrativos" in pedido
-    assert "exactamente 3 líneas" in pedido
+    assert "- Horas de cada sesión: 4" in pedido and "exactamente 3 sesiones" in pedido
+    assert "Lo que había" not in pedido
     assert not consulta.llamadas[0]["options"].allowed_tools   # sin fuentes, sin herramientas
+
+
+def test_repartir_las_sesiones_calcula_la_cobertura_con_las_paginas_de_las_fuentes(curso, monkeypatch):
+    _ficha(curso, {"curso.nombre": "Agilidad", "curso.horas": "6", "curso.numero_sesiones": "2"})
+    monkeypatch.setattr(flujo.verificacion, "fuentes_utilizables", lambda c: ["Guia.pdf", "Manifiesto.pdf"])
+    monkeypatch.setattr(flujo, "paginas_de_las_fuentes",
+                        lambda c, f: {"Guia.pdf": list(range(1, 11)), "Manifiesto.pdf": [1, 2, 3, 4, 5, 7, 8, 9, 10, 11]})
+    consulta = _sesiones(
+        (1, "Dominios", "Los dominios.", [{"fuente": "Guia.pdf.jsonl", "desde": 1, "hasta": 8},
+                                          {"fuente": "Inventada.pdf", "desde": 1, "hasta": 99}]),
+        (2, "Valores", "Los cuatro valores.", [{"fuente": "Manifiesto.pdf", "desde": 9, "hasta": 3}]))
+    mensaje = correr(flujo.completar(curso, "agilidad", "sesiones", consulta=consulta))
+    ficha = almacen.cargar(curso, "curso")
+    c = flujo.cobertura_vigente(ficha)
+    # Guía: 8 de 10. Manifiesto: 3 a 9 son 3, 4, 5, 7, 8 y 9. Una fuente que no es del curso no cuenta.
+    assert (c["cubiertas"], c["total"], c["porcentaje"], c["vigente"]) == (14, 20, 70, True)
+    assert c["fuentes"][0] == {"fuente": "Guia.pdf", "cubiertas": 8, "total": 10, "fuera": "9 y 10"}
+    assert c["fuentes"][1]["fuera"] == "1, 2, 10 y 11"
+    assert c["sesiones"] == {"1": ["Guia.pdf: páginas 1 a 8"], "2": ["Manifiesto.pdf: páginas 3 a 5 y 7 a 9"]}
+    assert "Cubren el 70 % de las páginas de las fuentes (14 de 20)." in mensaje
+    pedido = consulta.llamadas[0]["prompt"]
+    assert "Guia.pdf (páginas 1 a 10)" in pedido and "Si no cabe, elige los temas más importantes" in pedido
+    # Si el profesor cambia las sesiones, la cobertura deja de valer.
+    almacen.aplicar_formulario(ficha, {"curso.sesiones": "1. Otra cosa"})
+    assert flujo.cobertura_vigente(ficha)["vigente"] is False
+
+
+def test_los_tramos_de_paginas_se_leen_como_una_frase():
+    assert flujo._tramos([1, 2, 3, 7, 9, 10]) == "1 a 3, 7, 9 y 10"
+    assert flujo._tramos([4]) == "4" and flujo._tramos([]) == ""
+
+
+def test_la_pagina_muestra_la_cobertura_y_avisa_si_ya_no_vale(entorno):
+    from fastapi.testclient import TestClient
+    from app import servidor
+    cliente = TestClient(servidor.app)
+    cliente.post("/cursos", data={"nombre": "Excel"})
+    curso = entorno["cursos"] / "excel"
+    ficha = almacen.cargar(curso, "curso")
+    ficha["campos"]["curso.sesiones"] = {"valor": "1. Dominios: los dominios.", "origen": "deducido", "estado": "propuesto"}
+    ficha["cobertura_sesiones"] = flujo.cobertura(
+        [{"numero": 1, "paginas": [{"fuente": "Guia.pdf", "desde": 1, "hasta": 3}]}], {"Guia.pdf": [1, 2, 3, 4]},
+        "1. Dominios: los dominios.")
+    almacen.guardar(curso, "curso", None, ficha)
+    pagina = cliente.get("/cursos/excel/ficha").text
+    assert "Las sesiones cubren el 75 % del material" in pagina and "Quedan fuera las páginas 4." in pagina
+    assert "Sesión 1: Guia.pdf: páginas 1 a 3." in pagina
+    almacen.aplicar_formulario(ficha, {"curso.sesiones": "1. Otra"})
+    almacen.guardar(curso, "curso", None, ficha)
+    assert "la cobertura ya no vale" in cliente.get("/cursos/excel/ficha").text
+
+
+def test_la_pregunta_de_adjuntos_solo_se_muestra_con_ia():
+    from app.fichas import controles
+    assert controles.vista("herramientas.adjuntos", "")["depende"] == ("herramientas.ejercicios", "IA|Excel e IA")
+    assert not controles.se_muestra("herramientas.adjuntos", {"herramientas.ejercicios": "ninguna"})
+    assert not controles.se_muestra("herramientas.adjuntos", {})
+    assert controles.se_muestra("herramientas.adjuntos", {"herramientas.ejercicios": "Excel e IA"})
+    assert controles.se_muestra("herramientas.neutral", {})
 
 
 def test_completar_pide_primero_lo_que_necesita_y_no_gasta_tokens(curso):
     _ficha(curso, {"curso.nombre": "Excel para análisis"})
     consulta = _respuesta()
     assert correr(flujo.completar(curso, "excel", "sesiones", consulta=consulta)) == \
-        "Para completar, llena primero «Número de sesiones»."
+        "Para repartir las sesiones, llena primero «Horas del curso» y «Número de sesiones»."
     assert correr(flujo.completar(curso, "excel", "datos", consulta=consulta)) == \
-        "Para completar, llena primero «Empresa o institución ficticia y rubro»."
+        "Para completar los datos fijos, llena primero «Empresa o institución ficticia y rubro»."
     assert consulta.llamadas == []
 
 

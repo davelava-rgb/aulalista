@@ -7,6 +7,7 @@ Reglas de la skill (Paso 1 y Paso 2):
 - Cada ejercicio se revisa con tres preguntas antes de confirmar la ficha de la sesión.
 """
 
+import hashlib
 import json
 import re
 import time
@@ -264,12 +265,14 @@ _PUBLICO = ("publico.quienes", "publico.saben", "publico.valoran")
 _CASO = ("caso.empresa", "caso.areas", "caso.moneda")
 
 # Cada botón «Completar» llena los campos vacíos de su sección con lo que ya dicen las secciones anteriores.
+# «Repartir las sesiones» reemplaza lo que haya y un programa calcula qué parte de las fuentes cubre (decisión 53).
 COMPLETAR = {
     "sesiones": {
-        "seccion": "1. Curso", "boton": "Completar las sesiones", "destino": ("curso.sesiones",),
-        "usa": _CURSO + _PUBLICO, "exige": ("curso.nombre", "curso.numero_sesiones"),
-        "ayuda": "Reparte el tema en el número de sesiones, según las horas y el público (sección 2). "
-                 "Llena «Sesiones» si está vacío.",
+        "seccion": "1. Curso", "boton": "Repartir las sesiones", "destino": ("curso.sesiones",),
+        "usa": _CURSO + _PUBLICO, "exige": ("curso.nombre", "curso.horas", "curso.numero_sesiones"),
+        "ayuda": "Reparte el contenido de las fuentes en el número de sesiones, según las horas y el público "
+                 "(sección 2). Reemplaza lo que haya en «Sesiones» y calcula qué parte de las páginas de las "
+                 "fuentes cubre.",
     },
     "caso": {
         "seccion": "3. Caso del curso", "boton": "Completar el caso", "destino": _CASO,
@@ -301,7 +304,7 @@ def _etiquetas() -> dict[str, str]:
     return {c.id: c.nombre for c, _ in plantillas.campos_de("curso")}
 
 
-def pedido_de_completar(ficha: dict, clave: str, fuentes: list[str]) -> str:
+def pedido_de_completar(ficha: dict, clave: str) -> str:
     datos = COMPLETAR[clave]
     etiquetas = _etiquetas()
     vacios = [c for c in datos["destino"] if not almacen.valor(ficha, c).strip()]
@@ -322,21 +325,7 @@ def pedido_de_completar(ficha: dict, clave: str, fuentes: list[str]) -> str:
         "- Escribe en el idioma del curso, en oraciones cortas y claras, sin jerga ni lenguaje publicitario.",
         "- En los campos de varias líneas, escribe un elemento por línea.",
     ]
-    if clave == "sesiones":
-        numero = almacen.valor(ficha, "curso.numero_sesiones").strip()
-        lineas += [
-            f"- Escribe exactamente {numero} líneas, una por sesión, que empiecen con su número: «1. Título: alcance».",
-            "- Reparte el tema de forma pareja entre las sesiones. Usa las horas solo para medir cuánto cabe en cada una.",
-            "- El alcance dice qué temas cubre la sesión, en una o dos oraciones. Sigue el orden lógico del tema.",
-            "- Ajusta el nivel a lo que el público ya sabe y a lo que valora.",
-        ]
-        if fuentes:
-            lineas += [
-                "- Si las fuentes del curso cubren el tema, sigue sus capítulos y su orden. Son los archivos .jsonl de "
-                "esta carpeta: una línea por pasaje. Busca con Grep y lee con Read. Fuentes:",
-                *[f"  - {f}" for f in fuentes],
-            ]
-    elif clave == "caso":
+    if clave == "caso":
         lineas += [
             "- El caso es ficticio: una empresa o institución que no existe, con su rubro, que encaja con el tema y el público.",
             "- Las áreas son de 3 a 5, en una sola línea, separadas por comas. Entre ellas rotan los ejemplos.",
@@ -359,18 +348,16 @@ async def completar(carpeta_curso: Path, curso: str, clave: str, consulta=agente
     etiquetas = _etiquetas()
     faltan = [etiquetas[c] for c in datos["exige"] if not almacen.valor(ficha, c).strip()]
     if faltan:
-        return "Para completar, llena primero " + " y ".join(f"«{f}»" for f in faltan) + "."
+        return f"Para {datos['boton'][:1].lower()}{datos['boton'][1:]}, llena primero " + \
+            " y ".join(f"«{f}»" for f in faltan) + "."
+    if clave == "sesiones":
+        return await repartir(carpeta_curso, curso, ficha, consulta)
     vacios = [c for c in datos["destino"] if not almacen.valor(ficha, c).strip()]
     if not vacios:
         return "Esa parte ya está llena. Borra lo que quieras cambiar y pulsa otra vez «Completar»."
-    fuentes = verificacion.fuentes_utilizables(carpeta_curso) if clave == "sesiones" else []
-    opciones = {}
-    if fuentes:
-        (carpeta_curso / "fuentes_texto").mkdir(parents=True, exist_ok=True)
-        opciones = {"cwd": carpeta_curso / "fuentes_texto", "herramientas": ("Read", "Grep", "Glob")}
     respuesta = await agente.consultar(
-        pedido_de_completar(ficha, clave, fuentes), tarea="completar_ficha", esquema=ESQUEMA_COMPLETAR,
-        curso=curso, etapa=f"completar ficha: {clave}", consulta=consulta, **opciones,
+        pedido_de_completar(ficha, clave), tarea="completar_ficha", esquema=ESQUEMA_COMPLETAR,
+        curso=curso, etapa=f"completar ficha: {clave}", consulta=consulta,
     )
     llenados = []
     for dato in respuesta.get("campos", []):
@@ -384,6 +371,173 @@ async def completar(carpeta_curso: Path, curso: str, clave: str, consulta=agente
     almacen.guardar(carpeta_curso, "curso", None, ficha, f"completada {clave}")
     nombres = ", ".join(f"«{etiquetas[c]}»" for c in llenados)
     return " ".join([f"Propuse {nombres}. Revisa lo marcado «Propuesto» y guarda.", *_avisos_de_completar(ficha, clave)])
+
+
+# ---------- Repartir las sesiones y su cobertura (PLAN.md §0, decisión 53) ----------
+
+ESQUEMA_REPARTIR = {
+    "type": "object",
+    "properties": {"sesiones": {"type": "array", "items": {
+        "type": "object",
+        "properties": {
+            "numero": {"type": "integer"}, "titulo": {"type": "string"}, "alcance": {"type": "string"},
+            "paginas": {"type": "array", "items": {
+                "type": "object",
+                "properties": {"fuente": {"type": "string"}, "desde": {"type": "integer"}, "hasta": {"type": "integer"}},
+                "required": ["fuente", "desde", "hasta"], "additionalProperties": False,
+            }},
+        },
+        "required": ["numero", "titulo", "alcance", "paginas"], "additionalProperties": False,
+    }}},
+    "required": ["sesiones"],
+    "additionalProperties": False,
+}
+
+
+def paginas_de_las_fuentes(carpeta_curso: Path, fuentes: list[str]) -> dict[str, list[int]]:
+    """Las páginas del PDF que tienen texto, por fuente. Una fuente sin páginas (Word, PowerPoint) no se cuenta."""
+    return {f: sorted({p["pagina"] for p in convertir.leer_pasajes(carpeta_curso, f) if p.get("pagina")})
+            for f in fuentes}
+
+
+def _horas_por_sesion(ficha: dict) -> str:
+    horas, numero = almacen.valor(ficha, "curso.horas").strip(), almacen.valor(ficha, "curso.numero_sesiones").strip()
+    try:
+        cada = float(horas.replace(",", ".")) / int(numero)
+    except (ValueError, ZeroDivisionError):
+        return ""
+    return f"{cada:g}".replace(".", ",")
+
+
+def pedido_de_repartir(ficha: dict, paginas: dict[str, list[int]]) -> str:
+    etiquetas = _etiquetas()
+    numero = almacen.valor(ficha, "curso.numero_sesiones").strip()
+    cada = _horas_por_sesion(ficha)
+    lineas = [
+        "Vas a repartir el tema de un curso en sesiones. Lo que ya está escrito lo decidió el profesor.",
+        "",
+        "Lo que ya dice la ficha:",
+        *[f"- {etiquetas[c]}: {almacen.valor(ficha, c).strip()}" for c in COMPLETAR["sesiones"]["usa"]
+          if almacen.valor(ficha, c).strip()],
+        *([f"- Horas de cada sesión: {cada}"] if cada else []),
+        "",
+        "Reglas:",
+        f"- Devuelve exactamente {numero} sesiones, numeradas de 1 a {numero}.",
+        "- Cada sesión tiene un título corto y un alcance: qué temas cubre, en una o dos oraciones.",
+        "- Usa las horas solo para medir cuánto cabe en cada sesión. No escribas horas, minutos ni ningún otro "
+        "tiempo: ningún material muestra tiempos.",
+        "- Ajusta el nivel a lo que el público ya sabe y a lo que valora.",
+        "- No inventes hechos del mundo real: ni cifras reales, ni estudios, ni personas reales, ni funciones de herramientas.",
+        "- Escribe en el idioma del curso, en oraciones cortas y claras, sin jerga ni lenguaje publicitario.",
+        "- No escribas el número de la sesión dentro del título.",
+    ]
+    con_paginas = {f: p for f, p in paginas.items() if p}
+    if paginas:
+        lineas += [
+            "- Las fuentes del curso son los archivos .jsonl de esta carpeta: una línea por pasaje, con su texto y su "
+            "campo «pagina» (la página del PDF). Busca con Grep y lee con Read. Fuentes:",
+            *[f"  - {f}" + (f" (páginas {p[0]} a {p[-1]})" if p else "") for f, p in paginas.items()],
+            "- Cubre todo el contenido de las fuentes si cabe en las horas de cada sesión. Si no cabe, elige los temas "
+            "más importantes y deja fuera lo secundario: anexos, ejemplos que se repiten, bibliografía, créditos.",
+            "- Sigue los capítulos y el orden de las fuentes.",
+        ]
+    if con_paginas:
+        lineas += [
+            "- En «paginas» escribe los tramos de cada fuente que cubre la sesión: el nombre exacto de la fuente (sin "
+            "«.jsonl»), la primera y la última página. Usa el campo «pagina» de los pasajes, no el número impreso.",
+            "- Un mismo tramo no va en dos sesiones. Lo que dejas fuera no va en ningún tramo.",
+        ]
+    else:
+        lineas.append("- Deja «paginas» vacío.")
+    return "\n".join(lineas)
+
+
+def _huella_sesiones(texto: str) -> str:
+    return hashlib.sha256(" ".join(texto.split()).encode("utf-8")).hexdigest()
+
+
+def _tramos(paginas: list[int]) -> str:
+    """[1, 2, 3, 7, 9, 10] → «1 a 3, 7, 9 y 10»."""
+    tramos = []
+    for p in paginas:
+        if tramos and p == tramos[-1][1] + 1:
+            tramos[-1][1] = p
+        else:
+            tramos.append([p, p])
+    partes = []
+    for a, b in tramos:
+        partes += [str(a)] if a == b else [str(a), str(b)] if b == a + 1 else [f"{a} a {b}"]
+    return " y ".join([", ".join(partes[:-1]), partes[-1]]) if len(partes) > 1 else "".join(partes)
+
+
+def cobertura(sesiones: list[dict], paginas: dict[str, list[int]], texto: str) -> dict:
+    """Qué parte de las páginas de las fuentes cubren las sesiones. Lo calcula un programa, no la IA: solo cuentan
+    los tramos de fuentes del curso y las páginas que existen en ellas."""
+    cubiertas = {f: set() for f in paginas}
+    por_sesion = {}
+    for s in sesiones:
+        tramos = []
+        for tramo in s["paginas"]:
+            fuente = tramo["fuente"].removesuffix(".jsonl").strip()
+            desde, hasta = sorted((tramo["desde"], tramo["hasta"]))
+            dentro = {p for p in paginas.get(fuente, []) if desde <= p <= hasta}
+            if dentro:
+                cubiertas[fuente] |= dentro
+                tramos.append(f"{fuente}: páginas {_tramos(sorted(dentro))}")
+        por_sesion[str(s["numero"])] = tramos
+    fuentes = [{"fuente": f, "cubiertas": len(cubiertas[f]), "total": len(p),
+                "fuera": _tramos(sorted(set(p) - cubiertas[f]))} for f, p in paginas.items() if p]
+    total = sum(f["total"] for f in fuentes)
+    cubiertas_total = sum(f["cubiertas"] for f in fuentes)
+    return {"huella": _huella_sesiones(texto), "porcentaje": round(100 * cubiertas_total / total) if total else 0,
+            "cubiertas": cubiertas_total, "total": total, "fuentes": fuentes, "sesiones": por_sesion}
+
+
+def cobertura_vigente(ficha: dict) -> dict | None:
+    """La cobertura guardada y si todavía vale: deja de valer si el profesor cambió las sesiones después."""
+    guardada = ficha.get("cobertura_sesiones")
+    if not guardada:
+        return None
+    return {**guardada, "vigente": guardada["huella"] == _huella_sesiones(almacen.valor(ficha, "curso.sesiones"))}
+
+
+async def repartir(carpeta_curso: Path, curso: str, ficha: dict, consulta=agente.query) -> str:
+    """Reparte el contenido de las fuentes en las sesiones. Reemplaza lo que haya en «Sesiones»."""
+    fuentes = verificacion.fuentes_utilizables(carpeta_curso)
+    paginas = paginas_de_las_fuentes(carpeta_curso, fuentes)
+    opciones = {}
+    if fuentes:
+        (carpeta_curso / "fuentes_texto").mkdir(parents=True, exist_ok=True)
+        opciones = {"cwd": carpeta_curso / "fuentes_texto", "herramientas": ("Read", "Grep", "Glob")}
+    respuesta = await agente.consultar(
+        pedido_de_repartir(ficha, paginas), tarea="completar_ficha", esquema=ESQUEMA_REPARTIR,
+        curso=curso, etapa="completar ficha: sesiones", consulta=consulta, **opciones,
+    )
+    sesiones = sorted(respuesta.get("sesiones", []), key=lambda s: s["numero"])
+    lineas = []
+    for s in sesiones:
+        titulo, alcance = almacen.sin_marcas(s["titulo"]).strip(" .:"), almacen.sin_marcas(s["alcance"]).strip()
+        if titulo:
+            lineas.append(f"{s['numero']}. {titulo}: {alcance}" if alcance else f"{s['numero']}. {titulo}")
+    if not lineas:
+        return "La propuesta llegó vacía. No cambié nada."
+    texto = "\n".join(lineas)
+    ficha["campos"]["curso.sesiones"] = {"valor": texto, "origen": "deducido", "estado": almacen.PROPUESTO}
+    if any(paginas.values()):
+        ficha["cobertura_sesiones"] = cobertura(sesiones, paginas, texto)
+    else:
+        ficha.pop("cobertura_sesiones", None)
+    ficha["confirmada"] = False
+    almacen.guardar(carpeta_curso, "curso", None, ficha, "sesiones repartidas")
+    resumen = f"Repartí el contenido en {len(lineas)} sesiones."
+    if "cobertura_sesiones" in ficha:
+        c = ficha["cobertura_sesiones"]
+        resumen += f" Cubren el {c['porcentaje']} % de las páginas de las fuentes ({c['cubiertas']} de {c['total']})."
+    elif fuentes:
+        resumen += " Las fuentes no tienen páginas: no se calculó la cobertura."
+    else:
+        resumen += " Sin fuentes convertidas no se calcula la cobertura."
+    return " ".join([resumen, "Revisa lo marcado «Propuesto» y guarda.", *_avisos_de_completar(ficha, "sesiones")])
 
 
 def _avisos_de_completar(ficha: dict, clave: str) -> list[str]:

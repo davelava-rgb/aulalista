@@ -284,6 +284,7 @@ def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, m
         "desactualizados": desactualizados,
         "completar": {d["seccion"]: {"clave": c, **d} for c, d in flujo.COMPLETAR.items()} if tipo == "curso" else {},
         "base": json.dumps(almacen.valores_de(ficha), ensure_ascii=False),
+        "cobertura": flujo.cobertura_vigente(ficha) if tipo == "curso" else None,
     })
 
 
@@ -334,6 +335,7 @@ def _resumen_de_seccion(s: dict, campos: list[dict]) -> None:
     s["estado"] = ("no_se_usa" if no_se_usa else "alerta" if s["alertas"]
                    else "completa" if any(c["valor"].strip() for c in campos) else "vacia")
     s["resumen"], s["filas"], s["vacios"] = [], [], 0
+    valores = {c.get("id", ""): c["valor"] for c in campos}
     for e in s["elementos"]:
         if e.get("repetible"):
             for b in e["bloques"]:
@@ -346,6 +348,8 @@ def _resumen_de_seccion(s: dict, campos: list[dict]) -> None:
                                    "titulo": valores[0] if valores else "", "detalle": valores[1] if len(valores) > 1 else ""})
         else:
             for c in (e["campos"] if e.get("grupo") else [e]):
+                if not controles.se_muestra(c.get("id", ""), valores):
+                    continue        # una pregunta que no aplica no se resume (por ejemplo, los adjuntos sin IA)
                 s["resumen"].append({"etiqueta": _etiqueta_corta(c["etiqueta"]), "completa": c["etiqueta"],
                                      "valor": " ".join(c["valor"].split())})
 
