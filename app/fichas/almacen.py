@@ -63,6 +63,7 @@ def nueva(tipo: str) -> dict:
 def cargar(carpeta_curso: Path, tipo: str, sesion: int | None = None) -> dict:
     ruta = ruta_ficha(carpeta_curso, tipo, sesion)
     ficha = json.loads(ruta.read_text(encoding="utf-8")) if ruta.exists() else nueva(tipo)
+    poner_nombre_del_curso(carpeta_curso, ficha)
     quitar_faltas_viejas(ficha)
     revision = ficha.get("revision_ejercicios") or {}
     vigente = ficha["tipo"] == "sesion" and revision.get("huella") == huella_de_ejercicios(ficha)
@@ -72,6 +73,17 @@ def cargar(carpeta_curso: Path, tipo: str, sesion: int | None = None) -> dict:
         revision["huella"] = huella_de_ejercicios(ficha)
     poner_por_omision(ficha)
     return ficha
+
+
+def poner_nombre_del_curso(carpeta_curso: Path, ficha: dict) -> None:
+    """El nombre que el profesor dio al crear el curso llena «Nombre del curso» si está vacío. Así la propuesta
+    desde las fuentes no lo reemplaza por el título de un PDF."""
+    ruta = carpeta_curso / "curso.json"
+    if ficha["tipo"] != "curso" or valor(ficha, "curso.nombre").strip() or not ruta.exists():
+        return
+    nombre = json.loads(ruta.read_text(encoding="utf-8")).get("nombre", "").strip()
+    if nombre:
+        ficha["campos"]["curso.nombre"] = {"valor": nombre, "origen": PROFESOR, "estado": ""}
 
 
 def texto_de_ejercicios(ficha: dict) -> tuple[str, list[int]]:

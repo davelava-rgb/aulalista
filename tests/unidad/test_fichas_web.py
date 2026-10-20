@@ -22,7 +22,7 @@ def test_la_pagina_muestra_la_plantilla_y_las_preguntas_pendientes(curso):
     assert r.status_code == 200
     assert "Nombre del curso (obligatorio)" in r.text
     assert "¿El material habla en general o nombra una herramienta?" in r.text
-    assert "Responde primero estas 2" in r.text   # nombre y sesiones: los dos obligatorios del curso
+    assert "Responde primero esta" in r.text   # las sesiones: el nombre ya es el que se dio al crear el curso
 
 
 def test_guardar_con_datos_faltantes_guarda_sin_confirmar(curso):
@@ -31,6 +31,15 @@ def test_guardar_con_datos_faltantes_guarda_sin_confirmar(curso):
     assert "Para confirmarla falta" in r.text
     assert "Falta «Sesiones. Una línea por sesión: número, título y alcance.»." in r.text
     assert almacen.valor(almacen.cargar(curso, "curso"), "curso.nombre") == "Scrum Master con IA"
+
+
+def test_el_nombre_del_curso_es_el_que_dio_el_profesor_y_la_propuesta_no_lo_cambia(curso):
+    ficha = almacen.cargar(curso, "curso")
+    assert ficha["campos"]["curso.nombre"] == {"valor": "Scrum", "origen": "profesor", "estado": ""}
+    resumen = flujo.aplicar_propuesta(curso, ficha, {"campos": [
+        {"id": "curso.nombre", "valor": "Título del PDF", "origen": "deducido", "literal": False}], "conflictos": []})
+    assert resumen["descartados"] == 1 and almacen.valor(ficha, "curso.nombre") == "Scrum"
+    assert "curso.nombre" not in flujo.pedido_de_propuesta(curso, "curso", None, ficha)   # no se pide lo que está lleno
 
 
 def test_guardar_una_pagina_abierta_antes_de_la_propuesta_no_borra_lo_propuesto(curso):
