@@ -285,6 +285,7 @@ def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, m
         "completar": {d["seccion"]: {"clave": c, **d} for c, d in flujo.COMPLETAR.items()} if tipo == "curso" else {},
         "base": json.dumps(almacen.valores_de(ficha), ensure_ascii=False),
         "cobertura": flujo.cobertura_vigente(ficha) if tipo == "curso" else None,
+        "sin_revisar": flujo.fuentes_sin_revisar(carpeta) if tipo == "curso" else [],
     })
 
 

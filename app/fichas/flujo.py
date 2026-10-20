@@ -443,9 +443,11 @@ def pedido_de_repartir(ficha: dict, paginas: dict[str, list[int]]) -> str:
         ]
     if con_paginas:
         lineas += [
-            "- En «paginas» escribe los tramos de cada fuente que cubre la sesión: el nombre exacto de la fuente (sin "
-            "«.jsonl»), la primera y la última página. Usa el campo «pagina» de los pasajes, no el número impreso.",
-            "- Un mismo tramo no va en dos sesiones. Lo que dejas fuera no va en ningún tramo.",
+            "- En «paginas» escribe los tramos de cada fuente que cubre la sesión: el nombre de la fuente copiado tal "
+            "cual de la lista de arriba, la primera y la última página. Usa el campo «pagina» de los pasajes, no el "
+            "número impreso. Para saber en qué página está un tema, búscalo con Grep y mira su campo «pagina».",
+            "- Cada sesión trae al menos un tramo. Un mismo tramo no va en dos sesiones. Lo que dejas fuera no va en "
+            "ningún tramo.",
         ]
     else:
         lineas.append("- Deja «paginas» vacío.")
@@ -470,27 +472,56 @@ def _tramos(paginas: list[int]) -> str:
     return " y ".join([", ".join(partes[:-1]), partes[-1]]) if len(partes) > 1 else "".join(partes)
 
 
-def cobertura(sesiones: list[dict], paginas: dict[str, list[int]], texto: str) -> dict:
+def _comparable(nombre: str) -> str:
+    return " ".join(nombre.lower().removesuffix(".jsonl").split())
+
+
+def _fuente_de(nombre: str, fuentes) -> str | None:
+    """La fuente del curso que nombra la IA, sin importar mayúsculas, espacios, «.jsonl» ni la extensión."""
+    buscado = _comparable(nombre)
+    for fuente in fuentes:
+        if buscado in (_comparable(fuente), _comparable(Path(fuente).stem)):
+            return fuente
+    return None
+
+
+def cobertura(sesiones: list[dict], paginas: dict[str, list[int]], texto: str,
+              sin_revisar: dict[str, list[int]] | None = None) -> dict:
     """Qué parte de las páginas de las fuentes cubren las sesiones. Lo calcula un programa, no la IA: solo cuentan
-    los tramos de fuentes del curso y las páginas que existen en ellas."""
+    los tramos de fuentes del curso y las páginas que existen en ellas. Una fuente que el profesor todavía no
+    revisó cuenta en el total, pero ninguna sesión puede usarla: su texto lo leyó la IA y nadie lo confirmó."""
     cubiertas = {f: set() for f in paginas}
-    por_sesion = {}
+    por_sesion, descartados = {}, []
     for s in sesiones:
         tramos = []
         for tramo in s["paginas"]:
-            fuente = tramo["fuente"].removesuffix(".jsonl").strip()
+            fuente = _fuente_de(tramo["fuente"], paginas)
             desde, hasta = sorted((tramo["desde"], tramo["hasta"]))
             dentro = {p for p in paginas.get(fuente, []) if desde <= p <= hasta}
             if dentro:
                 cubiertas[fuente] |= dentro
                 tramos.append(f"{fuente}: páginas {_tramos(sorted(dentro))}")
+            elif fuente is None:
+                descartados.append(f"Sesión {s['numero']}: «{tramo['fuente']}» no es una fuente del curso.")
+            else:
+                descartados.append(f"Sesión {s['numero']}: {fuente} no tiene las páginas {desde} a {hasta}.")
         por_sesion[str(s["numero"])] = tramos
-    fuentes = [{"fuente": f, "cubiertas": len(cubiertas[f]), "total": len(p),
+    fuentes = [{"fuente": f, "cubiertas": len(cubiertas[f]), "total": len(p), "sin_revisar": False,
                 "fuera": _tramos(sorted(set(p) - cubiertas[f]))} for f, p in paginas.items() if p]
+    fuentes += [{"fuente": f, "cubiertas": 0, "total": len(p), "sin_revisar": True, "fuera": _tramos(p)}
+                for f, p in (sin_revisar or {}).items() if p]
     total = sum(f["total"] for f in fuentes)
     cubiertas_total = sum(f["cubiertas"] for f in fuentes)
     return {"huella": _huella_sesiones(texto), "porcentaje": round(100 * cubiertas_total / total) if total else 0,
-            "cubiertas": cubiertas_total, "total": total, "fuentes": fuentes, "sesiones": por_sesion}
+            "cubiertas": cubiertas_total, "total": total, "fuentes": fuentes, "sesiones": por_sesion,
+            "descartados": descartados}
+
+
+def fuentes_sin_revisar(carpeta_curso: Path) -> list[str]:
+    """Fuentes convertidas que no se pueden usar: la IA leyó parte de su texto y el profesor no lo revisó."""
+    usables = set(verificacion.fuentes_utilizables(carpeta_curso))
+    return [f for f, e in convertir.leer_indice(carpeta_curso).items()
+            if e["estado"] == convertir.CONVERTIDA and f not in usables]
 
 
 def cobertura_vigente(ficha: dict) -> dict | None:
@@ -505,6 +536,7 @@ async def repartir(carpeta_curso: Path, curso: str, ficha: dict, consulta=agente
     """Reparte el contenido de las fuentes en las sesiones. Reemplaza lo que haya en «Sesiones»."""
     fuentes = verificacion.fuentes_utilizables(carpeta_curso)
     paginas = paginas_de_las_fuentes(carpeta_curso, fuentes)
+    sin_revisar = paginas_de_las_fuentes(carpeta_curso, fuentes_sin_revisar(carpeta_curso))
     opciones = {}
     if fuentes:
         (carpeta_curso / "fuentes_texto").mkdir(parents=True, exist_ok=True)
@@ -523,21 +555,30 @@ async def repartir(carpeta_curso: Path, curso: str, ficha: dict, consulta=agente
         return "La propuesta llegó vacía. No cambié nada."
     texto = "\n".join(lineas)
     ficha["campos"]["curso.sesiones"] = {"valor": texto, "origen": "deducido", "estado": almacen.PROPUESTO}
-    if any(paginas.values()):
-        ficha["cobertura_sesiones"] = cobertura(sesiones, paginas, texto)
+    if any(paginas.values()) or any(sin_revisar.values()):
+        ficha["cobertura_sesiones"] = cobertura(sesiones, paginas, texto, sin_revisar)
     else:
         ficha.pop("cobertura_sesiones", None)
     ficha["confirmada"] = False
     almacen.guardar(carpeta_curso, "curso", None, ficha, "sesiones repartidas")
-    resumen = f"Repartí el contenido en {len(lineas)} sesiones."
+    resumen = [f"Repartí el contenido en {len(lineas)} sesiones."]
     if "cobertura_sesiones" in ficha:
         c = ficha["cobertura_sesiones"]
-        resumen += f" Cubren el {c['porcentaje']} % de las páginas de las fuentes ({c['cubiertas']} de {c['total']})."
+        resumen.append(f"Cubren el {c['porcentaje']} % de las páginas de las fuentes ({c['cubiertas']} de {c['total']}).")
+        resumen += [f"Ojo: la sesión {n} no trae páginas de las fuentes." for n, t in c["sesiones"].items()
+                    if not t and any(paginas.values())]
+        if any(sin_revisar.values()):
+            resumen.append("Ojo: " + _y([f"«{f}»" for f, p in sin_revisar.items() if p]) +
+                           " no se usó porque falta revisar el texto que leyó la IA.")
     elif fuentes:
-        resumen += " Las fuentes no tienen páginas: no se calculó la cobertura."
+        resumen.append("Las fuentes no tienen páginas: no se calculó la cobertura.")
     else:
-        resumen += " Sin fuentes convertidas no se calcula la cobertura."
-    return " ".join([resumen, "Revisa lo marcado «Propuesto» y guarda.", *_avisos_de_completar(ficha, "sesiones")])
+        resumen.append("Sin fuentes convertidas no se calcula la cobertura.")
+    return " ".join([*resumen, "Revisa lo marcado «Propuesto» y guarda.", *_avisos_de_completar(ficha, "sesiones")])
+
+
+def _y(partes: list[str]) -> str:
+    return " y ".join([", ".join(partes[:-1]), partes[-1]]) if len(partes) > 1 else "".join(partes)
 
 
 def _avisos_de_completar(ficha: dict, clave: str) -> list[str]:

@@ -92,8 +92,8 @@ def test_repartir_las_sesiones_usa_horas_numero_y_publico_y_reemplaza_lo_que_hab
 def test_repartir_las_sesiones_calcula_la_cobertura_con_las_paginas_de_las_fuentes(curso, monkeypatch):
     _ficha(curso, {"curso.nombre": "Agilidad", "curso.horas": "6", "curso.numero_sesiones": "2"})
     monkeypatch.setattr(flujo.verificacion, "fuentes_utilizables", lambda c: ["Guia.pdf", "Manifiesto.pdf"])
-    monkeypatch.setattr(flujo, "paginas_de_las_fuentes",
-                        lambda c, f: {"Guia.pdf": list(range(1, 11)), "Manifiesto.pdf": [1, 2, 3, 4, 5, 7, 8, 9, 10, 11]})
+    todas = {"Guia.pdf": list(range(1, 11)), "Manifiesto.pdf": [1, 2, 3, 4, 5, 7, 8, 9, 10, 11]}
+    monkeypatch.setattr(flujo, "paginas_de_las_fuentes", lambda c, f: {n: todas[n] for n in f})
     consulta = _sesiones(
         (1, "Dominios", "Los dominios.", [{"fuente": "Guia.pdf.jsonl", "desde": 1, "hasta": 8},
                                           {"fuente": "Inventada.pdf", "desde": 1, "hasta": 99}]),
@@ -103,7 +103,8 @@ def test_repartir_las_sesiones_calcula_la_cobertura_con_las_paginas_de_las_fuent
     c = flujo.cobertura_vigente(ficha)
     # Guía: 8 de 10. Manifiesto: 3 a 9 son 3, 4, 5, 7, 8 y 9. Una fuente que no es del curso no cuenta.
     assert (c["cubiertas"], c["total"], c["porcentaje"], c["vigente"]) == (14, 20, 70, True)
-    assert c["fuentes"][0] == {"fuente": "Guia.pdf", "cubiertas": 8, "total": 10, "fuera": "9 y 10"}
+    assert c["fuentes"][0] == {"fuente": "Guia.pdf", "cubiertas": 8, "total": 10, "fuera": "9 y 10", "sin_revisar": False}
+    assert c["descartados"] == ["Sesión 1: «Inventada.pdf» no es una fuente del curso."]
     assert c["fuentes"][1]["fuera"] == "1, 2, 10 y 11"
     assert c["sesiones"] == {"1": ["Guia.pdf: páginas 1 a 8"], "2": ["Manifiesto.pdf: páginas 3 a 5 y 7 a 9"]}
     assert "Cubren el 70 % de las páginas de las fuentes (14 de 20)." in mensaje
@@ -112,6 +113,32 @@ def test_repartir_las_sesiones_calcula_la_cobertura_con_las_paginas_de_las_fuent
     # Si el profesor cambia las sesiones, la cobertura deja de valer.
     almacen.aplicar_formulario(ficha, {"curso.sesiones": "1. Otra cosa"})
     assert flujo.cobertura_vigente(ficha)["vigente"] is False
+
+
+def test_la_cobertura_reconoce_la_fuente_aunque_la_ia_la_escriba_distinto_y_cuenta_las_sin_revisar():
+    paginas = {"Manifesto for Enterprise Agility FINAL.pdf": list(range(1, 13))}
+    sesiones = [{"numero": 1, "paginas": [{"fuente": "manifesto for enterprise  agility final", "desde": 1, "hasta": 6}]},
+                {"numero": 2, "paginas": [{"fuente": "Manifesto for Enterprise Agility FINAL.pdf.jsonl", "desde": 7, "hasta": 40}]},
+                {"numero": 3, "paginas": []}]
+    c = flujo.cobertura(sesiones, paginas, "texto", {"BAI.pdf": list(range(1, 42))})
+    assert (c["cubiertas"], c["total"], c["porcentaje"]) == (12, 53, 23)
+    assert c["fuentes"][1] == {"fuente": "BAI.pdf", "cubiertas": 0, "total": 41, "sin_revisar": True, "fuera": "1 a 41"}
+    assert c["sesiones"]["3"] == [] and c["descartados"] == []
+
+
+def test_repartir_avisa_las_sesiones_sin_paginas_y_las_fuentes_sin_revisar(curso, monkeypatch):
+    _ficha(curso, {"curso.nombre": "Agilidad", "curso.horas": "6", "curso.numero_sesiones": "2"})
+    monkeypatch.setattr(flujo.verificacion, "fuentes_utilizables", lambda c: ["Manifiesto.pdf"])
+    monkeypatch.setattr(flujo, "fuentes_sin_revisar", lambda c: ["BAI.pdf"])
+    monkeypatch.setattr(flujo, "paginas_de_las_fuentes",
+                        lambda c, f: {n: list(range(1, 13 if n == "Manifiesto.pdf" else 42)) for n in f})
+    consulta = _sesiones((1, "Valores", "Los valores.", [{"fuente": "Manifiesto.pdf", "desde": 1, "hasta": 12}]),
+                         (2, "Principios", "Los principios.", []))
+    mensaje = correr(flujo.completar(curso, "agilidad", "sesiones", consulta=consulta))
+    assert "Ojo: la sesión 2 no trae páginas de las fuentes." in mensaje
+    assert "Ojo: «BAI.pdf» no se usó porque falta revisar el texto que leyó la IA." in mensaje
+    assert "Cubren el 23 % de las páginas de las fuentes (12 de 53)." in mensaje
+    assert "BAI.pdf" not in consulta.llamadas[0]["prompt"]       # la IA no recibe una fuente sin revisar
 
 
 def test_los_tramos_de_paginas_se_leen_como_una_frase():

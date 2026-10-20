@@ -116,9 +116,15 @@
   <p><b>Las sesiones cubren el {{ cobertura.porcentaje }} % del material</b>: {{ cobertura.cubiertas }} de {{ cobertura.total }} páginas de las fuentes.</p>
   <ul>
     {% for f in cobertura.fuentes %}
-    <li>{{ f.fuente }}: {{ f.cubiertas }} de {{ f.total }} páginas.{% if f.fuera %} Quedan fuera las páginas {{ f.fuera }}.{% endif %}</li>
+    <li>{{ f.fuente }}: {{ f.cubiertas }} de {{ f.total }} páginas.
+      {% if f.sin_revisar %}No se usó porque falta revisar el texto que leyó la IA.
+      {% elif f.fuera %}Quedan fuera las páginas {{ f.fuera }}.{% endif %}</li>
     {% endfor %}
   </ul>
+  {% if cobertura.descartados %}
+  <p>Tramos que no cuentan:</p>
+  <ul>{% for d in cobertura.descartados %}<li>{{ d }}</li>{% endfor %}</ul>
+  {% endif %}
   <details>
     <summary>Páginas de cada sesión</summary>
     <ul>
@@ -258,6 +264,11 @@
     {% if extra %}
     {% if extra.clave == "sesiones" %}{{ cobertura_de_sesiones() }}{% endif %}
     <div class="completar">
+      {% if extra.clave == "sesiones" and sin_revisar %}
+      <p class="mensaje">Antes de repartir, revisa el texto que leyó la IA en
+        {% for f in sin_revisar %}<a href="/cursos/{{ curso }}/fuentes/{{ f | urlencode }}">{{ f }}</a>{{ ", " if not loop.last }}{% endfor %}
+        y pulsa «Marcar como revisada». Mientras tanto, las sesiones no pueden usar esa fuente.</p>
+      {% endif %}
       <button type="submit" name="accion" value="completar.{{ extra.clave }}" class="secundario" {% if propuesta.estado == "trabajando" %}disabled{% endif %}>{{ extra.boton }}</button>
       <p class="ayuda">{{ extra.ayuda }} {{ gasta(terminos) }}. {{ costo(costos["completar." ~ extra.clave]) }}</p>
     </div>
