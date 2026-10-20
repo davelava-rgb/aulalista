@@ -416,9 +416,9 @@ def test_sin_ia_no_hay_aviso_de_adjuntos_ni_respuesta_a_la_herramienta(sesion): 
     assert laboratorio.respuestas_a_la_herramienta(sesion, 1) == {}
     assert laboratorio.aviso_de_adjuntos(sesion) == ""
     pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
-    assert "ejercicio.2.pregunta_herramienta" not in pagina and "ejercicio.2.respuesta" in pagina
+    assert 'name="ejercicio.2.pregunta_herramienta"' not in pagina and 'name="ejercicio.2.respuesta"' in pagina
     poner_herramienta(sesion, "IA")
-    assert "ejercicio.2.pregunta_herramienta" in cliente.get("/cursos/scrum/sesiones/1/ficha").text
+    assert 'name="ejercicio.2.pregunta_herramienta"' in cliente.get("/cursos/scrum/sesiones/1/ficha").text
 
 
 def test_el_laboratorio_a_mano_no_tiene_problemas_en_un_curso_sin_herramienta(sesion):  # noqa: F811

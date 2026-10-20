@@ -267,6 +267,21 @@ def aplicar_formulario(ficha: dict, formulario: dict) -> bool:
     return cambio
 
 
+def valores_de(ficha: dict) -> dict[str, str]:
+    """Lo que muestra la página al abrirse: el valor de cada campo con dato."""
+    return {campo_id: dato["valor"] for campo_id, dato in ficha["campos"].items() if dato and dato.get("valor")}
+
+
+def solo_lo_cambiado(formulario: dict, base: dict[str, str]) -> dict:
+    """Quita del formulario los campos que el profesor no tocó: los que siguen como estaban al abrir la página.
+    Así, si la ficha cambió mientras la página estaba abierta (una propuesta que terminó), guardar no la borra."""
+    return {
+        clave: texto for clave, texto in formulario.items()
+        if not (_limpiar(texto) == _limpiar(base.get(clave, ""))
+                or controles.equivalente(clave, _limpiar(texto), base.get(clave, "")))
+    }
+
+
 def _limpiar(texto: str) -> str:
     return "\n".join(sin_marca(linea) for linea in str(texto).replace("\r\n", "\n").strip().split("\n"))
 

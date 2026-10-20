@@ -33,6 +33,22 @@ def test_guardar_con_datos_faltantes_guarda_sin_confirmar(curso):
     assert almacen.valor(almacen.cargar(curso, "curso"), "curso.nombre") == "Scrum Master con IA"
 
 
+def test_guardar_una_pagina_abierta_antes_de_la_propuesta_no_borra_lo_propuesto(curso):
+    # La página se abrió con la ficha vacía; mientras, la propuesta llenó campos que la página no muestra.
+    base = cliente.get("/cursos/scrum/ficha").text.split('name="base" value="', 1)[1].split('"', 1)[0]
+    ficha = almacen.cargar(curso, "curso")
+    ficha["campos"]["curso.nombre"] = {"valor": "Nombre propuesto", "origen": "deducido", "estado": almacen.PROPUESTO}
+    ficha["campos"]["publico.quienes"] = {"valor": "Jefes de proyecto", "origen": "deducido", "estado": almacen.PROPUESTO}
+    almacen.guardar(curso, "curso", None, ficha, "propuesta desde las fuentes")
+    cliente.post("/cursos/scrum/ficha", data={
+        "accion": "guardar", "base": base.replace("&#34;", '"'),
+        "curso.nombre": "Agilidad de Negocios", "curso.sesiones": "1. Dominios", "publico.quienes": ""})
+    guardada = almacen.cargar(curso, "curso")
+    assert almacen.valor(guardada, "curso.nombre") == "Agilidad de Negocios"      # lo que escribió el profesor
+    assert almacen.valor(guardada, "curso.sesiones") == "1. Dominios"
+    assert almacen.valor(guardada, "publico.quienes") == "Jefes de proyecto"      # lo propuesto que no tocó
+
+
 def test_guardar_la_ficha_del_curso_completa_la_confirma_y_abre_las_sesiones(curso):
     r = cliente.post("/cursos/scrum/ficha", data={"accion": "guardar", **datos.CURSO})
     assert "Ficha del curso guardada y confirmada." in r.text

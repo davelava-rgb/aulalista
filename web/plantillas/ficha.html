@@ -170,6 +170,8 @@
 </nav>
 
 <form method="post" id="form-ficha" enctype="multipart/form-data"{% if modo_lectura %} class="ficha-lectura"{% endif %}>
+  {# Lo que mostraba la página al abrirse: al guardar, solo se aplica lo que cambiaste. #}
+  <input type="hidden" name="base" value="{{ base }}">
   {% for s in secciones %}
   {# Cada sección se dibuja dos veces: un resumen para leer y sus campos para editar (decisión 45). Sin JavaScript
      se ven solo los campos, como antes. Una sección con alertas se abre siempre en edición. #}
@@ -281,8 +283,11 @@
       try { estado = await (await fetch(enCurso.dataset.url)).json(); } catch (error) { estado = { estado: "trabajando" }; }
       if (estado.estado === "trabajando") { setTimeout(consultar, 5000); return; }
       enCurso.replaceChildren();
+      // Los botones vuelven a funcionar. Guardar aplica solo lo que escribiste y conserva lo propuesto.
+      document.querySelectorAll("#form-ficha button").forEach((b) => (b.disabled = false));
       const texto = document.createElement("p");
-      texto.textContent = (estado.estado === "error" ? "La propuesta se detuvo. " : "La propuesta terminó. ") + (estado.mensaje || "");
+      texto.textContent = (estado.estado === "error" ? "La propuesta se detuvo. " : "La propuesta terminó. ") + (estado.mensaje || "")
+        + (sinGuardar ? " Si pulsas «Guardar», se guarda lo que escribiste y se conserva lo propuesto en los demás campos." : "");
       const boton = document.createElement("button");
       boton.type = "button";
       boton.textContent = "Mostrar la ficha propuesta";

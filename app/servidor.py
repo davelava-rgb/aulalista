@@ -1,6 +1,7 @@
 """Servidor local. Responde solo a esta computadora (127.0.0.1)."""
 
 import asyncio
+import json
 import re
 import threading
 from pathlib import Path
@@ -282,6 +283,7 @@ def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, m
         "panel": _panel(carpeta, curso, "ficha-curso" if sesion is None else f"ficha-{sesion}"),
         "desactualizados": desactualizados,
         "completar": {d["seccion"]: {"clave": c, **d} for c, d in flujo.COMPLETAR.items()} if tipo == "curso" else {},
+        "base": json.dumps(almacen.valores_de(ficha), ensure_ascii=False),
     })
 
 
@@ -371,6 +373,9 @@ async def _accion_ficha(request: Request, curso: str, tipo: str, sesion: int | N
     accion = formulario.pop("accion", "guardar")
     if accion == "confirmar":   # una página abierta antes de la decisión 28 todavía trae ese botón
         accion = "guardar"
+    base = formulario.pop("base", None)
+    if base:
+        formulario = almacen.solo_lo_cambiado(formulario, json.loads(base))
     ficha = almacen.cargar(carpeta, tipo, sesion)
     if almacen.aplicar_formulario(ficha, formulario) or not almacen.ruta_ficha(carpeta, tipo, sesion).exists():
         almacen.guardar(carpeta, tipo, sesion, ficha, "editada por el profesor")
