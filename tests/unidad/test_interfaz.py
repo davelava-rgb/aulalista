@@ -253,11 +253,11 @@ def test_ninguna_pagina_usa_puntos_medios_como_separador(sesion):  # noqa: F811
         assert " · " not in pagina.split("<body>")[1], url
 
 
-def test_la_ficha_tiene_indice_aviso_de_cambios_y_consulta_la_propuesta_sin_recargar(sesion):  # noqa: F811
+def test_la_ficha_tiene_indice_y_aviso_de_cambios_y_no_se_recarga_sola(sesion):  # noqa: F811
     pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
     assert 'aria-label="Secciones de la ficha"' in pagina and 'href="#seccion-1"' in pagina
     assert 'id="sin-guardar"' in pagina and "location.reload(), 5000" not in pagina
-    assert cliente.get("/cursos/scrum/sesiones/1/ficha/propuesta").json() == {}
+    assert 'id="propuesta-en-curso"' not in pagina   # la ficha ya no se propone sola en segundo plano (decisión 17)
 
 
 def test_guardar_una_ficha_confirmada_avisa_que_desactualiza_lo_generado(sesion):  # noqa: F811

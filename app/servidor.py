@@ -272,11 +272,9 @@ def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, m
               **{f"completar.{c}": tokens.ultima_corrida(curso, f"completar ficha: {c}") for c in flujo.COMPLETAR}}
     return plantillas.TemplateResponse(request, "ficha.html", {
         "curso": curso, "nombre": _nombre(curso), "titulo": titulo, "sesion": sesion, "ficha": ficha,
-        "propuesta": flujo.estado_propuesta(carpeta, tipo, sesion),
         "hay_propuestos": any((d or {}).get("estado") == almacen.PROPUESTO for d in ficha["campos"].values()),
         "secciones": secciones, "modo_lectura": ficha["confirmada"], "generados": generados, "generados_texto": _y(generados), "costos": costos,
         "campos_sin_efecto": list(almacen.CAMPOS_SIN_EFECTO),
-        "url_propuesta": _url_ficha(curso, sesion) + "/propuesta",
         # En la sesión solo se pregunta por la ficha corta: el plan lo prepara AulaLista (decisión 54).
         "preguntas": [p for p in almacen.preguntas_pendientes(ficha, maximo=10_000)
                       if tipo == "curso" or p["id"] not in plantillas_fichas.ids_del_plan()
@@ -365,17 +363,6 @@ def _resumen_de_seccion(s: dict, campos: list[dict]) -> None:
                                      "valor": " ".join(c["valor"].split())})
 
 
-@app.get("/cursos/{curso}/ficha/propuesta")
-def propuesta_del_curso(curso: str):
-    """Estado de la propuesta automática: la página lo consulta sin recargarse."""
-    return flujo.estado_propuesta(_carpeta(curso), "curso") or {}
-
-
-@app.get("/cursos/{curso}/sesiones/{sesion}/ficha/propuesta")
-def propuesta_de_la_sesion(curso: str, sesion: int):
-    return flujo.estado_propuesta(_carpeta(curso), "sesion", sesion) or {}
-
-
 def _exigir_ficha_del_curso(carpeta, curso):
     if not almacen.cargar(carpeta, "curso")["confirmada"]:
         raise HTTPException(409, "Guarda primero la ficha del curso completa: así queda confirmada.")
@@ -459,17 +446,9 @@ async def _guardar_y_confirmar(carpeta, curso: str, tipo: str, sesion: int | Non
     return "Ficha de la sesión guardada y confirmada. Se escribió verificacion.json."
 
 
-def _proponer_si_corresponde(curso: str, tipo: str, sesion: int | None) -> None:
-    """Con fuentes convertidas, una ficha vacía se propone sola al abrirla (PLAN.md §0, decisión 17)."""
-    carpeta = _carpeta(curso)
-    if flujo.debe_proponer_sola(carpeta, tipo, sesion):
-        flujo.marcar_propuesta_en_curso(carpeta, tipo, sesion)
-        _trabajo_en_segundo_plano(flujo.proponer_sola, carpeta, curso, tipo, sesion)
-
-
 @app.get("/cursos/{curso}/ficha")
 def ver_ficha_del_curso(request: Request, curso: str):
-    _proponer_si_corresponde(curso, "curso", None)
+    # Abrir la ficha nunca gasta: la propuesta desde las fuentes la pide el profesor con su botón (decisión 17).
     return _pagina_ficha(request, curso, "curso", None, *_AVISOS_FICHA.pop(_url_ficha(curso, None), ("", None)))
 
 

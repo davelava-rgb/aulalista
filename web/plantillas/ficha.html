@@ -151,23 +151,13 @@
   {% else %}Sin confirmar. Queda confirmada al guardarla completa. Ningún material empieza sin las dos fichas confirmadas.{% endif %}
 </p>
 
-{% if propuesta.estado == "trabajando" %}
-<div class="mensaje" role="status" id="propuesta-en-curso" data-url="{{ url_propuesta }}">
-  <p>Leyendo las fuentes y proponiendo la ficha. Puede tardar unos minutos. Te aviso aquí cuando termine;
-    la página no se recarga sola.</p>
-</div>
-{% elif propuesta.mensaje and not ficha.confirmada %}
-<p class="mensaje" role="status">{{ propuesta.mensaje }}</p>
-{% endif %}
-
 {% if errores %}
 <section class="mensaje" role="alert">
   <h2>Para confirmarla falta</h2>
   <ul>{% for e in errores %}<li>{{ e }}</li>{% endfor %}</ul>
   {% if corregibles %}
   <div class="completar">
-    <button type="submit" form="form-ficha" name="accion" value="corregir_ejercicios"
-            {% if propuesta.estado == "trabajando" %}disabled{% endif %}>Corregir los ejercicios</button>
+    <button type="submit" form="form-ficha" name="accion" value="corregir_ejercicios">Corregir los ejercicios</button>
     <p class="ayuda">AulaLista corrige los ejercicios marcados, los revisa de nuevo y, si cumplen, confirma la ficha.
       Lo cambiado queda marcado «Propuesto». {{ gasta(terminos) }}. {{ costo(costos.corregir) }}</p>
   </div>
@@ -270,7 +260,7 @@
         {% for f in sin_revisar %}<a href="/cursos/{{ curso }}/fuentes/{{ f | urlencode }}">{{ f }}</a>{{ ", " if not loop.last }}{% endfor %}
         y pulsa «Marcar como revisada». Mientras tanto, las sesiones no pueden usar esa fuente.</p>
       {% endif %}
-      <button type="submit" name="accion" value="completar.{{ extra.clave }}" class="secundario" {% if propuesta.estado == "trabajando" %}disabled{% endif %}>{{ extra.boton }}</button>
+      <button type="submit" name="accion" value="completar.{{ extra.clave }}" class="secundario">{{ extra.boton }}</button>
       <p class="ayuda">{{ extra.ayuda }} {{ gasta(terminos) }}. {{ costo(costos["completar." ~ extra.clave]) }}</p>
     </div>
     {% endif %}
@@ -289,19 +279,18 @@
   </details>
   {% endif %}
 
-  {% set ocupada = propuesta.estado == "trabajando" %}
   <div class="acciones">
     {# En la sesión, Guardar ya acepta lo propuesto y la ficha no se propone aparte (decisión 54). #}
     {% set aceptar_aparte = hay_propuestos and not ficha.confirmada and not sesion %}
     {% if aceptar_aparte %}
-    <button type="submit" name="accion" value="aceptar" {% if ocupada %}disabled{% endif %}>Aceptar lo propuesto y guardar</button>
+    <button type="submit" name="accion" value="aceptar">Aceptar lo propuesto y guardar</button>
     {% endif %}
-    <button type="submit" name="accion" value="guardar" id="guardar-ficha" {% if aceptar_aparte %}class="secundario"{% endif %} {% if ocupada %}disabled{% endif %}
+    <button type="submit" name="accion" value="guardar" id="guardar-ficha" {% if aceptar_aparte %}class="secundario"{% endif %}
             {% if sesion %}data-ocupado="Preparando el plan… puede tardar unos minutos"{% endif %}
             {% if ficha.confirmada and generados %}data-confirmar="Esta ficha está confirmada. Si guardas el cambio, hay que generar de nuevo {{ generados_texto }}, con gasto de tokens. ¿Guardar?"{% endif %}>Guardar</button>
     {% if modo_lectura %}<button type="button" class="secundario" id="cancelar-seccion">Cancelar</button>{% endif %}
     {% if not sesion %}
-    <button type="submit" name="accion" value="proponer" class="secundario" {% if ocupada %}disabled{% endif %}>Proponer desde las fuentes</button>
+    <button type="submit" name="accion" value="proponer" class="secundario">Proponer desde las fuentes</button>
     {% endif %}
     <p class="sin-guardar" id="sin-guardar" role="status" hidden>Hay cambios sin guardar.</p>
     {% if ficha.confirmada and generados %}
@@ -335,28 +324,6 @@
 
 {% block scripts %}
 <script>
-  // Mientras la ficha se propone sola, la página pregunta cada 5 segundos si terminó, sin recargarse: el foco y
-  // lo que estés escribiendo no se pierden. Al terminar, avisa y ofrece mostrar la ficha propuesta.
-  const enCurso = document.getElementById("propuesta-en-curso");
-  if (enCurso) {
-    const consultar = async () => {
-      let estado = {};
-      try { estado = await (await fetch(enCurso.dataset.url)).json(); } catch (error) { estado = { estado: "trabajando" }; }
-      if (estado.estado === "trabajando") { setTimeout(consultar, 5000); return; }
-      enCurso.replaceChildren();
-      // Los botones vuelven a funcionar. Guardar aplica solo lo que escribiste y conserva lo propuesto.
-      document.querySelectorAll("#form-ficha button").forEach((b) => (b.disabled = false));
-      const texto = document.createElement("p");
-      texto.textContent = (estado.estado === "error" ? "La propuesta se detuvo. " : "La propuesta terminó. ") + (estado.mensaje || "")
-        + (sinGuardar ? " Si pulsas «Guardar», se guarda lo que escribiste y se conserva lo propuesto en los demás campos." : "");
-      const boton = document.createElement("button");
-      boton.type = "button";
-      boton.textContent = "Mostrar la ficha propuesta";
-      boton.addEventListener("click", () => location.reload());
-      enCurso.append(texto, boton);
-    };
-    setTimeout(consultar, 5000);
-  }
   // Controles de la ficha (decisión 27).
   const formulario = document.getElementById("form-ficha");
   const COLORES = { principal: "visual.principal", acento: "visual.acento", advertencia: "visual.advertencia",

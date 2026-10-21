@@ -97,12 +97,11 @@ def test_la_ficha_corta_de_la_sesion_se_llena_desde_la_del_curso_y_el_plan_va_pl
 def test_guardar_prepara_el_plan_vacio_con_ia_y_abrir_la_ficha_no_gasta(curso, entorno, monkeypatch):
     entorno["env"].write_text("ANTHROPIC_API_KEY=sk-ant-de-prueba\n", encoding="utf-8")
     cliente.post("/cursos/scrum/ficha", data={"accion": "guardar", **datos.CURSO})
-    llamadas = []
-    monkeypatch.setattr(flujo, "proponer_sola", lambda *a, **k: llamadas.append("sola"))
+    monkeypatch.setattr(flujo, "proponer", lambda *a, **k: pytest.fail("abrir la ficha no debe gastar"))
     cliente.get("/cursos/scrum/sesiones/1/ficha")
-    assert llamadas == [] and flujo.estado_propuesta(curso, "sesion", 1) == {}
 
-    plan = {c: v for c, v in datos.SESION.items() if c in flujo.plantillas.ids_del_plan()}
+    llamadas = []
+    plan ={c: v for c, v in datos.SESION.items() if c in flujo.plantillas.ids_del_plan()}
 
     async def proponer(carpeta, nombre, tipo, sesion, consulta=None):
         llamadas.append("propuesta")
@@ -258,19 +257,11 @@ def test_los_temas_de_la_lectura_dicen_que_se_exigen_al_generarla(curso):
     assert "Temas que debe cubrir (obligatorio para generar la lectura si no hay material de referencia)" in pagina
 
 
-# ---------- Propuesta automática al abrir la ficha (PLAN.md §0, decisión 17) ----------
+# ---------- La propuesta desde las fuentes, solo con su botón (PLAN.md §0, decisión 17) ----------
 
-def _esperar_hilos():
-    import threading
-    for hilo in [h for h in threading.enumerate() if h.daemon]:
-        hilo.join(timeout=30)
-
-
-def _propuesta_simulada(llamadas, falla=False):
+def _propuesta_simulada(llamadas):
     async def proponer(carpeta, curso, tipo, sesion=None, consulta=None):
         llamadas.append(tipo)
-        if falla:
-            raise RuntimeError("sin conexión")
         ficha = almacen.cargar(carpeta, tipo, sesion)
         ficha["campos"]["publico.quienes"] = {"valor": "Jefes de proyecto", "origen": "silabo.pdf", "estado": "propuesto"}
         almacen.guardar(carpeta, tipo, sesion, ficha, "propuesta desde las fuentes")
@@ -278,83 +269,24 @@ def _propuesta_simulada(llamadas, falla=False):
     return proponer
 
 
-def test_con_fuentes_la_ficha_se_propone_sola_una_vez(curso, monkeypatch):
+def test_abrir_la_ficha_del_curso_con_fuentes_no_gasta(curso, monkeypatch):
+    from tests.unidad.test_fichas import con_fuente
+    con_fuente(curso)
+    monkeypatch.setattr(flujo, "proponer", lambda *a, **k: pytest.fail("abrir la ficha no debe gastar"))
+    pagina = cliente.get("/cursos/scrum/ficha").text
+    assert 'value="proponer"' in pagina and "Proponer desde las fuentes" in pagina
+    assert almacen.valor(almacen.cargar(curso, "curso"), "publico.quienes") == ""
+
+
+def test_el_boton_proponer_llena_la_ficha_desde_las_fuentes(curso, monkeypatch):
     from tests.unidad.test_fichas import con_fuente
     con_fuente(curso)
     llamadas = []
     monkeypatch.setattr(flujo, "proponer", _propuesta_simulada(llamadas))
-    primera = cliente.get("/cursos/scrum/ficha").text
-    assert "Leyendo las fuentes y proponiendo la ficha" in primera
-    _esperar_hilos()
-    pagina = cliente.get("/cursos/scrum/ficha").text
-    assert "AulaLista llenó la ficha desde las fuentes." in pagina
+    pagina = cliente.post("/cursos/scrum/ficha", data={"accion": "proponer"}).text
+    assert llamadas == ["curso"]
+    assert "Datos tomados de las fuentes: 1." in pagina
     assert "Jefes de proyecto" in pagina and "Aceptar lo propuesto y guardar" in pagina
-    cliente.get("/cursos/scrum/ficha")
-    _esperar_hilos()
-    assert llamadas == ["curso"]          # una sola vez: recargar no vuelve a gastar tokens
-
-
-def test_sin_fuentes_la_ficha_no_se_propone_sola(curso, monkeypatch):
-    llamadas = []
-    monkeypatch.setattr(flujo, "proponer", _propuesta_simulada(llamadas))
-    pagina = cliente.get("/cursos/scrum/ficha").text
-    _esperar_hilos()
-    assert llamadas == [] and 'id="propuesta-en-curso"' not in pagina
-    assert flujo.estado_propuesta(curso, "curso") == {}
-
-
-def test_mientras_se_propone_los_botones_esperan(curso):
-    flujo.marcar_propuesta_en_curso(curso, "curso")
-    pagina = cliente.get("/cursos/scrum/ficha").text
-    assert 'id="propuesta-en-curso"' in pagina
-    assert 'value="guardar" id="guardar-ficha"  disabled' in pagina
-
-
-def test_si_la_propuesta_falla_la_pagina_lo_dice(curso, monkeypatch):
-    from tests.unidad.test_fichas import con_fuente
-    con_fuente(curso)
-    monkeypatch.setattr(flujo, "proponer", _propuesta_simulada([], falla=True))
-    cliente.get("/cursos/scrum/ficha")
-    _esperar_hilos()
-    pagina = cliente.get("/cursos/scrum/ficha").text
-    assert "No se pudo proponer la ficha desde las fuentes: sin conexión" in pagina
-    assert "Proponer desde las fuentes" in pagina          # el botón manual sigue disponible
-
-
-def test_aceptar_lo_propuesto_confirma_la_ficha(curso):
-    ficha = datos.ficha("curso", datos.CURSO)
-    ficha["campos"]["caso.empresa"] = {"valor": "Comercial Los Volcanes", "origen": "deducido", "estado": "propuesto"}
-    almacen.guardar(curso, "curso", None, ficha)
-    formulario = {k: v for k, v in datos.CURSO.items()}
-    r = cliente.post("/cursos/scrum/ficha", data={"accion": "aceptar", **formulario})
-    assert "Ficha del curso guardada y confirmada." in r.text
-    guardada = almacen.cargar(curso, "curso")
-    assert guardada["confirmada"] is True
-    assert guardada["campos"]["caso.empresa"]["estado"] == ""
-
-
-def test_la_propuesta_llena_todo_salvo_identidad_visual_y_no_inventa_personas(curso):
-    pedido = flujo.pedido_de_propuesta(curso, "curso", None, almacen.cargar(curso, "curso"))
-    assert "Propón todos los campos de la lista" in pedido
-    assert "una por capítulo o tema principal" in pedido
-    assert "visual.principal" not in pedido and "modelos.aprobados" not in pedido
-    assert "El docente y los\n  datos de contacto solo van si la fuente los dice tal cual" in pedido
-    ficha = datos.ficha("curso", {})
-    resumen = flujo.aplicar_propuesta(curso, ficha, {"campos": [
-        {"id": "portada.docente", "valor": "Juan Pérez", "origen": "deducido", "literal": False},
-        {"id": "visual.principal", "valor": "#123456", "origen": "deducido", "literal": False},
-        {"id": "caso.empresa", "valor": "Comercial Los Volcanes", "origen": "deducido", "literal": False},
-    ], "conflictos": []})
-    assert resumen["propuestos"] == 1 and resumen["descartados"] == 2
-    assert almacen.valor(ficha, "portada.docente") == "" and almacen.valor(ficha, "visual.principal") == ""
-
-
-def test_un_estado_a_medio_escribir_no_rompe_la_pagina(curso):
-    flujo.marcar_propuesta_en_curso(curso, "curso")
-    ruta = almacen.ruta_ficha(curso, "curso").with_name("propuesta_curso.json")
-    ruta.write_text("", encoding="utf-8")          # el instante en que el archivo se está escribiendo
-    assert flujo.estado_propuesta(curso, "curso")["estado"] == "trabajando"
-    assert cliente.get("/cursos/scrum/ficha").status_code == 200
 
 
 # ---------- Guardar confirma y botones «Completar» (PLAN.md §0, decisión 28) ----------

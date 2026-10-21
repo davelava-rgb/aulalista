@@ -10,7 +10,6 @@ Reglas de la skill (Paso 1 y Paso 2):
 import hashlib
 import json
 import re
-import time
 import unicodedata
 from pathlib import Path
 
@@ -86,7 +85,6 @@ def _dice_literal(carpeta_curso: Path, archivo: str, texto: str) -> bool:
 # los dice tal cual; nunca se proponen.
 NO_SE_PROPONEN = ("visual.", "modelos.", "sesion.exclusiones")   # las exclusiones las decide el profesor (decisión 23)
 SOLO_TAL_CUAL = ("portada.", "curso.horas", "curso.numero_sesiones")   # las horas y las sesiones las da el profesor
-_INTENTOS_DE_REEMPLAZO = 40   # 40 × 0,05 s: unos dos segundos
 
 
 def campos_vacios(ficha: dict) -> list[tuple[str, str]]:
@@ -639,74 +637,6 @@ def _avisos_de_completar(ficha: dict, clave: str) -> list[str]:
     if any(_TIEMPOS.search(almacen.valor(ficha, c)) for c in COMPLETAR[clave]["destino"]):
         avisos.append("Ojo: la propuesta menciona un tiempo. Bórralo: ningún material muestra tiempos.")
     return avisos
-
-
-# ---------- Propuesta automática al abrir la ficha (PLAN.md §0, decisión 17) ----------
-
-def _ruta_propuesta(carpeta_curso: Path, tipo: str, sesion: int | None) -> Path:
-    return almacen.ruta_ficha(carpeta_curso, tipo, sesion).with_name(f"propuesta_{tipo}.json")
-
-
-def estado_propuesta(carpeta_curso: Path, tipo: str, sesion: int | None = None) -> dict:
-    """{estado: trabajando, lista o error; mensaje}. Vacío si nunca se propuso sola."""
-    ruta = _ruta_propuesta(carpeta_curso, tipo, sesion)
-    if not ruta.exists():
-        return {}
-    try:
-        return json.loads(ruta.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {"estado": "trabajando", "mensaje": ""}   # se está escribiendo justo ahora
-
-
-def _guardar_estado_propuesta(carpeta_curso: Path, tipo: str, sesion: int | None, **estado) -> None:
-    ruta = _ruta_propuesta(carpeta_curso, tipo, sesion)
-    ruta.parent.mkdir(parents=True, exist_ok=True)
-    # Se escribe aparte y se reemplaza de una vez: la página nunca lee el archivo a medio escribir.
-    temporal = ruta.with_suffix(".tmp")
-    temporal.write_text(json.dumps(estado, ensure_ascii=False), encoding="utf-8")
-    # En Windows el reemplazo falla mientras la página lee el archivo. Se reintenta unos instantes.
-    for intento in range(_INTENTOS_DE_REEMPLAZO):
-        try:
-            temporal.replace(ruta)
-            return
-        except PermissionError:
-            if intento == _INTENTOS_DE_REEMPLAZO - 1:
-                raise
-            time.sleep(0.05)
-
-
-def debe_proponer_sola(carpeta_curso: Path, tipo: str, sesion: int | None = None) -> bool:
-    """Una ficha sin confirmar, con campos vacíos y con fuentes convertidas se propone sola, una sola vez.
-    Sin fuentes, el profesor la llena a mano."""
-    if estado_propuesta(carpeta_curso, tipo, sesion):
-        return False
-    if not verificacion.fuentes_utilizables(carpeta_curso):
-        return False
-    if tipo == "sesion" and not almacen.cargar(carpeta_curso, "curso")["confirmada"]:
-        return False
-    ficha = almacen.cargar(carpeta_curso, tipo, sesion)
-    return not ficha["confirmada"] and bool(campos_vacios(ficha))
-
-
-def marcar_propuesta_en_curso(carpeta_curso: Path, tipo: str, sesion: int | None = None) -> None:
-    """Se marca antes de empezar, para que recargar la página no lance otra propuesta."""
-    _guardar_estado_propuesta(carpeta_curso, tipo, sesion, estado="trabajando", mensaje="")
-
-
-async def proponer_sola(carpeta_curso: Path, curso: str, tipo: str, sesion: int | None = None,
-                        consulta=agente.query) -> dict:
-    try:
-        resumen = await proponer(carpeta_curso, curso, tipo, sesion, consulta=consulta)
-    except Exception as error:   # la página muestra el motivo; el botón «Proponer» sigue disponible
-        _guardar_estado_propuesta(carpeta_curso, tipo, sesion, estado="error",
-                                  mensaje=f"No se pudo proponer la ficha desde las fuentes: {error}")
-        raise
-    _guardar_estado_propuesta(
-        carpeta_curso, tipo, sesion, estado="lista",
-        mensaje=(f"AulaLista llenó la ficha desde las fuentes. Datos tomados tal cual: {resumen['de_las_fuentes']}. "
-                 f"Propuestos: {resumen['propuestos']}. Con dos versiones: {resumen['conflictos']}. "
-                 "Revisa lo marcado «Propuesto» y guarda."))
-    return resumen
 
 
 def aceptar_propuestos(ficha: dict) -> int:
