@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Actividad</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible&display=swap" rel="stylesheet">
+<style>
+:root { --principal: #0F4C5C; --acento: #B7791F; --advertencia: #A3261F; --papel: #FFFFFF; --tinta: #1F2933; --linea: #DDDDDD; }
+@media (prefers-color-scheme: dark) { :root { --papel: #111111; --tinta: #EEEEEE; --linea: #444444; } }
+body { margin: 0; background: var(--papel); color: var(--tinta); font-family: "Atkinson Hyperlegible", Calibri, sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 1rem; }
+button, select { min-height: 44px; }
+[data-paso] { display: none; }
+[data-paso].activo { display: block; }
+.recuerde { border-left: 4px solid var(--acento); background: color-mix(in srgb, var(--acento) 12%, var(--papel)); padding: .6rem 1rem; }
+:focus-visible { outline: 3px solid var(--acento); outline-offset: 2px; }
+.desliza { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main id="app" aria-live="polite"></main>
+<script type="application/json" id="contenido">/*CONTENIDO*/</script>
+<script>
+(function () {
+  "use strict";
+  var D = JSON.parse(document.getElementById("contenido").textContent);
+  var app = document.getElementById("app");
+  var estado = { paso: 0, respuestas: {}, intentos: {}, aciertos: {} };
+  try { var guardado = localStorage.getItem(D.clave); if (guardado) estado = JSON.parse(guardado); } catch (e) {}
+  function guardar() { try { localStorage.setItem(D.clave, JSON.stringify(estado)); } catch (e) {} }
+  function el(etiqueta, atributos, texto) {
+    var n = document.createElement(etiqueta);
+    for (var a in (atributos || {})) n.setAttribute(a, atributos[a]);
+    if (texto != null) n.textContent = texto;
+    return n;
+  }
+  function pantalla(id) { return el("section", { "data-paso": String(id) }); }
+  var inicio = pantalla(0);
+  inicio.append(el("h1", null, D.titulo), el("p", null, D.curso), el("p", null, D.sesion));
+  D.presentacion.forEach(function (t) { inicio.append(el("p", null, t)); });
+  app.append(inicio);
+  D.pasos.forEach(function (paso, i) {
+    var s = pantalla(i + 1);
+    s.append(el("h2", null, paso.titulo));
+    paso.introduccion.forEach(function (t) { s.append(el("p", null, t)); });
+    if (paso.recuerde) s.append(el("p", { "class": "recuerde" }, paso.recuerde));
+    paso.preguntas.forEach(function (p, j) {
+      var caja = el("div", { "data-pregunta": (i + 1) + "." + (j + 1) });
+      caja.append(el("p", null, p.enunciado), el("p", null, String(p.puntos)));
+      p.opciones.forEach(function (o, k) {
+        var etiqueta = el("label");
+        etiqueta.append(el("input", { type: p.tipo === "opcion_unica" ? "radio" : "checkbox", name: "p" + i + j, value: String(k) }), o.texto);
+        caja.append(etiqueta);
+      });
+      caja.append(el("button", { type: "button", "data-accion": "comprobar" }, "Comprobar"));
+      caja.append(el("button", { type: "button", "data-accion": "reintentar" }, "Intentar otra vez"));
+      caja.append(el("p", { "data-resultado": "" }));
+      s.append(caja);
+    });
+    app.append(s);
+  });
+  var entrega = pantalla("entrega");
+  entrega.append(el("h2", null, "Su entrega"), el("input", { "data-campo": "nombre", "aria-label": "Su nombre" }));
+  entrega.append(el("p", { "data-puntaje": "" }, "0"), el("p", null, D.regla_del_puntaje), el("p", null, D.nota_del_puntaje));
+  entrega.append(el("button", { type: "button", "data-accion": "copiar" }, "Copiar mi entrega"));
+  entrega.append(el("button", { type: "button", "data-accion": "borrar" }, "Borrar mis respuestas"));
+  app.append(entrega);
+  var nav = el("nav");
+  nav.append(el("button", { type: "button", "data-accion": "anterior" }, "Anterior"));
+  nav.append(el("button", { type: "button", "data-accion": "siguiente" }, "Siguiente"));
+  document.body.append(nav);
+  function mostrar() {
+    document.querySelectorAll("[data-paso]").forEach(function (s, n) { s.classList.toggle("activo", n === estado.paso); });
+    guardar();
+  }
+  mostrar();
+})();
+</script>
+</body>
+</html>

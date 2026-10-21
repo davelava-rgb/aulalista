@@ -8,6 +8,15 @@
         "value": "arial",
         "createdAt": "2026-10-09T02:30:17.989Z",
         "reason": "Claude decided: Arial matches the font of the project's Excel model S1_Laboratorio_Verificacion.xlsx; internal tool page"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "atkinson hyperlegible",
+        "files": [
+          "tests/fixtures/actividad_pagina.html"
+        ],
+        "createdAt": "2026-10-21T16:54:35.279Z",
+        "reason": "Claude: test fixture for a student page, not AulaLista UI; DESIGN.md does not cover generated activity pages"
       }
     ]
   }

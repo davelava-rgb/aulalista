@@ -26,11 +26,11 @@ def lectura_aprobada(carpeta, numero=1):
     comun.actualizar(carpeta, numero, lectura.CLAVE, estado="aprobada", aprobada="2026-10-21T10:00:00")
 
 
-def generar(carpeta, *salidas, revisar=True):
+def generar(carpeta, *salidas, revisar=True, disenar=False):
     """revisar=True agrega al final la revisión del contenido sin errores (fase 8b). Si quedan fallas del
     verificador, la revisión no corre y esa respuesta queda sin usar."""
     consulta = consulta_en_secuencia(*salidas, *([SIN_ERRORES] if revisar else []))
-    material = asyncio.run(actividad.generar(carpeta, "scrum", 1, consulta=consulta))
+    material = asyncio.run(actividad.generar(carpeta, "scrum", 1, consulta=consulta, disenar=disenar))
     return material, consulta
 
 

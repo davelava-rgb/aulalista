@@ -10,9 +10,11 @@ Flujo:
    muestra puntos; los tiempos siguen siendo FALLA. Las fallas se corrigen hasta VUELTAS_DEL_VERIFICADOR veces.
 5. Segunda pasada: la revisión del contenido con IA, por bloque, contra la lectura aprobada, las fuentes y las fichas.
    Una sola corrección; después, el verificador y la revisión solo de los bloques que cambiaron (decisión 22).
-6. Entrega en el formato del SPEC §8. El profesor la aprueba desde la página. El revisor independiente es opcional.
+6. Con el contenido sin fallas, el agente diseñador escribe la página del alumno a medida (disenador_web.py). Un
+   programa la revisa y el diseñador la arregla hasta ARREGLOS_DE_DISENO veces. Si quedan fallas, no se entrega.
+7. Entrega en el formato del SPEC §8. El profesor la aprueba desde la página. El revisor independiente es opcional.
 
-El diseño de la página del alumno llega en la fase 8c.
+Las pruebas de la página en un navegador llegan en la fase 8d.
 """
 
 import asyncio
@@ -27,7 +29,7 @@ from pydantic import ValidationError
 
 from app import agente, entrega, skill, tokens
 from app.fichas import almacen, referencia, verificacion
-from app.materiales import comun, diapositivas, estilo, lectura
+from app.materiales import comun, diapositivas, disenador_web, estilo, lectura
 from app.materiales.contenido import ESQUEMA_ACTIVIDAD, PUNTOS_POR_PREGUNTA, Actividad, Lectura, Pregunta
 from app.validacion import excel, pasada2, revision, revisor, verificador
 from app.validacion.pasajes import Corpus
@@ -35,6 +37,7 @@ from app.validacion.pasajes import Corpus
 MATERIAL = "Actividad web"
 CLAVE = "actividad"
 VUELTAS_DEL_VERIFICADOR = comun.VUELTAS_DEL_VERIFICADOR
+ARREGLOS_DE_DISENO = 3   # decisión 57 f: el diseñador corrige hasta tres veces
 PASOS = (4, 6)
 SECCIONES_DE_LA_SKILL = ("Reglas comunes", "Paso 3 · Vocabulario de la sesión", "Actividad web")
 NOTA_DEL_PUNTAJE = "El puntaje es una orientación. La nota la pone el profesor."
@@ -59,6 +62,7 @@ def archivos(carpeta_curso: Path, sesion: int) -> dict[str, Path]:
     carpeta = lectura.carpeta_materiales(carpeta_curso, sesion)
     trabajo = carpeta / comun.TRABAJO / CLAVE
     return {
+        "pagina": carpeta / f"S{sesion}_Actividad.html",
         "vista": carpeta / f"S{sesion}_Actividad_Contenido.html",
         "excel": carpeta / f"S{sesion}_Actividad_Verificacion.xlsx",
         "verificacion_json": trabajo / "verificacion.json",
@@ -66,6 +70,7 @@ def archivos(carpeta_curso: Path, sesion: int) -> dict[str, Path]:
         "explicaciones": trabajo / "explicaciones.json",
         "sistema": trabajo / "sistema_correccion.txt",
         "revision": trabajo / "revisor",
+        "diseno": trabajo / "diseno",
     }
 
 
@@ -478,15 +483,17 @@ def _decimal(carpeta_curso: Path, sesion: int) -> str:
 
 def _limpiar(rutas: dict[str, Path]) -> None:
     """Borra lo que dejó la generación anterior. Un archivo abierto puede negar el borrado: se deja y se reescribe."""
-    for clave in ("vista", "excel", "verificacion_json", "contenido", "explicaciones"):
+    for clave in ("pagina", "vista", "excel", "verificacion_json", "contenido", "explicaciones"):
         try:
             rutas[clave].unlink(missing_ok=True)
         except OSError:
             pass
     shutil.rmtree(rutas["revision"], ignore_errors=True)
+    shutil.rmtree(rutas["diseno"], ignore_errors=True)
 
 
-async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.query) -> dict:
+async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.query, disenar: bool = True) -> dict:
+    """`disenar=False` deja la actividad sin la página del alumno: lo usan las pruebas del contenido."""
     if not almacen.puede_empezar_material(carpeta_curso, sesion):
         raise NoSePuedeEmpezar("Guarda completas la ficha del curso y la ficha de la sesión antes de generar la "
                                "actividad web: así quedan confirmadas.")
@@ -498,7 +505,7 @@ async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.
     _actualizar(carpeta_curso, sesion, estado="trabajando", previo="", avance=[], error="", desactualizado=False,
                 entrega={}, aprobada="", revisor={}, corrida_desde=tokens.lineas(curso))
     try:
-        return await _generar(carpeta_curso, curso, sesion, rutas, consulta)
+        return await _generar(carpeta_curso, curso, sesion, rutas, consulta, disenar)
     except asyncio.CancelledError:
         marcar_detenida(carpeta_curso, sesion)
         raise
@@ -529,6 +536,7 @@ class _Trabajo:
         self.descartados: list[dict] = []
         self.lectura = lectura_aprobada(carpeta_curso, sesion)
         self.consulta = consulta
+        self.diseno: dict = {}
         self.vuelta = 0
 
     def avance(self, texto: str) -> None:
@@ -603,8 +611,45 @@ class _Trabajo:
                 verificacion.escribir(self.carpeta_curso, numero)
             self.avance(f"Datos nuevos del caso agregados a la ficha del curso: {len(nuevos)}.")
 
+    # ---------- Diseño de la página del alumno (decisión 57 e y f) ----------
 
-async def _generar(carpeta_curso, curso, sesion, rutas, consulta) -> dict:
+    async def disenar(self) -> None:
+        """El diseñador escribe la página con el contenido aprobado. AulaLista la revisa y le pide hasta
+        ARREGLOS_DE_DISENO arreglos. Si quedan fallas, la página no se entrega: las fallas impiden aprobar."""
+        carpeta = self.rutas["diseno"]
+        nombre_curso = almacen.valor(almacen.cargar(self.carpeta_curso, "curso"), "curso.nombre").strip() or self.curso
+        datos_ = disenador_web.datos_de_la_pagina(self.contenido, self.curso, self.sesion, nombre_curso, NOTA_DEL_PUNTAJE)
+        comun_ = {"curso": self.curso, "sesion": f"S{self.sesion}", "material": CLAVE, "consulta": self.consulta,
+                  "sistema": disenador_web.escribir_sistema(datos_, self.identidad, carpeta)}
+        self.avance("Diseño: el agente diseñador escribe la página del alumno con el contenido aprobado.")
+        respuesta = await agente.consultar(disenador_web.pedido_de_diseno(), tarea="diseno_web",
+                                           esquema=disenador_web.ESQUEMA_DISENO, etapa="diseño", **comun_)
+        html_, pendientes = respuesta["html"], []
+        self.diseno = {"arreglos": 0, "notas": respuesta.get("notas", ""), "problemas": []}
+        for intento in range(ARREGLOS_DE_DISENO + 1):
+            (carpeta / "pagina.html").write_text(html_, encoding="utf-8")   # con la marca, para los arreglos
+            pagina = disenador_web.armar(html_, datos_)
+            problemas = pendientes + disenador_web.revisar(pagina, datos_, self.identidad)
+            ronda = "primera versión" if intento == 0 else f"arreglo {intento}"
+            self.avance(f"Diseño, {ronda}: " + (f"{comun.cuantos(len(problemas), 'problema')}: " + " | ".join(problemas)
+                                                 if problemas else "la página pasa los controles."))
+            if not problemas:
+                self.rutas["pagina"].write_text(pagina, encoding="utf-8")
+                self.diseno.update(estado="diseñada", problemas=[])
+                return
+            if intento == ARREGLOS_DE_DISENO:
+                break
+            self.diseno["arreglos"] += 1
+            respuesta = await agente.consultar(disenador_web.pedido_de_arreglo(html_, problemas), tarea="arreglo_web",
+                                               esquema=disenador_web.ESQUEMA_ARREGLO,
+                                               etapa=f"diseño, arreglo {intento + 1}", **comun_)
+            html_, pendientes = disenador_web.aplicar_cambios(html_, respuesta["cambios"])
+        self.diseno.update(estado="con fallas", problemas=problemas)
+        self.avance(f"Diseño: la página sigue con {comun.cuantos(len(problemas), 'falla')} después de "
+                    f"{ARREGLOS_DE_DISENO} arreglos. No la entrego.")
+
+
+async def _generar(carpeta_curso, curso, sesion, rutas, consulta, disenar=True) -> dict:
     inicio = tokens.lineas(curso)
     # Antes de gastar tokens: la skill tiene todo lo que usarán la redacción, la revisión y el revisor.
     skill.comprobar(secciones=SECCIONES_DE_LA_SKILL + pasada2.SECCIONES_DE_LA_SKILL + revisor.SECCIONES_DE_LA_SKILL,
@@ -622,12 +667,16 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta) -> dict:
     if await trabajo.verificar():
         # Segunda pasada: la revisión del contenido, por bloque, con una sola corrección.
         errores, revisados = await comun.revisar_y_corregir(trabajo, bloques_de)
+    if disenar and not trabajo.fallas:
+        await trabajo.disenar()
 
     pendientes = [e for e in errores if e.estado == "pendiente"]
     final = trabajo.contenido
     decisiones = final.decisiones if final else []
     sin_fuente = [f"Afirmación sin fuente: {d.texto}" for d in decisiones if d.tipo == "sin fuente"]
-    estado_final = "con fallas" if trabajo.fallas else ("con pendientes" if pendientes or sin_fuente else "verificada")
+    fallas_de_diseno = [f"FALLA · diseño de la página · {p}" for p in trabajo.diseno.get("problemas", [])]
+    estado_final = ("con fallas" if trabajo.fallas or fallas_de_diseno
+                    else "con pendientes" if pendientes or sin_fuente else "verificada")
     if trabajo.resultado is not None:
         excel.solo_hallazgos(rutas["excel"], "Sección")
         excel.agregar_historial(rutas["excel"], [
@@ -639,8 +688,9 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta) -> dict:
         carpeta_curso, sesion,
         estado=estado_final,
         resumen=trabajo.resultado.resumen() if trabajo.resultado else "",
-        problemas=trabajo.fallas + [e.describir() for e in pendientes] + sin_fuente,
+        problemas=trabajo.fallas + fallas_de_diseno + [e.describir() for e in pendientes] + sin_fuente,
         correcciones=trabajo.correcciones,
+        diseno=trabajo.diseno,
         revision={"bloques": revisados, "errores": len(errores), "corregidos": sum(e.estado == "corregido" for e in errores),
                   "pendientes": len(pendientes), "descartados": len(trabajo.descartados)},
         datos_agregados=trabajo.datos_agregados,
@@ -653,7 +703,8 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta) -> dict:
         preguntas=sum(len(p.preguntas) for p in final.pasos) if final else 0,
         puntaje_total=final.puntaje_total if final else 0,
         decisiones=[d.model_dump() for d in decisiones],
-        archivos={"vista": rutas["vista"].name, "excel": rutas["excel"].name},
+        archivos={"vista": rutas["vista"].name, "excel": rutas["excel"].name,
+                  **({"pagina": rutas["pagina"].name} if trabajo.diseno.get("estado") == "diseñada" else {})},
         costo=tokens.total(curso, sesion=f"S{sesion}", material=CLAVE, desde_linea=inicio),
         fecha=datetime.now().isoformat(timespec="seconds"),
     )
@@ -661,7 +712,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta) -> dict:
     trabajo.avance({"verificada": "Contenido de la actividad listo para tu aprobación.",
                     "con pendientes": f"Contenido listo, con {comun.cuantos(len(pendientes) + len(sin_fuente), 'pendiente')} "
                                       "para que decidas.",
-                    "con fallas": "El contenido de la actividad quedó con fallas."}[estado_final])
+                    "con fallas": "La actividad quedó con fallas."}[estado_final])
     return _estado(carpeta_curso, sesion)
 
 
@@ -669,13 +720,20 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta) -> dict:
 
 def _entrega(material: dict) -> dict:
     archivos_ = material["archivos"]
+    diseno = material.get("diseno") or {}
     lineas_archivos = [
+        *([f"{archivos_['pagina']}: la página del alumno, diseñada a medida. Ábrela en el navegador y compártela con "
+           "los alumnos."] if archivos_.get("pagina") else []),
         f"{archivos_['vista']}: el contenido de la actividad con sus respuestas, para revisarlo: "
         f"{material['pasos']} pasos, {material['preguntas']} preguntas y {material['puntaje_total']} puntos en total.",
         f"{archivos_['excel']}: el archivo de verificación, con la hoja Hallazgos.",
     ]
     probe = ["Revisé cada pregunta con un programa: una sola respuesta correcta, una explicación en cada opción y "
              "ninguna respuesta abierta. Rehice las sumas y los porcentajes de las tablas del caso."]
+    if diseno.get("estado") == "diseñada":
+        probe.append("Revisé la página del alumno con un programa: el contenido es el aprobado, todo su texto sale de él "
+                     "salvo etiquetas cortas, no carga nada de afuera salvo las fuentes de Google, no muestra tiempos y "
+                     f"usa solo los colores de la ficha. Arreglos del diseñador: {diseno.get('arreglos', 0)}.")
     r = material.get("revision") or {}
     valide = [f"Verificador: {material['resumen']}." if material["resumen"] else "El verificador no llegó a correr.",
               *([f"Avisos explicados en la hoja Hallazgos: {material['avisos_explicados']}."]
@@ -700,7 +758,11 @@ def _entrega(material: dict) -> dict:
     valide.append(f"Costo de esta actividad: {material['costo']['llamadas']} llamadas, "
                   f"{material['costo']['costo_usd']:.2f} USD estimados.")
     no_pude = (["La revisión del contenido no corrió porque quedaron fallas del verificador."] if not r.get("bloques") else [])
-    no_pude.append("La página del alumno todavía no se diseña: llega en la fase 8c del plan.")
+    if not diseno:
+        no_pude.append("La página del alumno no se diseñó porque el contenido quedó con fallas.")
+    elif diseno.get("estado") == "diseñada":
+        no_pude.append("Todavía no recorrí la página en un navegador (tamaños, modos, teclado y puntaje): llega en la "
+                       "fase 8d del plan. Ábrela y recórrela antes de compartirla.")
     decisiones = material["decisiones"]
     decidi = [d["texto"] for d in decisiones if d["tipo"] == "decisión"]
     decidi += [f"Dato nuevo del caso, agregado a la ficha del curso: {d}" for d in material["datos_agregados"]]
