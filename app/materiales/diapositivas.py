@@ -883,8 +883,9 @@ Señala solo las que tienen un problema de diseño real:
 - recurso: su contenido se entendería mejor con otro recurso (organigrama, proceso, ciclo, mapa, tarjetas, matriz,
   cifras, gráfica, columnas o pasos).
 No señales la portada ni el cierre. No propongas contenido nuevo: solo cómo mostrar lo que ya está.
+El texto está aprobado y se muestra completo: no propongas quitarlo, acortarlo ni pasarlo a las notas.
 Para cada una, di el número, el problema en una frase y una propuesta concreta (por ejemplo: «pasar a organigrama con
-el Consejo arriba», «dejar dos frases y pasar el resto a las notas»). Si ninguna tiene problemas, devuelve la lista vacía."""
+el Consejo arriba», «repartir las frases en tres tarjetas»). Si ninguna tiene problemas, devuelve la lista vacía."""
 
 ESQUEMA_VISUAL = {
     "type": "object",

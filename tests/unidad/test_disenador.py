@@ -22,11 +22,16 @@ module.exports = async (h) => {
     color: C.texto, isTextBox: true, valign: "top", ...o });
   const notas = (s, n) => s.addNotes(`Qué destacar: ${n.destacar}\nQué preguntar al grupo: ${n.preguntar}`);
   const icono = await h.icono("FaDatabase", C.blanco);
+  const visibles = (d) => [...d.frases, ...d.columnas.flatMap((x) => [x.titulo, ...x.frases]),
+    ...(d.tabla ? [d.tabla.titulo, ...d.tabla.encabezados, ...d.tabla.filas.flat()] : []),
+    ...(d.grafico ? [d.grafico.centro, ...d.grafico.ejes,
+                     ...d.grafico.elementos.flatMap((e) => [e.texto, e.detalle, ...e.hijos])] : [])].filter(Boolean);
 
   let s = h.pres.addSlide();
   s.background = { color: C.principal };
   texto(s, h.portada.curso, 0.5, 1.5, 6, 1, { fontSize: 36, bold: true, color: C.blanco });
   texto(s, h.portada.sesion, 0.5, 2.6, 6, 0.6, { color: C.blanco });
+  texto(s, [h.portada.docente, ...h.portada.contacto].map((p) => ({ text: p, options: { breakLine: true } })), 0.5, 3.4, 6, 1.2, { color: C.blanco });
   s.addImage({ data: icono, x: 7.5, y: 1.8, w: 1.2, h: 1.2 });
   notas(s, c.portada.notas);
 
@@ -40,12 +45,11 @@ module.exports = async (h) => {
     s.addShape(h.pres.shapes.ROUNDED_RECTANGLE, { x: 0.5, y: 0.2, w: 1.4, h: 0.3, rectRadius: 0.1, fill: { color: C.acento } });
     texto(s, `${i + 1} · Bloque`, 0.5, 0.2, 1.4, 0.3, { fontSize: 12, color: C.blanco, margin: 0 });
     texto(s, d.titulo, 0.5, 0.6, 9, 0.7, { fontSize: 24, bold: true, color: C.principal });
-    const partes = [...d.frases, ...d.columnas.flatMap((x) => [x.titulo, ...x.frases]),
-                    ...(d.grafico ? d.grafico.elementos.map((e) => e.texto) : [])];
+    const partes = visibles(d);
     texto(s, partes.map((p) => ({ text: p, options: { breakLine: true } })), 0.5, 1.5, 9, 3.5);
     notas(s, d.notas);
   }
-  for (const [titulo, parte, lineas] of [["Aplícalo así", c.aplicalo, c.aplicalo.plantilla],
+  for (const [titulo, parte, lineas] of [["Aplícalo así", c.aplicalo, [...c.aplicalo.frases, ...c.aplicalo.plantilla]],
                                           ["Cuidado con", c.cuidado, c.cuidado.riesgos]]) {
     s = h.pres.addSlide();
     texto(s, titulo, 0.5, 0.4, 9, 0.7, { fontSize: 24, bold: true, color: C.principal });
@@ -66,6 +70,10 @@ COMUN = r"""
   const texto = (s, t, x, y, w, alto, o = {}) => s.addText(t, { x, y, w, h: alto, fontFace: h.fuente, fontSize: 16,
     color: C.texto, isTextBox: true, valign: "top", ...o });
   const notas = (s, n) => s.addNotes(`Qué destacar: ${n.destacar}\nQué preguntar al grupo: ${n.preguntar}`);
+  const visibles = (d) => [...d.frases, ...d.columnas.flatMap((x) => [x.titulo, ...x.frases]),
+    ...(d.tabla ? [d.tabla.titulo, ...d.tabla.encabezados, ...d.tabla.filas.flat()] : []),
+    ...(d.grafico ? [d.grafico.centro, ...d.grafico.ejes,
+                     ...d.grafico.elementos.flatMap((e) => [e.texto, e.detalle, ...e.hijos])] : [])].filter(Boolean);
   const lista = (s, lineas, y) => texto(s, lineas.map((p) => ({ text: p, options: { breakLine: true } })), 0.5, y, 9, 3);
   const dibujar = async (n) => {
     const s = h.pres.addSlide();
@@ -74,6 +82,7 @@ COMUN = r"""
       s.background = { color: C.principal };
       texto(s, h.portada.curso, 0.5, 1.5, 6, 1, { fontSize: 36, bold: true, color: C.blanco });
       texto(s, h.portada.sesion, 0.5, 2.6, 6, 0.6, { color: C.blanco });
+      texto(s, [h.portada.docente, ...h.portada.contacto].map((p) => ({ text: p, options: { breakLine: true } })), 0.5, 3.4, 6, 1.2, { color: C.blanco });
       s.addImage({ data: await h.icono("FaDatabase", C.blanco), x: 7.5, y: 1.8, w: 1.2, h: 1.2 });
       return notas(s, c.portada.notas);
     }
@@ -85,12 +94,11 @@ COMUN = r"""
     if (n <= k + 2) {
       const d = c.diapositivas[n - 3];
       texto(s, d.titulo, 0.5, 0.6, 9, 0.7, { fontSize: 24, bold: true, color: C.principal });
-      lista(s, [...d.frases, ...d.columnas.flatMap((x) => [x.titulo, ...x.frases]),
-                ...(d.grafico ? d.grafico.elementos.map((e) => e.texto) : [])], 1.5);
+      lista(s, visibles(d), 1.5);
       return notas(s, d.notas);
     }
     if (n === k + 3 || n === k + 4) {
-      const [titulo, parte, lineas] = n === k + 3 ? ["Aplícalo así", c.aplicalo, c.aplicalo.plantilla]
+      const [titulo, parte, lineas] = n === k + 3 ? ["Aplícalo así", c.aplicalo, [...c.aplicalo.frases, ...c.aplicalo.plantilla]]
                                                    : ["Cuidado con", c.cuidado, c.cuidado.riesgos];
       texto(s, titulo, 0.5, 0.4, 9, 0.7, { fontSize: 24, bold: true, color: C.principal });
       lista(s, lineas, 1.4);
@@ -237,3 +245,65 @@ def test_el_texto_ajeno_no_se_arregla_sin_ia(tmp_path, contenido):
     assert corrida.ok, corrida.error
     disenador.ajustar_pptx(salida, contenido, IDENTIDAD)
     assert "no está tal cual" in " ".join(disenador.revisar_pptx(salida, contenido, PORTADA, IDENTIDAD))
+
+
+# ---------- Contradicciones entre la guía y los controles ----------
+
+LISTA = "    texto(s, partes.map((p) => ({ text: p, options: { breakLine: true } })), 0.5, 1.5, 9, 3.5);"
+
+
+def con_lista(trozos: str) -> str:
+    """Las frases de cada diapositiva como viñetas, con la primera palabra en un trozo y el resto en otro."""
+    assert LISTA in DISENO
+    return DISENO.replace(LISTA, (
+        "    texto(s, partes.flatMap((p) => { const [a, ...b] = p.split(' ');\n"
+        "      if (!b.length) return [{ text: p, options: { bullet: true, breakLine: true } }];\n"
+        f"      return {trozos}; }}), 0.5, 1.5, 9, 3.5);"))
+
+
+def test_las_etiquetas_y_el_pie_unidos_con_punto_medio_se_aceptan(tmp_path, contenido):
+    """La guía pide «1 · Qué es el gobierno de datos» y el pie con el curso y la sesión: el número y el separador no
+    cuentan como palabras, y cada tramo que sale del contenido o de la portada tampoco."""
+    bien = (DISENO.replace("`${i + 1} · Bloque`", "`${i + 1} · ${d.bloque}`")
+            .replace("    notas(s, d.notas);",
+                     "    texto(s, `${h.portada.curso}  ·  ${h.portada.sesion}`, 0.5, 5.1, 9, 0.3, { fontSize: 12 });\n"
+                     "    notas(s, d.notas);"))
+    corrida, salida = correr(tmp_path, contenido, bien)
+    assert corrida.ok, corrida.error
+    assert disenador.revisar_pptx(salida, contenido, PORTADA, IDENTIDAD) == []
+
+
+def test_un_texto_ajeno_unido_con_punto_medio_sigue_siendo_ajeno(tmp_path, contenido):
+    malo = DISENO.replace("`${i + 1} · Bloque`", "`${i + 1} · Scrum · nació en Japón en 1986 y lo usan`")
+    corrida, salida = correr(tmp_path, contenido, malo)
+    assert corrida.ok, corrida.error
+    assert "nació en Japón" in " ".join(disenador.revisar_pptx(salida, contenido, PORTADA, IDENTIDAD))
+
+
+def test_una_frase_partida_en_varias_vinetas_vuelve_al_disenador(tmp_path, contenido):
+    """Con bullet en cada trozo, pptxgenjs hace una viñeta por trozo y la frase queda partida (Agilidad S1)."""
+    malo = con_lista("[{ text: a + ' ', options: { bullet: true } }, "
+                     "{ text: b.join(' '), options: { bullet: true, bold: true, breakLine: true } }]")
+    corrida, salida = correr(tmp_path, contenido, malo)
+    assert corrida.ok, corrida.error
+    problemas = " ".join(disenador.revisar_pptx(salida, contenido, PORTADA, IDENTIDAD))
+    assert "quedó partida en varias viñetas" in problemas and "bullet: true solo en su primer trozo" in problemas
+
+
+def test_una_frase_resaltada_con_bullet_solo_en_su_primer_trozo_queda_entera(tmp_path, contenido):
+    bien = con_lista("[{ text: a + ' ', options: { bullet: true } }, "
+                     "{ text: b.join(' '), options: { bold: true, breakLine: true } }]")
+    corrida, salida = correr(tmp_path, contenido, bien)
+    assert corrida.ok, corrida.error
+    assert disenador.revisar_pptx(salida, contenido, PORTADA, IDENTIDAD) == []
+    lista = max(Presentation(salida).slides[2].shapes, key=lambda f: len(f.text_frame.paragraphs))
+    assert len(lista.text_frame.paragraphs) == len(contenido.diapositivas[0].textos_visibles())
+
+
+def test_el_texto_que_el_diseno_quita_o_pasa_a_las_notas_vuelve_al_disenador(tmp_path, contenido):
+    """Las notas se copian del contenido sin IA: un texto que el diseño pasa a las notas se perdería."""
+    malo = DISENO.replace("[...c.aplicalo.frases, ...c.aplicalo.plantilla]", "c.aplicalo.plantilla")
+    corrida, salida = correr(tmp_path, contenido, malo)
+    assert corrida.ok, corrida.error
+    problemas = " ".join(disenador.revisar_pptx(salida, contenido, PORTADA, IDENTIDAD))
+    assert f"falta el texto «{contenido.aplicalo.frases[0][:120]}»" in problemas

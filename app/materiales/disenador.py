@@ -5,8 +5,8 @@ pptxgenjs que dibuja ese contenido, con íconos y la identidad visual de la fich
 1. revisa el programa antes de correrlo: sin require, fs, red ni procesos;
 2. lo corre con Node con permisos limitados (app/disenador/ejecutar.js);
 3. arregla sin IA la letra chica, los colores ajenos y las notas (decisión 41);
-4. comprueba el PowerPoint: cantidad de diapositivas, texto que sale tal cual del contenido aprobado,
-   letra mínima, colores de la ficha y notas en todas.
+4. comprueba el PowerPoint: cantidad de diapositivas, texto que sale tal cual del contenido aprobado y que se
+   muestra completo, frases enteras en las viñetas, letra mínima, colores de la ficha y notas en todas.
 La medición con PowerPoint, el verificador y la revisión visual corren después, en diapositivas.py.
 """
 
@@ -118,8 +118,11 @@ CÓMO ES EL PROGRAMA
   - await h.icono(nombre, color): un ícono de react-icons como imagen PNG, para addImage({ data, x, y, w, h }).
     El nombre lleva el prefijo de su colección: FaDatabase, FaUsers, LuScale, MdGavel, HiOutlineLightBulb, TbChartBar…
 - Gotchas de pptxgenjs: colores sin «#»; isTextBox: true en cada addText; margin: 0 cuando el texto debe alinearse
-  con una forma; rectRadius solo en ROUNDED_RECTANGLE; las listas con bullet: true en cada elemento; no compartas
-  un mismo objeto de opciones (shadow) entre dos llamadas.
+  con una forma; rectRadius solo en ROUNDED_RECTANGLE; no compartas un mismo objeto de opciones (shadow) entre dos
+  llamadas.
+- Listas: cada elemento es un párrafo. Si partes un elemento en varios trozos para resaltar palabras, pon
+  bullet: true solo en su primer trozo y breakLine: true solo en su último trozo. Un trozo con bullet empieza otra
+  viñeta: con bullet en cada trozo, la frase queda partida en varias viñetas.
 
 ORDEN Y CANTIDAD
 - Una diapositiva por parte del contenido, en este orden y sin agregar ni quitar ninguna: portada, idea central,
@@ -128,11 +131,15 @@ ORDEN Y CANTIDAD
   esa parte, tal cual.
 
 EL TEXTO
-- Todo el texto sale tal cual de h.contenido y de h.portada. Puedes partir una frase en dos líneas, poner en negrita
-  o en color algunas de sus palabras (con varios trozos de texto) y elegir dónde va cada una. No cambies palabras,
-  no resumas y no agregues afirmaciones.
-- Solo puedes agregar etiquetas cortas de {etiqueta} palabras como máximo: «EJEMPLO», «1 · Qué es el gobierno de
-  datos», «Primer principio», «vs», números de paso, el pie con el curso y la sesión, el número de diapositiva.
+- Todo el texto sale tal cual de h.contenido y de h.portada, y todo el texto de cada parte se muestra en su
+  diapositiva. Puedes partir una frase en dos líneas, poner en negrita o en color algunas de sus palabras (con varios
+  trozos de texto) y elegir dónde va cada una. No cambies palabras, no resumas, no quites texto, no lo pases a las
+  notas y no agregues afirmaciones. Solo los encabezados de una tabla se pueden omitir, si la composición los deja
+  claros.
+- Solo puedes agregar etiquetas cortas de {etiqueta} palabras como máximo: «EJEMPLO», «Primer principio», «vs»,
+  números de paso, el número de diapositiva.
+- Puedes unir con « · » textos del contenido o de la portada y una etiqueta corta: «1 · Qué es el gobierno de
+  datos», el pie con el curso y la sesión. Los números y los separadores no cuentan como palabras.
 - El «tipo» de cada diapositiva del contenido es una sugerencia: elige la composición que mejor muestre su contenido.
 
 EL DISEÑO
@@ -307,6 +314,76 @@ def _textos_del_contenido(contenido: Diapositivas, portada: Portada) -> list[str
     return [t for t in textos if t]
 
 
+def _textos_por_diapositiva(contenido: Diapositivas, portada: Portada) -> list[list[str]]:
+    """Lo que cada diapositiva debe mostrar, en orden: el diseño no quita texto ni lo pasa a las notas. Los
+    encabezados de una tabla se pueden omitir: una tabla dibujada como tarjetas ya no los necesita."""
+    def visibles(d):
+        encabezados = d.tabla.encabezados if d.tabla else []
+        return [d.titulo, *[t for t in d.textos_visibles() if t not in encabezados]]
+
+    a = contenido.aplicalo
+    partes = [[portada.curso, portada.sesion, portada.docente, *lineas_de_contacto(portada.contacto)],
+              list(contenido.idea_central.frases), *[visibles(d) for d in contenido.diapositivas],
+              [*a.frases, *a.plantilla], list(contenido.cuidado.riesgos), [contenido.cierre.frase]]
+    return [[t for t in textos if t] for textos in partes]
+
+
+SEPARADOR = re.compile(r"\s+[·|•–—]\s+")      # «1 · Qué es el gobierno de datos», «Curso · Sesión 1»
+
+
+def _palabras(texto: str) -> list[str]:
+    """Las palabras de una etiqueta: los números y los separadores no cuentan."""
+    return re.findall(r"[^\W\d_]+", texto)
+
+
+def _es_ajeno(normal: str, corpus: str) -> bool:
+    """Un párrafo es ajeno si suma más de PALABRAS_DE_UNA_ETIQUETA palabras que no salen del contenido. Puede unir con
+    « · » textos del contenido o de la portada y una etiqueta corta (el número del bloque, el pie)."""
+    if normal in corpus:
+        return False
+    tramos = [t.strip(" .,:;") for t in SEPARADOR.split(normal)]
+    return sum(len(_palabras(t)) for t in tramos if t and t not in corpus) > PALABRAS_DE_UNA_ETIQUETA
+
+
+def _con_vineta(parrafo) -> bool:
+    propiedades = parrafo._p.pPr
+    return propiedades is not None and any(propiedades.find(qn(f"a:{v}")) is not None for v in ("buChar", "buAutoNum"))
+
+
+def _frases_partidas(figura, frases: set[str]) -> list[str]:
+    """Una frase del contenido repartida en varias viñetas seguidas: en pptxgenjs, cada trozo con bullet empieza
+    otra viñeta. Partir una frase en dos líneas sin viñeta sí se puede."""
+    seguidas, grupos = [], []
+    for parrafo in _parrafos(figura):
+        if not _con_vineta(parrafo):
+            grupos.append(seguidas)
+            seguidas = []
+        elif normal := _normal("".join(r.text for r in parrafo.runs)):
+            seguidas.append(normal)
+    grupos.append(seguidas)
+    partidas = []
+    for grupo in grupos:
+        for i in range(len(grupo)):
+            unida = grupo[i]
+            for siguiente in grupo[i + 1:]:
+                unida = f"{unida} {siguiente}"
+                if unida in frases:
+                    partidas.append(unida)
+                    break
+    return partidas
+
+
+def _texto_de_la_diapositiva(diapositiva) -> set[str]:
+    """Las palabras y números que se ven en la diapositiva, también en tablas y gráficas."""
+    textos = []
+    for figura in _figuras(diapositiva.shapes):
+        textos += ["".join(r.text for r in p.runs) for p in _parrafos(figura)]
+        if getattr(figura, "has_chart", False) and figura.has_chart:
+            for grafica in figura.chart.plots:
+                textos += [str(c) for c in grafica.categories] + [s.name or "" for s in grafica.series]
+    return set(re.findall(r"\w+", _normal(" ".join(textos))))
+
+
 def _notas_del_contenido(contenido: Diapositivas) -> list[str]:
     partes = [contenido.portada, contenido.idea_central, *contenido.diapositivas, contenido.aplicalo,
               contenido.cuidado, contenido.cierre]
@@ -378,23 +455,27 @@ def ajustar_pptx(ruta: Path, contenido: Diapositivas, identidad: Identidad) -> l
 
 
 def revisar_pptx(ruta: Path, contenido: Diapositivas, portada: Portada, identidad: Identidad) -> list[str]:
-    """Cantidad, texto tal cual del contenido, letra mínima, colores de la ficha y notas."""
+    """Cantidad, texto tal cual del contenido y completo, viñetas enteras, letra mínima, colores de la ficha y notas."""
     presentacion = Presentation(ruta)
     problemas = []
     total = len(presentacion.slides)
     if total != contenido.total:
         problemas.append(f"FALLA · diseño · hay {total} diapositivas; deben ser {contenido.total}: una por parte del "
                          "contenido, sin agregar ni quitar.")
-    corpus = " | ".join(_normal(t) for t in _textos_del_contenido(contenido, portada))
+    textos = _textos_del_contenido(contenido, portada)
+    corpus = " | ".join(_normal(t) for t in textos)
+    frases = {_normal(t) for t in textos}
+    esperados = _textos_por_diapositiva(contenido, portada) if total == contenido.total else []
     permitidos = identidad.colores_permitidos()
     notas_esperadas = _notas_del_contenido(contenido)
     for numero, diapositiva in enumerate(presentacion.slides, start=1):
-        ajenos, chicos, colores = [], set(), set()
+        ajenos, chicos, colores, partidas = [], set(), set(), []
         for figura in _figuras(diapositiva.shapes):
+            partidas += _frases_partidas(figura, frases)
             for parrafo in _parrafos(figura):
                 texto = "".join(r.text for r in parrafo.runs)
                 normal = _normal(texto)
-                if normal and len(normal.split()) > PALABRAS_DE_UNA_ETIQUETA and normal not in corpus:
+                if normal and _es_ajeno(normal, corpus):
                     ajenos.append(texto.strip())
                 for corrida in parrafo.runs:
                     if corrida.text.strip() and corrida.font.size is not None and corrida.font.size < Pt(LETRA_MINIMA):
@@ -404,6 +485,15 @@ def revisar_pptx(ruta: Path, contenido: Diapositivas, portada: Portada, identida
         for texto in ajenos[:3]:
             problemas.append(f"FALLA · diseño · diapositiva {numero}: el texto «{texto[:120]}» no está tal cual en el "
                              "contenido aprobado. Usa el texto del contenido sin cambiar palabras.")
+        for frase in partidas[:3]:
+            problemas.append(f"FALLA · diseño · diapositiva {numero}: la frase «{frase[:120]}» quedó partida en varias "
+                             "viñetas. Pon bullet: true solo en su primer trozo y breakLine: true solo en el último.")
+        if numero <= len(esperados):
+            vistas = _texto_de_la_diapositiva(diapositiva)
+            faltan = [t for t in esperados[numero - 1] if not set(re.findall(r"\w+", _normal(t))) <= vistas]
+            for texto in faltan[:3]:
+                problemas.append(f"FALLA · diseño · diapositiva {numero}: falta el texto «{texto[:120]}» del contenido "
+                                 "aprobado. Muestra todo el texto de esa parte; no lo quites ni lo pases a las notas.")
         if chicos:
             problemas.append(f"FALLA · diseño · diapositiva {numero}: hay letra de {', '.join(map(str, sorted(chicos)))} "
                              f"puntos; el mínimo es {LETRA_MINIMA}.")

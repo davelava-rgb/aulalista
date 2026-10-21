@@ -711,3 +711,9 @@ def test_no_se_reanuda_si_las_fichas_cambiaron(con_lectura):
     with pytest.raises(diapositivas.NoSePuedeEmpezar):
         asyncio.run(diapositivas.reanudar(con_lectura, "scrum", 1, consulta=consulta_en_secuencia(),
                                           medir=medir_sin_desbordes, disenar=False))
+
+
+def test_la_revision_visual_no_propone_quitar_texto_ni_pasarlo_a_las_notas():
+    """Las notas se copian del contenido sin IA: un texto que el diseño pasara a las notas se perdería."""
+    assert "no propongas quitarlo, acortarlo ni pasarlo a las notas" in diapositivas.PEDIDO_VISUAL
+    assert "pasar el resto a las notas" not in diapositivas.PEDIDO_VISUAL
