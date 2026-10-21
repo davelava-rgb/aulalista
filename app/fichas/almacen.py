@@ -9,7 +9,10 @@ Cada vez que se guarda, queda una copia en fichas/versiones/ con la fecha.
 
 import hashlib
 import json
+import os
 import re
+import threading
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -464,26 +467,69 @@ def ruta_estado(carpeta_curso: Path, sesion: int) -> Path:
     return carpeta_sesion(carpeta_curso, sesion) / "estado.json"
 
 
+# El estado de una sesión lo escriben a la vez el trabajo en segundo plano (el avance de un material) y las páginas.
+# El candado ordena esas escrituras dentro del servidor; la escritura por reemplazo evita que una página lea el
+# archivo a medio escribir (vacío), lo que daba «Internal Server Error».
+CANDADO_ESTADO = threading.RLock()
+INTENTOS_DE_ARCHIVO = 20
+
+
 def cargar_estado(carpeta_curso: Path, sesion: int) -> dict:
     ruta = ruta_estado(carpeta_curso, sesion)
-    return json.loads(ruta.read_text(encoding="utf-8")) if ruta.exists() else {"materiales": {}}
+    for intento in range(INTENTOS_DE_ARCHIVO):
+        try:
+            return json.loads(ruta.read_text(encoding="utf-8")) if ruta.exists() else {"materiales": {}}
+        except (json.JSONDecodeError, PermissionError):
+            # Otro proceso (OneDrive, un antivirus) lo tiene tomado un instante.
+            if intento == INTENTOS_DE_ARCHIVO - 1:
+                raise
+            time.sleep(0.05)
 
 
 def guardar_estado(carpeta_curso: Path, sesion: int, estado: dict) -> None:
     ruta = ruta_estado(carpeta_curso, sesion)
     ruta.parent.mkdir(parents=True, exist_ok=True)
-    ruta.write_text(json.dumps(estado, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporal = ruta.with_name(f"{ruta.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    temporal.write_text(json.dumps(estado, ensure_ascii=False, indent=2), encoding="utf-8")
+    for intento in range(INTENTOS_DE_ARCHIVO):
+        try:
+            os.replace(temporal, ruta)
+            return
+        except PermissionError:
+            # En Windows no se reemplaza un archivo que otro está leyendo en ese instante.
+            if intento == INTENTOS_DE_ARCHIVO - 1:
+                temporal.unlink(missing_ok=True)
+                raise
+            time.sleep(0.05)
+
+
+# Lo que no cambia ningún material: qué materiales produce la sesión. Cambiarlo no desactualiza lo ya generado.
+CAMPOS_SIN_EFECTO = ("materiales.cuales",)
+
+
+def huella_de_fichas(carpeta_curso: Path, sesion: int) -> str:
+    """Cambia si cambia un campo de las dos fichas que usan los materiales."""
+    datos = {
+        "curso": {k: valor(cargar(carpeta_curso, "curso"), k) for k in sorted(cargar(carpeta_curso, "curso")["campos"])},
+        "sesion": {k: valor(cargar(carpeta_curso, "sesion", sesion), k)
+                   for k in sorted(cargar(carpeta_curso, "sesion", sesion)["campos"]) if k not in CAMPOS_SIN_EFECTO},
+    }
+    return hashlib.sha256(json.dumps(datos, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
 
 def marcar_desactualizados(carpeta_curso: Path, sesion: int) -> list[str]:
-    """Los materiales ya generados no se entregan hasta validarlos con las fichas nuevas."""
-    estado = cargar_estado(carpeta_curso, sesion)
-    marcados = []
-    for nombre, material in estado["materiales"].items():
-        material["desactualizado"] = True
-        marcados.append(nombre)
-    guardar_estado(carpeta_curso, sesion, estado)
-    return marcados
+    """Los materiales ya generados no se entregan hasta validarlos con las fichas nuevas. Si las fichas dicen lo mismo
+    que cuando se generó el último material (solo cambió qué materiales se producen), no se marca ninguno."""
+    with CANDADO_ESTADO:
+        estado = cargar_estado(carpeta_curso, sesion)
+        if estado.get("huella_fichas") and estado["huella_fichas"] == huella_de_fichas(carpeta_curso, sesion):
+            return []
+        marcados = []
+        for nombre, material in estado["materiales"].items():
+            material["desactualizado"] = True
+            marcados.append(nombre)
+        guardar_estado(carpeta_curso, sesion, estado)
+        return marcados
 
 
 def sesiones_confirmadas(carpeta_curso: Path) -> list[int]:

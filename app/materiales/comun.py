@@ -177,18 +177,23 @@ def estado(carpeta_curso: Path, sesion: int, clave: str) -> dict:
 
 
 def actualizar(carpeta_curso: Path, sesion: int, clave: str, **cambios) -> dict:
-    datos = almacen.cargar_estado(carpeta_curso, sesion)
-    material = datos["materiales"].setdefault(clave, {"avance": []})
-    material.update(cambios)
-    almacen.guardar_estado(carpeta_curso, sesion, datos)
-    return material
+    with almacen.CANDADO_ESTADO:
+        datos = almacen.cargar_estado(carpeta_curso, sesion)
+        material = datos["materiales"].setdefault(clave, {"avance": []})
+        material.update(cambios)
+        if cambios.get("estado") == "trabajando" and not cambios.get("previo"):
+            # Las fichas con que se genera: un cambio que no las toca no desactualiza este material.
+            datos["huella_fichas"] = almacen.huella_de_fichas(carpeta_curso, sesion)
+        almacen.guardar_estado(carpeta_curso, sesion, datos)
+        return material
 
 
 def avance(carpeta_curso: Path, sesion: int, clave: str, texto: str) -> None:
-    datos = almacen.cargar_estado(carpeta_curso, sesion)
-    material = datos["materiales"].setdefault(clave, {"avance": []})
-    material.setdefault("avance", []).append(f"{datetime.now():%H:%M:%S} · {texto}")
-    almacen.guardar_estado(carpeta_curso, sesion, datos)
+    with almacen.CANDADO_ESTADO:
+        datos = almacen.cargar_estado(carpeta_curso, sesion)
+        material = datos["materiales"].setdefault(clave, {"avance": []})
+        material.setdefault("avance", []).append(f"{datetime.now():%H:%M:%S} · {texto}")
+        almacen.guardar_estado(carpeta_curso, sesion, datos)
 
 
 def gasto_de_la_corrida(carpeta_curso: Path, curso: str, sesion: int, clave: str) -> dict | None:

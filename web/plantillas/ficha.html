@@ -197,7 +197,7 @@
     {# El mismo orden que la página: la ficha corta primero y el plan de la sesión después (decisión 54). #}
     {% for s in (secciones | rejectattr("plan") | list) + (secciones | selectattr("plan") | list) %}
     {% set estado_texto = {"completa": "completa", "vacia": "vacía", "alerta": "con campos por definir", "no_se_usa": "no se usa"}[s.estado] %}
-    <li><a class="pildora estado-{{ s.estado }}" href="#{{ s.ancla }}" title="{{ s.titulo }}"><i aria-hidden="true"></i>{{ s.titulo.split(" (")[0] }}{% if s.estado == "no_se_usa" %}: no se usa{% endif %}<span class="sr">, {{ estado_texto }}</span></a>{% if s.alertas %} <span class="marca alerta">{{ s.alertas }} por definir</span>{% endif %}</li>
+    <li><a class="pildora estado-{{ s.estado }}" href="#{{ s.ancla }}" title="{{ s.nombre }}"><i aria-hidden="true"></i>{{ s.nombre.split(" (")[0] }}{% if s.estado == "no_se_usa" %}: no se usa{% endif %}<span class="sr">, {{ estado_texto }}</span></a>{% if s.alertas %} <span class="marca alerta">{{ s.alertas }} por definir</span>{% endif %}</li>
     {% endfor %}
   </ul>
 </nav>
@@ -213,10 +213,10 @@
     <div class="sec-cabeza">
       <button type="button" class="sec-plegar" aria-expanded="true" aria-controls="cuerpo-{{ s.ancla }}">
         <span class="sec-flecha" aria-hidden="true"></span><span class="sr">Plegar o desplegar </span></button>
-      <h2 id="t-{{ s.ancla }}">{{ s.titulo }}</h2>
+      <h2 id="t-{{ s.ancla }}">{{ s.nombre }}</h2>
       {% if s.origen_comun %}<span class="sec-fuente">De {{ s.origen_comun }}</span>{% endif %}
       <span class="sec-estado estado-{{ s.estado }}">{{ {"completa": "Completa", "vacia": "Vacía", "alerta": "Por definir", "no_se_usa": "No se usa"}[s.estado] }}</span>
-      <button type="button" class="secundario sec-editar" data-editar="{{ s.ancla }}">{{ "Ver lo escrito" if s.estado == "no_se_usa" else "Editar" }}<span class="sr"> {{ s.titulo.split(" (")[0] }}</span></button>
+      <button type="button" class="secundario sec-editar" data-editar="{{ s.ancla }}">{{ "Ver lo escrito" if s.estado == "no_se_usa" else "Editar" }}<span class="sr"> {{ s.nombre.split(" (")[0] }}</span></button>
     </div>
     <div class="sec-cuerpo" id="cuerpo-{{ s.ancla }}">
     <div class="sec-resumen">
@@ -305,7 +305,7 @@
     {% endif %}
     <p class="sin-guardar" id="sin-guardar" role="status" hidden>Hay cambios sin guardar.</p>
     {% if ficha.confirmada and generados %}
-    <p class="aviso-guardar">Ficha confirmada: guardar un cambio desactualiza {{ generados_texto }}.</p>
+    <p class="aviso-guardar">Ficha confirmada: guardar un cambio desactualiza {{ generados_texto }}. Cambiar solo «Materiales de esta sesión» no lo desactualiza.</p>
     {% endif %}
   </div>
   {% if sesion %}
@@ -412,7 +412,15 @@
 
   // Aviso de cambios sin guardar: junto a los botones y al salir de la página.
   let sinGuardar = false;
-  const marcarCambio = () => { sinGuardar = true; porId("sin-guardar").hidden = false; };
+  // Qué materiales produce la sesión no cambia lo ya generado: ese cambio no pide confirmar (almacen.CAMPOS_SIN_EFECTO).
+  let conEfecto = false;
+  const SIN_EFECTO = {{ campos_sin_efecto | tojson }};
+  const marcarCambio = (evento) => {
+    sinGuardar = true;
+    porId("sin-guardar").hidden = false;
+    const nombre = (evento && evento.target && evento.target.name) || "";
+    if (!SIN_EFECTO.some((campo) => nombre === campo || nombre.startsWith(campo + "."))) conEfecto = true;
+  };
   formulario.addEventListener("input", marcarCambio);
   formulario.addEventListener("change", marcarCambio);
   window.addEventListener("beforeunload", (evento) => { if (sinGuardar) { evento.preventDefault(); evento.returnValue = ""; } });
@@ -522,6 +530,7 @@
       const seccion = abierta;
       cerrar(seccion);
       sinGuardar = false;
+      conEfecto = false;
       porId("sin-guardar").hidden = true;
       seccion.scrollIntoView({ block: "start" });
     }
@@ -530,7 +539,7 @@
   formulario.addEventListener("submit", (evento) => {
     const boton = evento.submitter;
     // Guardar un cambio en una ficha confirmada deja desactualizado lo ya generado: se pregunta antes.
-    if (boton && boton.dataset.confirmar && sinGuardar && !window.confirm(boton.dataset.confirmar)) {
+    if (boton && boton.dataset.confirmar && sinGuardar && conEfecto && !window.confirm(boton.dataset.confirmar)) {
       evento.preventDefault();
       return;
     }

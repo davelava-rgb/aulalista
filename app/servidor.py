@@ -275,6 +275,7 @@ def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, m
         "propuesta": flujo.estado_propuesta(carpeta, tipo, sesion),
         "hay_propuestos": any((d or {}).get("estado") == almacen.PROPUESTO for d in ficha["campos"].values()),
         "secciones": secciones, "modo_lectura": ficha["confirmada"], "generados": generados, "generados_texto": _y(generados), "costos": costos,
+        "campos_sin_efecto": list(almacen.CAMPOS_SIN_EFECTO),
         "url_propuesta": _url_ficha(curso, sesion) + "/propuesta",
         # En la sesión solo se pregunta por la ficha corta: el plan lo prepara AulaLista (decisión 54).
         "preguntas": [p for p in almacen.preguntas_pendientes(ficha, maximo=10_000)
@@ -322,6 +323,11 @@ def _indice_de_secciones(secciones: list[dict]) -> list[dict]:
         for c in campos:
             c["origen_visible"] = c["origen"] if c.get("origen") not in ("", None, "profesor", comun) else ""
         _resumen_de_seccion(s, campos)
+    # El número que se ve sigue el orden en pantalla: en la ficha de la sesión, las secciones del plan van al final,
+    # plegadas (decisión 54). Sin esto se leía «1. Sesión» y después «6. Materiales de esta sesión».
+    for orden, s in enumerate([s for s in secciones if not s["plan"]] + [s for s in secciones if s["plan"]], 1):
+        s["orden"] = orden
+        s["nombre"] = re.sub(r"^\d+\.\s*", f"{orden}. ", s.get("titulo", ""))
     return secciones
 
 

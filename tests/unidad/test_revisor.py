@@ -196,6 +196,9 @@ def test_con_pendientes_la_pagina_deja_aprobar(sesion):
 
 def test_no_se_aprueba_una_lectura_desactualizada_ni_con_fallas(sesion):
     generar(sesion, LIMPIA)
+    ficha = almacen.cargar(sesion, "sesion", 1)   # un cambio real en la ficha: los materiales quedan desactualizados
+    ficha["campos"]["lectura.cuidado"] = {"valor": "Otro riesgo", "origen": "profesor", "estado": ""}
+    almacen.guardar(sesion, "sesion", 1, ficha)
     almacen.marcar_desactualizados(sesion, 1)
     r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura/aprobar", follow_redirects=True)
     assert lectura.estado(sesion, 1)["estado"] == "verificada"

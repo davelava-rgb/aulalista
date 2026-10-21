@@ -757,6 +757,9 @@ def test_reanudar_sigue_desde_lo_guardado_sin_redactar_de_nuevo(con_lectura):
 
 def test_no_se_reanuda_si_las_fichas_cambiaron(con_lectura):
     _con_fallas(con_lectura)
+    ficha = almacen.cargar(con_lectura, "sesion", 1)   # un cambio real en la ficha: los materiales quedan desactualizados
+    ficha["campos"]["lectura.cuidado"] = {"valor": "Otro riesgo", "origen": "profesor", "estado": ""}
+    almacen.guardar(con_lectura, "sesion", 1, ficha)
     almacen.marcar_desactualizados(con_lectura, 1)
     assert not diapositivas.se_puede_reanudar(con_lectura, 1)
     assert "Reanudar desde lo guardado" not in cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
