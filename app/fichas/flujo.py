@@ -581,6 +581,49 @@ def _y(partes: list[str]) -> str:
     return " y ".join([", ".join(partes[:-1]), partes[-1]]) if len(partes) > 1 else "".join(partes)
 
 
+# ---------- La ficha corta de la sesión (PLAN.md §0, decisión 54) ----------
+
+DESDE_EL_CURSO = "ficha del curso"
+
+
+def datos_desde_el_curso(ficha_curso: dict, sesion: int) -> dict[str, str]:
+    """Lo que la ficha de la sesión toma de la del curso, sin IA: número y título, alcance, lo ya visto, lo que no se
+    adelanta y, si la cobertura de «Repartir las sesiones» sigue valiendo, las páginas de referencia."""
+    sesiones = almacen.sesiones_del_curso(ficha_curso)
+    titulos = {s["numero"]: s["texto"].partition(":")[0].strip(" .") for s in sesiones}
+    actual = next((s for s in sesiones if s["numero"] == sesion), None)
+    if actual is None:
+        return {}
+    titulo, separador, alcance = actual["texto"].partition(":")
+    datos = {
+        "sesion.numero_titulo": f"{sesion}. {titulo.strip(' .')}",
+        "sesion.alcance": (alcance if separador else actual["texto"]).strip(),
+        "sesion.ya_vieron": "; ".join(t for n, t in sorted(titulos.items()) if n < sesion),
+        "sesion.no_adelantar": "; ".join(t for n, t in sorted(titulos.items()) if n > sesion),
+    }
+    cobertura_curso = cobertura_vigente(ficha_curso)
+    if cobertura_curso and cobertura_curso["vigente"]:
+        datos["sesion.referencia"] = "\n".join(cobertura_curso["sesiones"].get(str(sesion), []))
+    return {campo: texto for campo, texto in datos.items() if texto}
+
+
+def llenar_desde_el_curso(carpeta_curso: Path, sesion: int) -> list[str]:
+    """Llena los campos vacíos de la ficha corta con la ficha del curso y la guarda. Una ficha confirmada no cambia.
+    Devuelve los campos que llenó."""
+    ficha = almacen.cargar(carpeta_curso, "sesion", sesion)
+    if ficha["confirmada"]:
+        return []
+    llenados = []
+    for campo, texto in datos_desde_el_curso(almacen.cargar(carpeta_curso, "curso"), sesion).items():
+        dato = ficha["campos"].get(campo) or {}
+        if not dato.get("valor") and dato.get("estado") != almacen.CONFLICTO:
+            ficha["campos"][campo] = {"valor": texto, "origen": DESDE_EL_CURSO, "estado": ""}
+            llenados.append(campo)
+    if llenados:
+        almacen.guardar(carpeta_curso, "sesion", sesion, ficha, "datos desde la ficha del curso")
+    return llenados
+
+
 def _avisos_de_completar(ficha: dict, clave: str) -> list[str]:
     """Lo que un programa comprueba en la propuesta. No la descarta: el profesor decide."""
     avisos = []

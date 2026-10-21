@@ -194,7 +194,8 @@
     <button type="button" class="enlace" data-plegar-todas="0">Desplegar todas</button></p>
   {% if total_alertas %}<p class="titulo-indice alerta">{{ total_alertas }} {{ "campo" if total_alertas == 1 else "campos" }} en «Falta definir» o con dos versiones.</p>{% endif %}
   <ul>
-    {% for s in secciones %}
+    {# El mismo orden que la página: la ficha corta primero y el plan de la sesión después (decisión 54). #}
+    {% for s in (secciones | rejectattr("plan") | list) + (secciones | selectattr("plan") | list) %}
     {% set estado_texto = {"completa": "completa", "vacia": "vacía", "alerta": "con campos por definir", "no_se_usa": "no se usa"}[s.estado] %}
     <li><a class="pildora estado-{{ s.estado }}" href="#{{ s.ancla }}" title="{{ s.titulo }}"><i aria-hidden="true"></i>{{ s.titulo.split(" (")[0] }}{% if s.estado == "no_se_usa" %}: no se usa{% endif %}<span class="sr">, {{ estado_texto }}</span></a>{% if s.alertas %} <span class="marca alerta">{{ s.alertas }} por definir</span>{% endif %}</li>
     {% endfor %}
@@ -204,7 +205,7 @@
 <form method="post" id="form-ficha" enctype="multipart/form-data"{% if modo_lectura %} class="ficha-lectura"{% endif %}>
   {# Lo que mostraba la página al abrirse: al guardar, solo se aplica lo que cambiaste. #}
   <input type="hidden" name="base" value="{{ base }}">
-  {% for s in secciones %}
+  {% macro tarjeta(s) %}
   {# Cada sección se dibuja dos veces: un resumen para leer y sus campos para editar (decisión 45). Sin JavaScript
      se ven solo los campos, como antes. Una sección con alertas se abre siempre en edición. #}
   {% set leer = modo_lectura and s.estado != "alerta" %}
@@ -276,7 +277,17 @@
     </div>
     </div>
   </section>
-  {% endfor %}
+  {% endmacro %}
+
+  {% for s in secciones if not s.plan %}{{ tarjeta(s) }}{% endfor %}
+  {# En la ficha de la sesión, lo que prepara AulaLista va plegado (decisión 54). Se abre solo si pide algo. #}
+  {% set plan = secciones | selectattr("plan") | list %}
+  {% if plan %}
+  <details class="plan-sesion" id="plan-sesion" {% if plan | selectattr("alertas") | list or errores %}open{% endif %}>
+    <summary><span class="plan-titulo">Plan de la sesión</span> <span class="nota">Lo prepara AulaLista: lectura, vocabulario, ejercicios y evaluación. Ábrelo solo si quieres revisarlo o cambiarlo.</span></summary>
+    {% for s in plan %}{{ tarjeta(s) }}{% endfor %}
+  </details>
+  {% endif %}
 
   {% set ocupada = propuesta.estado == "trabajando" %}
   <div class="acciones">
@@ -419,6 +430,8 @@
   // Un enlace del índice despliega la sección a la que lleva.
   document.querySelectorAll(".indice a.pildora").forEach((a) => a.addEventListener("click", () => {
     const destino = document.querySelector(a.getAttribute("href"));
+    const plan = destino && destino.closest("details.plan-sesion");
+    if (plan) plan.open = true;
     if (destino) plegar(destino, false);
   }));
 

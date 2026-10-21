@@ -276,7 +276,10 @@ def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, m
         "hay_propuestos": any((d or {}).get("estado") == almacen.PROPUESTO for d in ficha["campos"].values()),
         "secciones": secciones, "modo_lectura": ficha["confirmada"], "generados": generados, "generados_texto": _y(generados), "costos": costos,
         "url_propuesta": _url_ficha(curso, sesion) + "/propuesta",
-        "preguntas": almacen.preguntas_pendientes(ficha),
+        # En la sesión solo se pregunta por la ficha corta: el plan lo prepara AulaLista (decisión 54).
+        "preguntas": [p for p in almacen.preguntas_pendientes(ficha, maximo=10_000)
+                      if tipo == "curso" or p["id"] not in plantillas_fichas.ids_del_plan()
+                      ][:almacen.MAX_PREGUNTAS_POR_VEZ],
         "errores": errores or [], "mensaje": mensaje, "corregibles": corregibles,
         "versiones": almacen.listar_versiones(carpeta, tipo, sesion),
         "url_restaurar": _url_ficha(curso, sesion) + "/restaurar",
@@ -308,6 +311,7 @@ def _indice_de_secciones(secciones: list[dict]) -> list[dict]:
             else:
                 campos.append(e)
         s["ancla"] = f"seccion-{numero}"
+        s["plan"] = s.get("titulo", "").startswith(plantillas_fichas.SECCIONES_DEL_PLAN)
         s["alertas"] = sum(1 for c in campos if c["estado"] in ALERTAS)
         # La fuente que más se repite se dice una vez en la sección; cada campo dice solo la suya si es otra.
         origenes = [c["origen"] for c in campos if c.get("origen") and c["origen"] != "profesor"]
@@ -462,6 +466,8 @@ async def accion_ficha_del_curso(request: Request, curso: str):
 @app.get("/cursos/{curso}/sesiones/{sesion}/ficha")
 def ver_ficha_de_la_sesion(request: Request, curso: str, sesion: int):
     _exigir_ficha_del_curso(_carpeta(curso), curso)
+    # Lo que la ficha corta toma de la del curso, sin IA (decisión 54). Antes de la propuesta: la IA no lo cambia.
+    flujo.llenar_desde_el_curso(_carpeta(curso), sesion)
     _proponer_si_corresponde(curso, "sesion", sesion)
     return _pagina_ficha(request, curso, "sesion", sesion, *_AVISOS_FICHA.pop(_url_ficha(curso, sesion), ("", None)))
 

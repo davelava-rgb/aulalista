@@ -67,6 +67,33 @@ def test_guardar_la_ficha_del_curso_completa_la_confirma_y_abre_las_sesiones(cur
     assert "/cursos/scrum/sesiones/2/ficha" in pagina
 
 
+def test_la_ficha_corta_de_la_sesion_se_llena_desde_la_del_curso_y_el_plan_va_plegado(curso):
+    cliente.post("/cursos/scrum/ficha", data={"accion": "guardar", **datos.CURSO})
+    ficha_curso = almacen.cargar(curso, "curso")
+    texto = almacen.valor(ficha_curso, "curso.sesiones")
+    ficha_curso["cobertura_sesiones"] = flujo.cobertura(
+        [{"numero": 2, "paginas": [{"fuente": "guia.pdf", "desde": 4, "hasta": 9}]}], {"guia.pdf": list(range(1, 20))}, texto)
+    almacen.guardar(curso, "curso", None, ficha_curso)
+    pagina = cliente.get("/cursos/scrum/sesiones/2/ficha").text
+    ficha = almacen.cargar(curso, "sesion", 2)
+    assert almacen.valor(ficha, "sesion.numero_titulo") == "2. Roles de Scrum"
+    assert almacen.valor(ficha, "sesion.alcance") == "responsabilidades"
+    assert almacen.valor(ficha, "sesion.ya_vieron") == "Agilidad y fundamentos de Scrum"
+    assert almacen.valor(ficha, "sesion.no_adelantar") == ""
+    assert almacen.valor(ficha, "sesion.referencia") == "guia.pdf: páginas 4 a 9"
+    assert ficha["campos"]["sesion.alcance"]["origen"] == flujo.DESDE_EL_CURSO
+    # Lo que prepara AulaLista va plegado, después de la ficha corta, y no se pregunta.
+    plan = pagina.index('<details class="plan-sesion"')
+    assert pagina.index('id="t-seccion-1"') < pagina.index('id="t-seccion-6"') < plan < pagina.index('id="t-seccion-2"')
+    preguntas = pagina.split('<section class="preguntas">', 1)[-1].split("</section>", 1)[0]
+    assert "lectura." not in preguntas and "ejercicio." not in preguntas
+    # Lo que el profesor cambió no se pisa al volver a abrir la ficha.
+    ficha["campos"]["sesion.alcance"] = {"valor": "Solo el Scrum Master", "origen": "profesor", "estado": ""}
+    almacen.guardar(curso, "sesion", 2, ficha)
+    cliente.get("/cursos/scrum/sesiones/2/ficha")
+    assert almacen.valor(almacen.cargar(curso, "sesion", 2), "sesion.alcance") == "Solo el Scrum Master"
+
+
 def test_la_ficha_de_la_sesion_espera_a_la_del_curso(curso):
     assert cliente.get("/cursos/scrum/sesiones/1/ficha").status_code == 409
 

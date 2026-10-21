@@ -167,6 +167,13 @@ FICHA_DE_LA_SESION = (
 
 PLANTILLAS = {"curso": FICHA_DEL_CURSO, "sesion": FICHA_DE_LA_SESION}
 
+# Las secciones de la ficha de la sesión que prepara AulaLista y la página muestra plegadas (decisión 54).
+SECCIONES_DEL_PLAN = ("2. Lectura", "3. Vocabulario", "4. Laboratorio", "5. Evaluación")
+
+
+def ids_del_plan() -> set[str]:
+    return {c.id for c, s in campos_de("sesion") if s.titulo.startswith(SECCIONES_DEL_PLAN)}
+
 
 def campos_de(tipo: str) -> list[tuple[Campo, Seccion]]:
     """Todos los campos que guardan un valor, con su sección, en el orden de la plantilla."""
