@@ -616,7 +616,7 @@ def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False
             # Un material aprobado no es un paso pendiente, aunque la ficha haya cambiado después: se marca como
             # desactualizado y el profesor decide si lo genera de nuevo.
             if viejo:
-                viejos.append(datos)
+                viejos.append(m)
             continue
         elif e in ("verificada", "con pendientes") and not viejo:
             siguiente = {"texto": f"Revisa la entrega y aprueba {datos['el']}.", "ancla": clave, "corto": datos["corto"]}
@@ -629,11 +629,16 @@ def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False
             siguiente = {"texto": f"Genera {datos['el']}.", "ancla": clave, "corto": datos["corto"]}
     if siguiente is None and viejos:
         # Aprobados, pero no todos al día: decirlo, para que «aprobados» no se lea como «listos para entregar».
-        cuales = (f"{viejos[0]['el']} quedó {_forma(viejos[0], 'desactualizad')}" if len(viejos) == 1
-                  else f"{len(viejos)} quedaron desactualizados")
+        # Se nombran y el enlace lleva al primero, para no tener que buscarlos en el panel.
+        nombres = _y([v["el"] for v in viejos])
+        if len(viejos) == 1 and not viejos[0].get("plural"):
+            cuales, lo = f"{nombres} quedó {_forma(viejos[0], 'desactualizad')}", viejos[0]["lo"]
+        else:
+            femenino = all(v.get("o", "a") == "a" for v in viejos)
+            cuales, lo = f"{nombres} quedaron desactualizad{'as' if femenino else 'os'}", "las" if femenino else "los"
         siguiente = {"texto": f"Los materiales de esta sesión están aprobados, pero {cuales}: la ficha cambió después. "
-                              f"Decide si {viejos[0]['lo'] if len(viejos) == 1 else 'los'} generas de nuevo.",
-                     "ancla": "", "corto": "Listo"}
+                              f"Decide si {lo} generas de nuevo.",
+                     "ancla": viejos[0]["clave"], "corto": viejos[0]["corto"], "boton": f"Ir a {viejos[0]['el']}"}
     elif siguiente is None:
         siguiente = {"texto": "Los materiales de esta sesión están aprobados.", "ancla": "", "corto": "Listo"}
     return {"puede_empezar": puede_empezar, "ficha_por_preparar": puede_empezar and not sesion_lista,

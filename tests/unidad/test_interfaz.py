@@ -215,7 +215,7 @@ def test_aprobar_dice_junto_al_boton_que_acepta_las_decisiones(sesion):  # noqa:
 def test_un_material_aprobado_cierra_con_lo_que_sigue_y_pliega_lo_que_gasta(sesion):  # noqa: F811
     _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00")
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
-    bloque = pagina.split('<div class="bloque-accion">')[1].split("</section>")[0]
+    bloque = pagina.split('<div class="bloque-accion" id="acciones">')[1].split("</section>")[0]
     assert "La lectura está aprobada.</strong>" in bloque and 'class="boton"' in bloque
     assert bloque.index('<details class="otras-acciones">') < bloque.index("Generar de nuevo")
     assert 'class="saltar" href="#principal"' in pagina and 'id="principal"' in pagina
@@ -228,12 +228,26 @@ def test_si_todo_esta_aprobado_pero_desactualizado_el_siguiente_paso_lo_dice(ses
     siguiente = servidor._vista_de_materiales(sesion, "scrum", 1)["siguiente"]
     assert siguiente["texto"] == ("Los materiales de esta sesión están aprobados, pero la lectura quedó desactualizada: "
                                   "la ficha cambió después. Decide si la generas de nuevo.")
+    assert siguiente["ancla"] == "lectura" and siguiente["boton"] == "Ir a la lectura"   # se nombra y se enlaza
+    _poner(sesion, "diapositivas", estado="aprobada", aprobada="2026-10-15T10:00:00", desactualizado=True)
+    texto = servidor._vista_de_materiales(sesion, "scrum", 1)["siguiente"]["texto"]
+    assert "pero la lectura y las diapositivas quedaron desactualizadas" in texto and "Decide si las generas" in texto
+
+
+def test_un_material_desactualizado_avisa_una_vez_y_marca_sus_archivos(sesion):  # noqa: F811
+    entrega = {"pregunta": "¿Apruebas la lectura?", "secciones": [
+        {"clave": "archivos", "titulo": "Archivos", "lineas": ["S1_Lectura.docx: la lectura."]}]}
+    _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00", desactualizado=True, entrega=entrega)
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    assert pagina.count('class="aviso-viejo"') == 1 and "No entregues sus archivos sin generarla de nuevo." in pagina
+    assert '<strong class="version-anterior">Versión anterior.</strong> La lectura.' in pagina
+    assert "Las dos fichas están confirmadas." not in pagina
 
 
 def test_las_acciones_van_juntas_con_un_solo_boton_principal(sesion):  # noqa: F811
     _poner(sesion, "lectura", estado="con pendientes", entrega={"pregunta": "¿Apruebas la lectura?", "secciones": []})
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
-    bloque = pagina.split('<div class="bloque-accion">')[1].split("</section>")[0]
+    bloque = pagina.split('<div class="bloque-accion" id="acciones">')[1].split("</section>")[0]
     assert "Aprobar la lectura</button>" in bloque and "Pedir revisor independiente</button>" in bloque
     assert bloque.count('<button type="submit">') == 1   # Aprobar es el único principal; Generar de nuevo es secundario
 
