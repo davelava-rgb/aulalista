@@ -182,6 +182,7 @@ Formato:
 - Al inicio, una tabla con los archivos de práctica: nombre, ejercicio y contenido.
 - Archivos de práctica en Excel para datos y en Word para textos. PDF solo si el caso lo exige. Sin portada y con diseño sobrio.
 - Nombres con el formato S[sesión]_E[ejercicio]_[descripcion-corta].
+- En un Excel de práctica, una columna donde el alumno elige su respuesta de un conjunto cerrado (una categoría, un concepto del vocabulario, un área del caso, "Sí" o "No") lleva una lista de opciones. La lista trae todas las opciones del conjunto, escritas igual que en la ficha y en el orden de la fuente, y no dice cuál es la correcta. Las opciones van en una hoja visible "Opciones". Sin lista si la respuesta es abierta o si la sesión enseña listas o validación de datos. El paso dice que el alumno elige de la lista de la celda.
 - Un archivo .zip con todos los archivos de práctica.
 - Revisa que los nombres de archivo coincidan en las guías y en los archivos.
 
@@ -221,7 +222,7 @@ Contenido:
 - Cada pregunta tiene una sola respuesta correcta y se responde con los datos del caso y lo que enseñó la lectura. Si una pregunta admite dos respuestas defendibles, rediséñala.
 - Cada opción, correcta o incorrecta, trae su explicación. La explicación de una opción correcta dice por qué lo es. La de una incorrecta dice qué confunde y cuál es la idea correcta. Las opciones incorrectas salen de errores comunes del tema, no de absurdos.
 - Sin «todas las anteriores» ni «ninguna de las anteriores».
-- Cada pregunta tiene sus puntos: un número entero de 1 a 3. La página los suma. El puntaje es una orientación: la nota la pone el profesor.
+- Cada pregunta tiene su peso: un número entero de 1 a 3. AulaLista lo convierte en puntos que suman 100 (PLAN.md §0, decisión 59). La página los suma. El puntaje es una orientación: la nota la pone el profesor.
 - Un recuadro «Recuerde» por paso, como máximo, con una idea de la lectura que ayuda a responder. No da la respuesta.
 - Ninguna pregunta repite un ejercicio del laboratorio ni una pregunta de la evaluación, ni da sus respuestas.
 - Sin tiempos ni duración de la actividad.

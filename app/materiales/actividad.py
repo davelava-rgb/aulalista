@@ -31,7 +31,7 @@ from pydantic import ValidationError
 from app import agente, entrega, skill, tokens
 from app.fichas import almacen, referencia, verificacion
 from app.materiales import comun, diapositivas, disenador_web, estilo, lectura, navegador
-from app.materiales.contenido import ESQUEMA_ACTIVIDAD, PUNTOS_POR_PREGUNTA, Actividad, Lectura, Pregunta
+from app.materiales.contenido import ESQUEMA_ACTIVIDAD, PUNTAJE_TOTAL, PUNTOS_POR_PREGUNTA, Actividad, Lectura, Pregunta
 from app.validacion import excel, pasada2, revision, revisor, verificador
 from app.validacion.pasajes import Corpus
 
@@ -161,7 +161,8 @@ CÓMO ENTREGAR LA ACTIVIDAD WEB
   trae una fila «Total», esa fila es la suma de las demás.
 - pasos: de {PASOS[0]} a {PASOS[1]}, en el orden del tema. Cada paso con «titulo», «introduccion», «recuerde» (vacío
   si no hace falta) y de 1 a 4 «preguntas».
-- Cada pregunta trae «tipo», «enunciado» y «puntos» (entero de {PUNTOS_POR_PREGUNTA[0]} a {PUNTOS_POR_PREGUNTA[1]}).
+- Cada pregunta trae «tipo», «enunciado» y «puntos» (entero de {PUNTOS_POR_PREGUNTA[0]} a {PUNTOS_POR_PREGUNTA[1]}): su peso
+  frente a las demás. AulaLista lleva los pesos a puntos que suman {PUNTAJE_TOTAL}.
   Llena solo la lista de su tipo y deja las otras vacías:
   - «opcion_unica»: «opciones», de 3 a 5, con una sola «correcta» en true.
   - «opcion_multiple»: «opciones», de 4 a 6, con al menos una correcta y una incorrecta. El enunciado avisa
@@ -370,9 +371,9 @@ def _tabla(encabezados: list[str], filas: list[list[str]], titulo: str = "") -> 
     return f"<table>{leyenda}<thead><tr>{cabeza}</tr></thead><tbody>{cuerpo}</tbody></table>"
 
 
-def _pregunta(p: Pregunta, numero: int) -> str:
+def _pregunta(p: Pregunta, numero: int, puntos: int) -> str:
     partes = [f"<h3>Pregunta {numero}</h3>",
-              f'<p class="meta">{TIPOS[p.tipo]} · {p.puntos} {"punto" if p.puntos == 1 else "puntos"}</p>',
+              f'<p class="meta">{TIPOS[p.tipo]} · {puntos} {"punto" if puntos == 1 else "puntos"}</p>',
               f"<p>{_e(p.enunciado)}</p>"]
     if p.tipo in ("opcion_unica", "opcion_multiple"):
         partes.append('<ul class="opciones">' + "".join(
@@ -410,14 +411,14 @@ def vista_html(actividad: Actividad, identidad: estilo.Identidad, decimal: str =
         filas = [[c, *[_cifra(s.valores[i], decimal) for s in g.series]] for i, c in enumerate(g.categorias)]
         partes.append(f'<p class="meta">Gráfico: {_e(g.titulo)}. Eje horizontal: {_e(g.eje_x)}. '
                       f'Eje vertical: {_e(g.eje_y)}.</p>' + _tabla([g.eje_x, *[s.nombre for s in g.series]], filas))
-    numero = 0
+    numero, puntos = 0, actividad.puntos_finales()
     for i, paso in enumerate(actividad.pasos, start=1):
         partes += [f"<h2>Paso {i}. {_e(paso.titulo)}</h2>", *[f"<p>{_e(t)}</p>" for t in paso.introduccion]]
         if paso.recuerde.strip():
             partes.append(f'<p class="recuerde"><strong>Recuerde.</strong> {_e(paso.recuerde)}</p>')
         for pregunta in paso.preguntas:
             numero += 1
-            partes.append(_pregunta(pregunta, numero))
+            partes.append(_pregunta(pregunta, numero, puntos[numero - 1]))
     total = actividad.puntaje_total
     partes += ["<h2>Puntaje</h2>", f"<p>Puntaje total: {total} {'punto' if total == 1 else 'puntos'}.</p>",
                f"<p>{_e(NOTA_DEL_PUNTAJE)}</p>"]

@@ -53,6 +53,10 @@ def datos_de_la_pagina(actividad: Actividad, curso: str, sesion: int, nombre_cur
     """Lo que la página muestra: el contenido aprobado sin los pasajes ni las decisiones del redactor, más los textos
     fijos del programa y la clave con que la página guarda el avance del alumno."""
     contenido = actividad.model_dump(exclude={"pasajes", "decisiones"})
+    puntos = iter(actividad.puntos_finales())   # sobre 100 (decisión 59)
+    for paso in contenido["pasos"]:
+        for pregunta in paso["preguntas"]:
+            pregunta["puntos"] = next(puntos)
     return {
         "curso": nombre_curso,
         "sesion": f"Sesión {sesion}",

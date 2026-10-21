@@ -12,7 +12,7 @@ from app import servidor
 from app.materiales import actividad, disenador_web, estilo
 from app.materiales.contenido import Actividad
 from tests.conftest import consulta_en_secuencia
-from tests.sembrados.actividad import LIMPIA
+from tests.sembrados.actividad import LIMPIA, PUNTOS_LIMPIOS
 from tests.unidad.test_actividad import SIN_ERRORES, lectura_aprobada
 from tests.unidad.test_lectura import sesion  # noqa: F401
 
@@ -33,7 +33,14 @@ def test_los_datos_de_la_pagina_son_el_contenido_sin_borradores():
     assert DATOS["titulo"] == LIMPIA["titulo"] and DATOS["pasos"][0]["titulo"] == "Reconozca los pilares"
     assert "pasajes" not in DATOS and "decisiones" not in DATOS
     assert DATOS["clave"] == "aulalista-scrum-ia-s1-actividad-v1"
-    assert DATOS["puntaje_total"] == 9 and DATOS["regla_del_puntaje"] == disenador_web.REGLA_DEL_PUNTAJE
+    assert DATOS["puntaje_total"] == 100 and DATOS["regla_del_puntaje"] == disenador_web.REGLA_DEL_PUNTAJE
+
+
+def test_la_pagina_muestra_los_puntos_sobre_100():
+    """Decisión 59: cada pregunta lleva sus puntos ya repartidos y la suma de la página da 100."""
+    puntos = [q["puntos"] for paso in DATOS["pasos"] for q in paso["preguntas"]]
+    assert puntos == PUNTOS_LIMPIOS and sum(puntos) == DATOS["puntaje_total"] == 100
+    assert [q["puntos"] for paso in LIMPIA["pasos"] for q in paso["preguntas"]] == [2, 1, 2, 1, 3]   # el contenido no cambia
 
 
 def test_el_bloque_no_puede_cerrar_su_etiqueta():

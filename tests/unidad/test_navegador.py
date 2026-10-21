@@ -40,8 +40,8 @@ def con(trozo: str, donde: str = "</head>") -> str:
 def test_la_referencia_pasa_el_recorrido_completo(tmp_path):
     informe = probar(tmp_path, REFERENCIA)
     assert informe.fallas == []
-    assert informe.lineas[0] == "Computadora, modo claro: recorrido con todas las respuestas correctas, puntaje 9 de 9."
-    assert informe.lineas[1] == "Celular, modo oscuro: recorrido con todas las respuestas incorrectas, puntaje 0 de 9."
+    assert informe.lineas[0] == "Computadora, modo claro: recorrido con todas las respuestas correctas, puntaje 100 de 100."
+    assert informe.lineas[1] == "Celular, modo oscuro: recorrido con todas las respuestas incorrectas, puntaje 0 de 100."
     assert "la recarga recupera el avance" in informe.lineas[-1]
 
 
@@ -81,7 +81,7 @@ def test_la_entrega_dice_lo_que_reviso_el_navegador(sesion):  # noqa: F811
     assert material["estado"] == "verificada", material["problemas"]
     texto = json.dumps(material["entrega"], ensure_ascii=False)
     assert "Recorrí la página en un navegador, sin conexión, como un alumno:" in texto
-    assert "Celular, modo oscuro: recorrido con todas las respuestas incorrectas, puntaje 0 de 9." in texto
+    assert "Celular, modo oscuro: recorrido con todas las respuestas incorrectas, puntaje 0 de 100." in texto
     assert "No recorrí la página" not in texto
 
 

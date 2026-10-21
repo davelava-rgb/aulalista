@@ -13,7 +13,8 @@ from app.fichas import almacen, controles
 from app.materiales import actividad, comun, estilo, lectura
 from app.materiales.contenido import Actividad
 from tests.conftest import consulta_en_secuencia
-from tests.sembrados.actividad import CASOS, LIMPIA, PUNTAJE_LIMPIO
+from app.materiales.contenido import repartir
+from tests.sembrados.actividad import CASOS, LIMPIA, PESOS_LIMPIOS, PUNTAJE_LIMPIO, PUNTOS_LIMPIOS
 from tests.unidad.test_lectura import LIMPIA as LECTURA_LIMPIA
 from tests.unidad.test_lectura import SIN_ERRORES, cambios, error, revision, sesion  # noqa: F401
 
@@ -39,7 +40,28 @@ def generar(carpeta, *salidas, revisar=True, disenar=False):
 def test_el_contenido_limpio_pasa_la_revision_del_programa():
     contenido, fallas = actividad._validar(copy.deepcopy(LIMPIA), ",")
     assert fallas == []
-    assert contenido.puntaje_total == PUNTAJE_LIMPIO
+    assert contenido.puntaje_total == PUNTAJE_LIMPIO == 100
+    assert contenido.puntos_finales() == PUNTOS_LIMPIOS and sum(PUNTOS_LIMPIOS) == 100
+
+
+# ---------- Puntaje sobre 100 (decisión 59) ----------
+
+@pytest.mark.parametrize("pesos, puntos", [
+    (PESOS_LIMPIOS, PUNTOS_LIMPIOS),
+    ([1, 1, 1], [34, 33, 33]),            # a igual resto, el punto que falta va a la primera
+    ([3] * 4, [25] * 4),
+    ([1, 2, 3], [17, 33, 50]),
+    ([1] * 7, [15, 15, 14, 14, 14, 14, 14]),
+])
+def test_los_pesos_se_reparten_en_puntos_que_suman_100(pesos, puntos):
+    assert repartir(pesos) == puntos
+
+
+@pytest.mark.parametrize("pesos", [[1] + [3] * 31, [3] * 31 + [1], [1, 2, 3] * 10 + [2, 2], [2] * 32, [1]])
+def test_el_total_es_siempre_100_y_ninguna_pregunta_queda_en_cero(pesos):
+    puntos = repartir(pesos)
+    assert sum(puntos) == 100 and min(puntos) >= 1
+    assert all(puntos[i] <= puntos[j] for i in range(len(pesos)) for j in range(len(pesos)) if pesos[i] < pesos[j])
 
 
 @pytest.mark.parametrize("ident, datos, esperado", CASOS, ids=[c[0] for c in CASOS])
@@ -70,7 +92,7 @@ def test_la_vista_muestra_el_contenido_con_sus_respuestas_y_el_puntaje():
     pagina = actividad.vista_html(Actividad.model_validate(LIMPIA), identidad)
     assert "<h1>Scrum en la Sucursal Norte</h1>" in pagina
     assert "<h2>Paso 1. Reconozca los pilares</h2>" in pagina
-    assert "Opción única · 2 puntos" in pagina and "Clasificar · 3 puntos" in pagina
+    assert "Opción única · 22 puntos" in pagina and "Clasificar · 34 puntos" in pagina
     assert "Correcta. La lectura nombra tres pilares." in pagina
     assert "Incorrecta. Faltaría un pilar: la lectura nombra tres." in pagina
     assert f"Puntaje total: {PUNTAJE_LIMPIO} puntos." in pagina and actividad.NOTA_DEL_PUNTAJE in pagina

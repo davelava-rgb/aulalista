@@ -65,7 +65,9 @@ LIMPIA = {
                  "texto": "Scrum Master con IA"}],
     "decisiones": [{"texto": "Usé la Sucursal Norte como caso de la actividad.", "tipo": "decisión"}],
 }
-PUNTAJE_LIMPIO = 2 + 1 + 2 + 1 + 3
+PESOS_LIMPIOS = [2, 1, 2, 1, 3]
+PUNTOS_LIMPIOS = [22, 11, 22, 11, 34]   # los pesos llevados a 100 (decisión 59)
+PUNTAJE_LIMPIO = 100
 
 
 def _con(cambio) -> dict:

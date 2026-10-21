@@ -428,7 +428,20 @@ ESQUEMA_LABORATORIO = _objeto({
 
 # Solo preguntas cerradas: la página corrige sola, sin IA (decisión 57 b).
 TIPOS_DE_PREGUNTA = ("opcion_unica", "opcion_multiple", "ordenar", "relacionar", "clasificar")
-PUNTOS_POR_PREGUNTA = (1, 3)
+PUNTOS_POR_PREGUNTA = (1, 3)   # el peso que da el redactor; la página muestra puntos sobre PUNTAJE_TOTAL
+PUNTAJE_TOTAL = 100            # decisión 59
+
+
+def repartir(pesos: list[int], total: int = PUNTAJE_TOTAL) -> list[int]:
+    """Convierte los pesos en puntos enteros que suman exactamente «total», en proporción a cada peso. Cada pregunta
+    recibe la parte entera de su proporción; los puntos que faltan van a las de mayor resto y, a igual resto, a la
+    primera. Con 32 preguntas de peso 3 como máximo, ninguna queda en cero."""
+    suma = sum(pesos)
+    puntos = [peso * total // suma for peso in pesos]
+    restos = sorted(range(len(pesos)), key=lambda i: (-(pesos[i] * total % suma), i))
+    for i in restos[:total - sum(puntos)]:
+        puntos[i] += 1
+    return puntos
 
 
 class Opcion(BaseModel):
@@ -506,7 +519,11 @@ class Actividad(BaseModel):
 
     @property
     def puntaje_total(self) -> int:
-        return sum(p.puntos for paso in self.pasos for p in paso.preguntas)
+        return PUNTAJE_TOTAL
+
+    def puntos_finales(self) -> list[int]:
+        """Los puntos que ve el alumno, pregunta por pregunta y en orden: los pesos llevados a PUNTAJE_TOTAL."""
+        return repartir([p.puntos for paso in self.pasos for p in paso.preguntas])
 
 
 _TEXTO = {"type": "string"}
