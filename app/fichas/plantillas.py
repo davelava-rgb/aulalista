@@ -8,6 +8,7 @@ Tipos de campo:
 - "grupo": una etiqueta seguida de subcampos con sangría (los bloques de la lectura).
 """
 
+import re
 from dataclasses import dataclass, field
 
 from app.fichas import controles
@@ -193,6 +194,31 @@ def campos_de(tipo: str) -> list[tuple[Campo, Seccion]]:
             else:
                 resultado.append((elemento, seccion))
     return resultado
+
+
+# Nombres cortos para los campos cuya etiqueta es una instrucción larga. La clave es el id sin el número del bloque.
+NOMBRES_CORTOS = {
+    "datos.fijos": "Datos fijos del caso",
+    "lectura.ejemplo": "Ejemplo completo de la lectura",
+    "modelos.aprobados": "Materiales modelo",
+    "ejercicio.respuesta": "respuesta correcta",
+    "ejercicio.pregunta_herramienta": "respuesta a la herramienta",
+}
+
+
+def etiqueta_corta(tipo: str, campo_id: str) -> str:
+    """El nombre de un campo para nombrarlo en una frase: «Alcance», «Bloque 2», «Ejercicio 3 · respuesta correcta».
+    Sin las instrucciones de la plantilla que van después de «:», «.» o «(»."""
+    partes = campo_id.split(".")
+    bloque = len(partes) == 3 and partes[1].isdigit()
+    for campo, _ in campos_de(tipo):
+        if campo.id == campo_id:
+            corta = NOMBRES_CORTOS.get(f"{partes[0]}.{partes[2]}" if bloque else campo_id) \
+                or re.split(r":|\. | \(", campo.nombre, maxsplit=1)[0].strip()
+            if bloque and not corta.startswith(partes[0].capitalize()):
+                corta = f"{partes[0].capitalize()} {partes[1]} · {corta[:1].lower()}{corta[1:]}"
+            return corta
+    return campo_id
 
 
 def es_obligatorio(campo: Campo, seccion: Seccion) -> bool:

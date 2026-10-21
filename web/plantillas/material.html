@@ -51,6 +51,11 @@
   {% if viejo %}
   <div class="aviso-viejo">
     <p><strong>{{ m.el | capitalize }} {{ "siguen" if m.plural else "sigue" }} una versión anterior de las fichas.</strong> La ficha cambió después de generar{{ m.lo }}. No entregues sus archivos sin generar{{ m.lo }} de nuevo.</p>
+    {# Qué cambió, sacado por un programa de las versiones guardadas de las fichas: sin IA y sin gasto. #}
+    {% if que_cambio %}
+    <p class="que-cambio-titulo">Qué cambió desde que se {{ "generaron" if m.plural else "generó" }}:</p>
+    <ul class="que-cambio">{% for f in que_cambio %}<li>{{ f }}</li>{% endfor %}</ul>
+    {% endif %}
     <p><a href="#acciones">Ir a Generar de nuevo</a></p>
   </div>
   {% endif %}

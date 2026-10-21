@@ -536,6 +536,40 @@ def ultima_confirmada(carpeta_curso: Path, sesion: int) -> dict | None:
     return None
 
 
+def version_en(carpeta_curso: Path, tipo: str, sesion: int | None, fecha: str) -> dict | None:
+    """La ficha como estaba guardada en `fecha` («2026-10-12T11:23:10»): la última versión anterior a esa fecha.
+    None si no hay ninguna versión de antes."""
+    carpeta = _carpeta_versiones(carpeta_curso, tipo, sesion)
+    marca = re.sub(r"\D", "", fecha)[:14]
+    marca = f"{marca[:8]}-{marca[8:]}"
+    for ruta in sorted(carpeta.glob("*.json"), reverse=True) if carpeta.exists() else []:
+        if ruta.name[:15] > marca:
+            continue
+        try:
+            return json.loads(ruta.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+    return None
+
+
+def campos_cambiados(carpeta_curso: Path, sesion: int, fecha: str) -> dict[str, list[str]] | None:
+    """Qué campos de las dos fichas cambiaron desde `fecha` (cuando se generó un material), sin IA: compara la versión
+    guardada de entonces con la de ahora, con los mismos campos que la huella de las fichas. None si no se puede
+    saber, porque falta la versión de entonces."""
+    cambios = {}
+    for tipo, numero in (("curso", None), ("sesion", sesion)):
+        antes = version_en(carpeta_curso, tipo, numero, fecha)
+        if antes is None:
+            return None
+        ahora = cargar(carpeta_curso, tipo, numero)
+        # La marca «(propuesto)» y los espacios no son un cambio de contenido: no se cuentan.
+        def limpio(ficha, campo_id):
+            return " ".join(sin_marcas(valor(ficha, campo_id)).split())
+        cambios[tipo] = [c.id for c, _ in plantillas.campos_de(tipo) if c.id not in CAMPOS_SIN_EFECTO
+                         and limpio(antes, c.id) != limpio(ahora, c.id)]
+    return cambios
+
+
 def marcar_desactualizados(carpeta_curso: Path, sesion: int, anterior: dict | None = None) -> list[str]:
     """Los materiales ya generados no se entregan hasta validarlos con las fichas nuevas. Si las fichas dicen lo mismo
     que cuando se generó el último material (solo cambió qué materiales se producen), no se marca ninguno.

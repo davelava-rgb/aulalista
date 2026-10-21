@@ -652,3 +652,6 @@ main:focus { outline: none; }
 .recorrido li.ahora::before { background: var(--principal); color: var(--fondo); }
 /* Los nombres de archivo largos se parten en vez de salirse de su caja en pantallas angostas. */
 .lista li, .decisiones li { overflow-wrap: anywhere; }
+.aviso-viejo .que-cambio-titulo { margin-bottom: 0.25rem; font-weight: bold; }
+.aviso-viejo .que-cambio { margin: 0 0 0.75rem; padding-left: 1.25rem; }
+.aviso-viejo .que-cambio li { overflow-wrap: anywhere; }

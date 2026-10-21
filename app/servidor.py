@@ -845,6 +845,26 @@ def _recorrido(datos: dict, estado: dict) -> list[dict]:
     return [{"paso": p, "clase": c, "nota": n} for p, c, n in zip(PASOS, clases, notas)]
 
 
+def _que_cambio(carpeta, sesion: int, material: dict) -> list[str]:
+    """Qué cambió desde que se generó un material desactualizado, sin IA: los campos de las fichas que ya no dicen
+    lo mismo y, para las diapositivas, si la lectura se generó de nuevo. Vacío si no se puede saber."""
+    estado = material["estado"]
+    if not estado.get("desactualizado") or not estado.get("fecha"):
+        return []
+    frases = []
+    cambios = almacen.campos_cambiados(carpeta, sesion, estado["fecha"]) or {}
+    for tipo, donde in (("sesion", "En la ficha de la sesión"), ("curso", "En la ficha del curso")):
+        nombres = [plantillas_fichas.etiqueta_corta(tipo, c) for c in cambios.get(tipo, [])]
+        if len(nombres) > 6:
+            nombres = nombres[:5] + [f"{len(nombres) - 5} campos más"]
+        if nombres:
+            frases.append(f"{donde}: {_y(nombres)}.")
+    if material["clave"] == diapositivas.CLAVE and estado.get("lectura_fecha") \
+            and lectura.estado(carpeta, sesion).get("fecha", "") != estado["lectura_fecha"]:
+        frases.append("La lectura se generó de nuevo.")
+    return frases
+
+
 def _listos(carpeta, sesion: int, material: dict, puede_empezar: bool, ficha_por_preparar: bool = False) -> list[str]:
     """Lo que ya se cumple para generar un material. Se muestra con ✓ junto a lo que falta, para que el profesor
     vea que el botón está listo por algo y no tenga que adivinarlo."""
@@ -885,6 +905,7 @@ def ver_material(request: Request, curso: str, sesion: int, material: str, mensa
         # «Material 2 de 3» cuenta solo los materiales que van en la sesión.
         "m": m, "recorrido": _recorrido(m, m["estado"]), "incluidos": [x["clave"] for x in vista["materiales"] if x["incluido"]],
         "listos": _listos(carpeta, sesion, m, vista["puede_empezar"], vista["ficha_por_preparar"]),
+        "que_cambio": _que_cambio(carpeta, sesion, m),
         "puede_empezar": vista["puede_empezar"], "ficha_por_preparar": vista["ficha_por_preparar"],
         "siguiente": vista["siguiente"],
         "costo_revisor": tokens.ultima_corrida(curso, "revisor independiente"),
