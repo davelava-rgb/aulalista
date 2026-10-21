@@ -170,3 +170,23 @@ def test_la_pagina_del_alumno_se_abre_en_el_navegador(sesion):  # noqa: F811
     assert respuesta.status_code == 200 and respuesta.headers["content-disposition"].startswith("inline")
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/actividad").text
     assert "S1_Actividad.html" in pagina
+
+
+# ---------- Falsos positivos de la primera actividad real (Agilidad de negocios S1) ----------
+
+def test_la_conexion_previa_a_las_fuentes_de_google_se_permite():
+    html_ = PAGINA.replace("</head>", '<link rel="preconnect" href="https://fonts.googleapis.com"></head>')
+    assert revisar(html_) == []
+    otra = PAGINA.replace("</head>", '<link rel="stylesheet" href="https://cdn.otro.com/fonts.googleapis.com/x.css"></head>')
+    assert any("Carga algo de afuera" in f for f in revisar(otra))
+
+
+def test_un_selector_de_css_en_el_javascript_no_es_texto():
+    html_ = PAGINA.replace('"use strict";', '"use strict"; var sel = ".q-cuerpo input, .q-cuerpo select, '
+                                             '.q-cuerpo button:not([aria-disabled])";')
+    assert revisar(html_) == []
+
+
+def test_un_gris_azulado_es_gris():
+    assert revisar(PAGINA.replace("--linea: #DDDDDD;", "--linea: #AEB5BB;")) == []
+    assert any("colores que no son de la ficha" in f for f in revisar(PAGINA.replace("--linea: #DDDDDD;", "--linea: #3366CC;")))

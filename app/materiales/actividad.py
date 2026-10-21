@@ -700,7 +700,10 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, disenar=True, 
         # Segunda pasada: la revisión del contenido, por bloque, con una sola corrección.
         errores, revisados = await comun.revisar_y_corregir(trabajo, bloques_de)
     if disenar and not trabajo.fallas:
-        trabajo.navegador = navegador.disponible() if probar_en_navegador is None else probar_en_navegador
+        # En su propio hilo: la API síncrona de Playwright no corre dentro de un bucle asyncio y, si se llamaba aquí,
+        # decía que no estaba instalado y la página se entregaba sin recorrer.
+        trabajo.navegador = (await asyncio.to_thread(navegador.disponible) if probar_en_navegador is None
+                             else probar_en_navegador)
         await trabajo.disenar()
 
     pendientes = [e for e in errores if e.estado == "pendiente"]

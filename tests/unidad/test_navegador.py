@@ -92,3 +92,13 @@ def test_una_falla_del_navegador_vuelve_al_disenador_con_su_captura(sesion):  # 
     assert material["estado"] == "verificada" and material["diseno"]["arreglos"] == 1
     assert not isinstance(consulta.llamadas[3]["prompt"], str)   # el arreglo va con imágenes
     assert actividad.archivos(sesion, 1)["pagina"].exists()
+
+
+def test_por_omision_la_generacion_recorre_la_pagina(sesion):  # noqa: F811
+    """La generación corre dentro de asyncio: ahí la API síncrona de Playwright fallaba y la página se entregaba sin
+    recorrer, como si Playwright no estuviera instalado."""
+    lectura_aprobada(sesion)
+    consulta = consulta_en_secuencia(copy.deepcopy(LIMPIA), SIN_ERRORES, {"html": REFERENCIA, "notas": ""})
+    material = asyncio.run(actividad.generar(sesion, "scrum", 1, consulta=consulta))
+    assert material["diseno"]["navegador"], material["diseno"]
+    assert "Recorrí la página en un navegador" in json.dumps(material["entrega"], ensure_ascii=False)

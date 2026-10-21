@@ -23,7 +23,8 @@ from app.validacion import verificador
 MARCA = "/*CONTENIDO*/"
 PALABRAS_DE_UNA_ETIQUETA = 8
 REGLA_DEL_PUNTAJE = "Cada pregunta suma sus puntos solo si se acierta en el primer intento."
-FUENTES_PERMITIDAS = ("https://fonts.googleapis.com/", "https://fonts.gstatic.com")
+HOSTS_DE_FUENTES = ("fonts.googleapis.com", "fonts.gstatic.com")   # también la conexión previa (preconnect)
+GRIS_MAXIMO = 24   # diferencia entre el canal más alto y el más bajo: #AEB5BB, un gris azulado, sigue siendo gris
 
 ESQUEMA_DISENO = {
     "type": "object",
@@ -245,7 +246,7 @@ class _Lector(html.parser.HTMLParser):
             self._en, self._actual = "style", []
         elif etiqueta == "link":
             href = a.get("href") or ""
-            if href.startswith(("http:", "https:", "//")) and not href.startswith(FUENTES_PERMITIDAS):
+            if href.startswith(("http:", "https:", "//")) and not es_de_fuentes(href):
                 self.externos.append(f"<link href=\"{href}\">")
         elif etiqueta in ("iframe", "object", "embed", "img", "audio", "video", "source"):
             src = a.get("src") or a.get("data") or ""
@@ -277,6 +278,9 @@ LITERAL = re.compile(r"'((?:[^'\\\n]|\\.)*)'|\"((?:[^\"\\\n]|\\.)*)\"|`((?:[^`\\
 COLOR_HEX = re.compile(r"#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b")
 COLOR_RGB = re.compile(r"rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)")
 SINTAXIS = re.compile(r"[{};=]|=>|\$\(")
+# Un selector de CSS («.q-cuerpo input, button:not([aria-disabled])») no es texto que vea el alumno.
+SELECTOR = re.compile(r"(?:^|[\s,(>+~])[.#][A-Za-z_-]|\[[\w-]+(?:[~|^$*]?=[^\]]*)?\]|:(?:not|is|where|has|nth-[a-z-]+)\(|"
+                      r"::?(?:hover|focus|focus-visible|checked|disabled|before|after|first-child|last-child)\b")
 
 
 def _normal(texto: str) -> str:
@@ -307,7 +311,8 @@ def _literales(codigo: str) -> list[str]:
         literal = next(g for g in m.groups() if g is not None)
         for tramo in re.split(r"\$\{[^}]*\}", literal):
             tramo = re.sub(r"<[^>]*>", " ", tramo).replace("\\n", " ")
-            if " " in tramo.strip() and not SINTAXIS.search(tramo) and re.search(r"[^\W\d_]{2}", tramo):
+            if (" " in tramo.strip() and not SINTAXIS.search(tramo) and not SELECTOR.search(tramo)
+                    and re.search(r"[^\W\d_]{2}", tramo)):
                 textos.append(tramo)
     return textos
 
@@ -321,8 +326,14 @@ def _ajeno(texto: str, corpus: str) -> bool:
     return sum(len(_palabras(t)) for t in tramos if t and t not in corpus) > PALABRAS_DE_UNA_ETIQUETA
 
 
+def es_de_fuentes(url: str) -> bool:
+    """Una dirección de las fuentes de Google, con ruta o sin ella."""
+    host = re.sub(r"^(?:https?:)?//", "", url).split("/")[0].split("?")[0].lower()
+    return url.startswith(("https://", "//")) and host in HOSTS_DE_FUENTES
+
+
 def _gris(r: int, g: int, b: int) -> bool:
-    return max(r, g, b) - min(r, g, b) <= 12
+    return max(r, g, b) - min(r, g, b) <= GRIS_MAXIMO
 
 
 def _hex6(valor: str) -> str:
@@ -352,10 +363,10 @@ def revisar(pagina: str, datos_: dict, identidad: estilo.Identidad) -> list[str]
         fallas.append(f"El JavaScript usa «{m.group(0).strip()}», que no se permite.")
     estilos = "\n".join(lector.estilos)
     for m in IMPORTACION_CSS.finditer(estilos):
-        if not m.group(1).startswith(FUENTES_PERMITIDAS):
+        if not es_de_fuentes(m.group(1)):
             fallas.append(f"El CSS importa «{m.group(1)}». Solo se permiten las fuentes de Google.")
     for m in URL_CSS.finditer(estilos + codigo):
-        if not (m.group(1) + m.group(2)).startswith(FUENTES_PERMITIDAS) and "fonts.gstatic.com" not in m.group(2):
+        if not es_de_fuentes(m.group(1) + m.group(2)):
             fallas.append(f"Carga «{m.group(1)}{m.group(2)[:60]}» desde afuera. Solo se permiten las fuentes de Google.")
 
     corpus = _normal(" \n ".join(_textos_de(datos_)))
