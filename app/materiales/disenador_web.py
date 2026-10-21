@@ -189,14 +189,17 @@ def pedido_de_diseno() -> str:
     ])
 
 
-def pedido_de_arreglo(html_: str, problemas: list[str]) -> str:
+def pedido_de_arreglo(html_: str, problemas: list[str], con_imagenes: bool = False) -> str:
     return "\n".join([
         "Corrige la página según la guía y los datos de tus instrucciones.",
+        *(["Arriba van capturas de la página donde falló el recorrido en el navegador. Míralas para encontrar la "
+           "causa de cada problema antes de cambiar el código."] if con_imagenes else []),
         "",
         "PÁGINA ACTUAL (con la marca del contenido; AulaLista la llena):",
         html_,
         "",
-        "PROBLEMAS QUE ENCONTRÓ AULALISTA. Corrígelos todos.",
+        "PROBLEMAS QUE ENCONTRÓ AULALISTA (controles del programa o recorrido en un navegador con el contrato de la",
+        "guía). Corrígelos todos.",
         *[f"- {p}" for p in problemas],
         "",
         "CÓMO DEVOLVER EL ARREGLO",

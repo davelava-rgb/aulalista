@@ -107,7 +107,7 @@ def test_un_arreglo_cambia_solo_los_trozos_unicos():
 def disenar(sesion, *disenos):  # noqa: F811
     lectura_aprobada(sesion)
     consulta = consulta_en_secuencia(copy.deepcopy(LIMPIA), SIN_ERRORES, *disenos)
-    material = asyncio.run(actividad.generar(sesion, "scrum", 1, consulta=consulta))
+    material = asyncio.run(actividad.generar(sesion, "scrum", 1, consulta=consulta, probar_en_navegador=False))
     return material, consulta
 
 
@@ -115,7 +115,8 @@ def test_con_el_contenido_aprobado_el_disenador_entrega_la_pagina(sesion):  # no
     material, consulta = disenar(sesion, {"html": PAGINA, "notas": "Una columna con el caso."})
     rutas = actividad.archivos(sesion, 1)
     assert material["estado"] == "verificada", material["problemas"]
-    assert material["diseno"] == {"arreglos": 0, "notas": "Una columna con el caso.", "problemas": [], "estado": "diseñada"}
+    assert material["diseno"] == {"arreglos": 0, "notas": "Una columna con el caso.", "problemas": [], "estado": "diseñada",
+                                  "navegador": []}
     assert material["archivos"]["pagina"] == "S1_Actividad.html" and rutas["pagina"].exists()
     pagina = rutas["pagina"].read_text(encoding="utf-8")
     assert disenador_web.MARCA not in pagina and '"titulo": "Scrum en la Sucursal Norte"' in pagina
@@ -126,7 +127,7 @@ def test_con_el_contenido_aprobado_el_disenador_entrega_la_pagina(sesion):  # no
     assert sistema.startswith("ERES EL DISEÑADOR DE LA PÁGINA") and "CONTRATO PARA LAS PRUEBAS" in sistema
     assert '"principal": "#0F4C5C"' in sistema
     lineas = json.dumps(material["entrega"], ensure_ascii=False)
-    assert "S1_Actividad.html: la página del alumno" in lineas and "fase 8d" in lineas
+    assert "S1_Actividad.html: la página del alumno" in lineas and "No recorrí la página en un navegador" in lineas
 
 
 def test_una_falla_de_la_pagina_se_arregla_por_trozos(sesion):  # noqa: F811
@@ -157,7 +158,7 @@ def test_con_el_contenido_con_fallas_no_se_disena(sesion):  # noqa: F811
     roto["pasos"][0]["preguntas"][0]["opciones"][1]["correcta"] = True
     sigue = {"actividad": roto, "explicaciones": [], "datos_nuevos": []}
     consulta = consulta_en_secuencia(roto, *[copy.deepcopy(sigue) for _ in range(actividad.VUELTAS_DEL_VERIFICADOR)])
-    material = asyncio.run(actividad.generar(sesion, "scrum", 1, consulta=consulta))
+    material = asyncio.run(actividad.generar(sesion, "scrum", 1, consulta=consulta, probar_en_navegador=False))
     assert material["estado"] == "con fallas" and material["diseno"] == {}
     assert not any("Diseña la página" in l["prompt"] for l in consulta.llamadas)
     assert "no se diseñó porque el contenido quedó con fallas" in json.dumps(material["entrega"], ensure_ascii=False)

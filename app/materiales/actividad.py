@@ -14,7 +14,8 @@ Flujo:
    programa la revisa y el diseñador la arregla hasta ARREGLOS_DE_DISENO veces. Si quedan fallas, no se entrega.
 7. Entrega en el formato del SPEC §8. El profesor la aprueba desde la página. El revisor independiente es opcional.
 
-Las pruebas de la página en un navegador llegan en la fase 8d.
+   Con la página sin fallas de los controles, Playwright la recorre como un alumno (navegador.py, fase 8d); sus
+   fallas también vuelven al diseñador, con capturas.
 """
 
 import asyncio
@@ -29,7 +30,7 @@ from pydantic import ValidationError
 
 from app import agente, entrega, skill, tokens
 from app.fichas import almacen, referencia, verificacion
-from app.materiales import comun, diapositivas, disenador_web, estilo, lectura
+from app.materiales import comun, diapositivas, disenador_web, estilo, lectura, navegador
 from app.materiales.contenido import ESQUEMA_ACTIVIDAD, PUNTOS_POR_PREGUNTA, Actividad, Lectura, Pregunta
 from app.validacion import excel, pasada2, revision, revisor, verificador
 from app.validacion.pasajes import Corpus
@@ -492,8 +493,10 @@ def _limpiar(rutas: dict[str, Path]) -> None:
     shutil.rmtree(rutas["diseno"], ignore_errors=True)
 
 
-async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.query, disenar: bool = True) -> dict:
-    """`disenar=False` deja la actividad sin la página del alumno: lo usan las pruebas del contenido."""
+async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.query, disenar: bool = True,
+                  probar_en_navegador: bool | None = None) -> dict:
+    """`disenar=False` deja la actividad sin la página del alumno: lo usan las pruebas del contenido.
+    `probar_en_navegador` vale por omisión si Playwright y su navegador están instalados."""
     if not almacen.puede_empezar_material(carpeta_curso, sesion):
         raise NoSePuedeEmpezar("Guarda completas la ficha del curso y la ficha de la sesión antes de generar la "
                                "actividad web: así quedan confirmadas.")
@@ -505,7 +508,7 @@ async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.
     _actualizar(carpeta_curso, sesion, estado="trabajando", previo="", avance=[], error="", desactualizado=False,
                 entrega={}, aprobada="", revisor={}, corrida_desde=tokens.lineas(curso))
     try:
-        return await _generar(carpeta_curso, curso, sesion, rutas, consulta, disenar)
+        return await _generar(carpeta_curso, curso, sesion, rutas, consulta, disenar, probar_en_navegador)
     except asyncio.CancelledError:
         marcar_detenida(carpeta_curso, sesion)
         raise
@@ -537,6 +540,7 @@ class _Trabajo:
         self.lectura = lectura_aprobada(carpeta_curso, sesion)
         self.consulta = consulta
         self.diseno: dict = {}
+        self.navegador = False   # recorrer la página con Playwright (fase 8d)
         self.vuelta = 0
 
     def avance(self, texto: str) -> None:
@@ -625,14 +629,24 @@ class _Trabajo:
         respuesta = await agente.consultar(disenador_web.pedido_de_diseno(), tarea="diseno_web",
                                            esquema=disenador_web.ESQUEMA_DISENO, etapa="diseño", **comun_)
         html_, pendientes = respuesta["html"], []
-        self.diseno = {"arreglos": 0, "notas": respuesta.get("notas", ""), "problemas": []}
+        self.diseno = {"arreglos": 0, "notas": respuesta.get("notas", ""), "problemas": [], "navegador": []}
         for intento in range(ARREGLOS_DE_DISENO + 1):
             (carpeta / "pagina.html").write_text(html_, encoding="utf-8")   # con la marca, para los arreglos
             pagina = disenador_web.armar(html_, datos_)
             problemas = pendientes + disenador_web.revisar(pagina, datos_, self.identidad)
+            capturas: list[Path] = []
+            if not problemas and self.navegador:
+                # Las pruebas en el navegador corren solo sobre una página que ya pasa los controles (fase 8d).
+                prueba = carpeta / "prueba.html"
+                prueba.write_text(pagina, encoding="utf-8")
+                shutil.rmtree(carpeta / "capturas", ignore_errors=True)
+                informe = await asyncio.to_thread(navegador.probar, prueba, datos_, carpeta / "capturas")
+                problemas, capturas = informe.fallas, informe.capturas
+                self.diseno["navegador"] = informe.lineas
             ronda = "primera versión" if intento == 0 else f"arreglo {intento}"
             self.avance(f"Diseño, {ronda}: " + (f"{comun.cuantos(len(problemas), 'problema')}: " + " | ".join(problemas)
-                                                 if problemas else "la página pasa los controles."))
+                                                 if problemas else "la página pasa los controles"
+                                                 + (" y el recorrido en el navegador." if self.navegador else ".")))
             if not problemas:
                 self.rutas["pagina"].write_text(pagina, encoding="utf-8")
                 self.diseno.update(estado="diseñada", problemas=[])
@@ -640,16 +654,20 @@ class _Trabajo:
             if intento == ARREGLOS_DE_DISENO:
                 break
             self.diseno["arreglos"] += 1
-            respuesta = await agente.consultar(disenador_web.pedido_de_arreglo(html_, problemas), tarea="arreglo_web",
-                                               esquema=disenador_web.ESQUEMA_ARREGLO,
-                                               etapa=f"diseño, arreglo {intento + 1}", **comun_)
+            pedido = disenador_web.pedido_de_arreglo(html_, problemas, con_imagenes=bool(capturas))
+            datos_pedido = {"tarea": "arreglo_web", "esquema": disenador_web.ESQUEMA_ARREGLO,
+                            "etapa": f"diseño, arreglo {intento + 1}", **comun_}
+            imagenes = [(f"Captura de la falla {k}, como se ve ahora: {problemas[k - 1]}", c.read_bytes())
+                        for k, c in enumerate(capturas, start=1)]
+            respuesta = (await agente.consultar_con_imagenes(pedido, imagenes, **datos_pedido) if imagenes
+                         else await agente.consultar(pedido, **datos_pedido))
             html_, pendientes = disenador_web.aplicar_cambios(html_, respuesta["cambios"])
         self.diseno.update(estado="con fallas", problemas=problemas)
         self.avance(f"Diseño: la página sigue con {comun.cuantos(len(problemas), 'falla')} después de "
                     f"{ARREGLOS_DE_DISENO} arreglos. No la entrego.")
 
 
-async def _generar(carpeta_curso, curso, sesion, rutas, consulta, disenar=True) -> dict:
+async def _generar(carpeta_curso, curso, sesion, rutas, consulta, disenar=True, probar_en_navegador=None) -> dict:
     inicio = tokens.lineas(curso)
     # Antes de gastar tokens: la skill tiene todo lo que usarán la redacción, la revisión y el revisor.
     skill.comprobar(secciones=SECCIONES_DE_LA_SKILL + pasada2.SECCIONES_DE_LA_SKILL + revisor.SECCIONES_DE_LA_SKILL,
@@ -668,6 +686,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, disenar=True) 
         # Segunda pasada: la revisión del contenido, por bloque, con una sola corrección.
         errores, revisados = await comun.revisar_y_corregir(trabajo, bloques_de)
     if disenar and not trabajo.fallas:
+        trabajo.navegador = navegador.disponible() if probar_en_navegador is None else probar_en_navegador
         await trabajo.disenar()
 
     pendientes = [e for e in errores if e.estado == "pendiente"]
@@ -734,6 +753,9 @@ def _entrega(material: dict) -> dict:
         probe.append("Revisé la página del alumno con un programa: el contenido es el aprobado, todo su texto sale de él "
                      "salvo etiquetas cortas, no carga nada de afuera salvo las fuentes de Google, no muestra tiempos y "
                      f"usa solo los colores de la ficha. Arreglos del diseñador: {diseno.get('arreglos', 0)}.")
+        if diseno.get("navegador"):
+            probe.append("Recorrí la página en un navegador, sin conexión, como un alumno:")
+            probe += diseno["navegador"]
     r = material.get("revision") or {}
     valide = [f"Verificador: {material['resumen']}." if material["resumen"] else "El verificador no llegó a correr.",
               *([f"Avisos explicados en la hoja Hallazgos: {material['avisos_explicados']}."]
@@ -760,9 +782,10 @@ def _entrega(material: dict) -> dict:
     no_pude = (["La revisión del contenido no corrió porque quedaron fallas del verificador."] if not r.get("bloques") else [])
     if not diseno:
         no_pude.append("La página del alumno no se diseñó porque el contenido quedó con fallas.")
-    elif diseno.get("estado") == "diseñada":
-        no_pude.append("Todavía no recorrí la página en un navegador (tamaños, modos, teclado y puntaje): llega en la "
-                       "fase 8d del plan. Ábrela y recórrela antes de compartirla.")
+    elif diseno.get("estado") == "diseñada" and not diseno.get("navegador"):
+        no_pude.append("No recorrí la página en un navegador: Playwright o su navegador no están instalados "
+                       "(«pip install -r requirements.txt» y «playwright install chromium»). Ábrela y recórrela antes "
+                       "de compartirla.")
     decisiones = material["decisiones"]
     decidi = [d["texto"] for d in decisiones if d["tipo"] == "decisión"]
     decidi += [f"Dato nuevo del caso, agregado a la ficha del curso: {d}" for d in material["datos_agregados"]]
