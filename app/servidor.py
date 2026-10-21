@@ -612,7 +612,7 @@ def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False
     sesion_lista = puede_empezar and almacen.cargar(carpeta, "sesion", sesion)["confirmada"]
     incluidos = almacen.materiales_de_la_sesion(almacen.cargar(carpeta, "sesion", sesion))
     numeros = [s["numero"] for s in almacen.sesiones_del_curso(almacen.cargar(carpeta, "curso"))] if detalle else []
-    materiales, siguiente = [], None
+    materiales, siguiente, viejos = [], None, []
     for clave, datos in MATERIALES.items():
         modulo = datos["modulo"]
         estado = modulo.estado(carpeta, sesion)   # calcula si quedó desactualizado
@@ -636,6 +636,8 @@ def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False
         elif e == "aprobada":
             # Un material aprobado no es un paso pendiente, aunque la ficha haya cambiado después: se marca como
             # desactualizado y el profesor decide si lo genera de nuevo.
+            if viejo:
+                viejos.append(datos)
             continue
         elif e in ("verificada", "con pendientes") and not viejo:
             siguiente = {"texto": f"Revisa la entrega y aprueba {datos['el']}.", "ancla": clave, "corto": datos["corto"]}
@@ -646,7 +648,14 @@ def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False
             siguiente = {"texto": f"Completa lo que falta para generar {datos['el']}.", "ancla": clave, "corto": datos["corto"]}
         else:
             siguiente = {"texto": f"Genera {datos['el']}.", "ancla": clave, "corto": datos["corto"]}
-    if siguiente is None:
+    if siguiente is None and viejos:
+        # Aprobados, pero no todos al día: decirlo, para que «aprobados» no se lea como «listos para entregar».
+        cuales = (f"{viejos[0]['el']} quedó {_forma(viejos[0], 'desactualizad')}" if len(viejos) == 1
+                  else f"{len(viejos)} quedaron desactualizados")
+        siguiente = {"texto": f"Los materiales de esta sesión están aprobados, pero {cuales}: la ficha cambió después. "
+                              f"Decide si {viejos[0]['lo'] if len(viejos) == 1 else 'los'} generas de nuevo.",
+                     "ancla": "", "corto": "Listo"}
+    elif siguiente is None:
         siguiente = {"texto": "Los materiales de esta sesión están aprobados.", "ancla": "", "corto": "Listo"}
     return {"puede_empezar": puede_empezar, "ficha_por_preparar": puede_empezar and not sesion_lista,
             "materiales": materiales, "siguiente": siguiente}
@@ -828,12 +837,7 @@ def _recorrido(datos: dict, estado: dict) -> list[dict]:
     e = estado.get("estado")
     notas = ["Pendiente", "Sin IA", "Con IA, por bloque", "Lo decides tú"]
     clases = ["ahora", "pendiente", "pendiente", "pendiente"]
-    if estado.get("desactualizado") and e == "aprobada":
-        # Sigue aprobado: el recorrido queda completo y la nota de Aprobar dice que la ficha cambió después.
-        cambio = "la lectura o la ficha" if datos.get("clave", "") == diapositivas.CLAVE else "la ficha"
-        clases = ["hecho"] * 4
-        notas = ["Listo", "Sin fallas", "Hecho", f"El {(estado.get('aprobada') or '')[:10]}; después cambió {cambio}"]
-    elif estado.get("desactualizado") and e in ("verificada", "con pendientes"):
+    if estado.get("desactualizado") and e in ("verificada", "con pendientes"):
         # Las diapositivas salen de la lectura: también quedan desactualizadas si la lectura cambia.
         notas[0] = "La lectura o las fichas cambiaron" if datos.get("clave", "") == diapositivas.CLAVE else "Las fichas cambiaron"
     elif e == "trabajando":
@@ -849,7 +853,11 @@ def _recorrido(datos: dict, estado: dict) -> list[dict]:
         notas[:3] = ["Listo", "Sin fallas", "Con pendientes" if estado.get("entrega") and any(
             s["clave"] == "pendientes" and s["lineas"] for s in estado["entrega"]["secciones"]) else "Sin errores abiertos"]
         if e == "aprobada":
-            notas[3] = "El " + (estado.get("aprobada") or "")[:10]
+            notas[3] = "El " + _fecha(estado.get("aprobada") or "")
+        if e == "aprobada" and estado.get("desactualizado"):
+            # Sigue aprobado, pero no al día: Aprobar no se ve hecho, para no contradecir el indicador rojo.
+            cambio = "la lectura o la ficha" if datos.get("clave", "") == diapositivas.CLAVE else "la ficha"
+            clases[3], notas[3] = "falla", f"{notas[3]}; después cambió {cambio}"
     return [{"paso": p, "clase": c, "nota": n} for p, c, n in zip(PASOS, clases, notas)]
 
 
@@ -890,7 +898,8 @@ def ver_material(request: Request, curso: str, sesion: int, material: str, mensa
     m = next(x for x in vista["materiales"] if x["clave"] == material)
     return plantillas.TemplateResponse(request, "material.html", {
         "curso": curso, "nombre": _nombre(curso), "sesion": sesion, "mensaje": mensaje,
-        "m": m, "recorrido": _recorrido(m, m["estado"]), "total": len(vista["materiales"]),
+        # «Material 2 de 3» cuenta solo los materiales que van en la sesión.
+        "m": m, "recorrido": _recorrido(m, m["estado"]), "incluidos": [x["clave"] for x in vista["materiales"] if x["incluido"]],
         "listos": _listos(carpeta, sesion, m, vista["puede_empezar"], vista["ficha_por_preparar"]),
         "puede_empezar": vista["puede_empezar"], "ficha_por_preparar": vista["ficha_por_preparar"],
         "siguiente": vista["siguiente"],

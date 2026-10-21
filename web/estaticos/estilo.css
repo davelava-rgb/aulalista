@@ -625,3 +625,19 @@ kbd { display: inline-block; min-width: 1.4em; padding: 0 0.35em; border: 1px so
 .volver { margin: 0 0 0.75rem; font-size: 0.875rem; }
 .volver a { display: inline-flex; align-items: center; gap: 0.35rem; min-height: 32px; }
 .volver a::before { content: ""; width: 0.45rem; height: 0.45rem; border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); }
+
+/* Enlace para saltar la cabecera y el panel: oculto hasta que recibe el foco del teclado. */
+.saltar { position: absolute; left: 1rem; top: -4rem; z-index: 10; padding: 0.6rem 1rem; border-radius: 6px;
+  background: var(--fondo); color: var(--principal); font-weight: bold; }
+.saltar:focus { top: 0.5rem; outline: 3px solid var(--texto); outline-offset: 2px; }
+main:focus { outline: none; }
+
+/* Página de un material: lo que acepta Aprobar, el cierre de un material aprobado y las acciones plegadas. */
+.cabeza + .siguiente { margin-top: 1rem; }
+.bloque-accion .consecuencia { margin: 0.25rem 0 0.75rem; }
+.bloque-accion .cierre { margin: 1rem 0 0.5rem; }
+.bloque-accion .boton { display: inline-flex; align-items: center; min-height: 44px; padding: 0 1.25rem; border-radius: 6px;
+  background: var(--principal); color: var(--fondo); text-decoration: none; }
+.bloque-accion .boton:focus-visible { outline: 3px solid var(--texto); outline-offset: 2px; }
+.otras-acciones { margin: 0.5rem 0; }
+.otras-acciones > summary { display: list-item; min-height: 44px; padding: 0.6rem 0; box-sizing: border-box; cursor: pointer; color: var(--principal); }

@@ -25,7 +25,7 @@ Toda afirmación sobre una fuente sale de un pasaje copiado de una fuente del cu
 ## Operating Context
 
 - Flujo: ficha del curso, fichas de las sesiones, fuentes convertidas a texto, y luego un material a la vez, en orden fijo. Cada material espera la aprobación del profesor.
-- Pantallas actuales: inicio, curso, ficha (del curso y de la sesión), fuente y sesión, en `web/plantillas/`.
+- Pantallas actuales: inicio, curso nuevo, curso, ficha (del curso y de la sesión), fuente, material y ayuda, en `web/plantillas/`.
 - Salidas en Word, PowerPoint, Excel y HTML, más un Excel de verificación por material, con el formato de `S1_Laboratorio_Verificacion.xlsx`.
 - Cada llamada a Claude cuesta dinero. La interfaz muestra el gasto por curso.
 
@@ -36,6 +36,7 @@ Toda afirmación sobre una fuente sale de un pasaje copiado de una fuente del cu
 - Todo se guarda en archivos dentro de `cursos/[curso]/`. Sin base de datos.
 - La interfaz y los materiales están en español.
 - La identidad visual de cada curso (logo, hasta tres colores, estilo) vive en su ficha y se aplica a los materiales, no a la interfaz.
+- La página del alumno de la actividad web la diseña el agente diseñador, a medida, con el contenido ya aprobado (`PLAN.md` §0, decisión 57). Es un material, no una pantalla de la interfaz: no lleva la marca FuturaSoft ni sigue `DESIGN.md`.
 - Las reglas de `CLAUDE.md`, `PLAN.md` y `SPEC.md` mandan sobre cualquier decisión de diseño.
 
 ## Brand Commitments

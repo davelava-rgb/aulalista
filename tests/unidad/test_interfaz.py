@@ -104,9 +104,11 @@ def test_el_recorrido_dice_en_que_paso_va_el_material(sesion):  # noqa: F811
     pendientes = {"secciones": [{"clave": "pendientes", "titulo": "Decisiones pendientes", "lineas": ["Una duda"]}]}
     assert pasos(estado="con pendientes", entrega=pendientes)[2:] == [("hecho", "Con pendientes"), ("ahora", "Lo decides tú")]
     assert pasos(estado="verificada")[2] == ("hecho", "Sin errores abiertos")
-    assert pasos(estado="aprobada", aprobada="2026-10-15T10:00:00")[3] == ("hecho", "El 2026-10-15")
+    assert pasos(estado="aprobada", aprobada="2026-10-15T10:00:00")[3] == ("hecho", "El 15 de octubre")
+    # Desactualizado: Aprobar no se ve hecho, para no contradecir el indicador rojo; los otros pasos dicen lo mismo de siempre.
     assert pasos(estado="aprobada", desactualizado=True, aprobada="2026-10-15T10:00:00") == [
-        ("hecho", "Listo"), ("hecho", "Sin fallas"), ("hecho", "Hecho"), ("hecho", "El 2026-10-15; después cambió la ficha")]
+        ("hecho", "Listo"), ("hecho", "Sin fallas"), ("hecho", "Sin errores abiertos"),
+        ("falla", "El 15 de octubre; después cambió la ficha")]
     assert pasos(estado="verificada", desactualizado=True)[0] == ("ahora", "Las fichas cambiaron")
 
 
@@ -121,7 +123,7 @@ def test_el_recorrido_se_ve_en_la_pagina_con_su_estado_en_palabras(sesion):  # n
 def test_el_laboratorio_concuerda_en_masculino(sesion):  # noqa: F811
     _poner(sesion, "laboratorio", estado="aprobada", aprobada="2026-10-15T10:00:00")
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/laboratorio").text
-    assert "Aprobado</span>" in pagina and "El 2026-10-15" in pagina
+    assert "Aprobado</span>" in pagina and "El 15 de octubre" in pagina
     assert "AulaLista lo reemplaza" in pagina
 
 
@@ -152,14 +154,15 @@ def test_el_boton_generar_dice_lo_que_gasto_la_ultima_corrida(sesion):  # noqa: 
         archivo.write(json.dumps({"fecha": "x", "curso": "scrum", "sesion": "S1", "material": "lectura",
                                   "etapa": "redacción", "tokens_entrada": 1, "tokens_salida": 1, "costo_usd": 0.42}) + "\n")
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
-    # El costo se dice una sola vez: en «Desde que pulsaste Generar» y el botón remite a esa línea.
-    assert "Desde que pulsaste Generar: 1 llamada, 0.42 USD estimados." in pagina
-    assert "Gasta tokens (la unidad con que se paga el uso de Claude), como la vez anterior (arriba)." in pagina
+    # El costo se dice una sola vez: en «La última generación» y el botón remite a esa línea, sin decir dónde está.
+    assert "La última generación: 1 llamada, 0.42 USD estimados." in pagina
+    assert "Gasta tokens (la unidad con que se paga el uso de Claude), como la última generación." in pagina
+    assert "(arriba)" not in pagina
 
 
 def test_la_pagina_del_curso_es_un_tablero_con_lo_que_sigue_las_sesiones_y_la_preparacion(sesion):  # noqa: F811
     _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00")
-    hoja = cliente.get("/cursos/scrum").text.split('<main class="hoja">')[1]
+    hoja = cliente.get("/cursos/scrum").text.split('<main class="hoja" id="principal" tabindex="-1">')[1]
     assert '<p class="sigue-etiqueta" id="t-sigue">Lo que sigue</p>' in hoja
     assert '<p class="sigue-paso">Sesión 1: completa lo que falta para generar las diapositivas.</p>' in hoja
     assert '<p class="sigue-motivo">Falta información para generarlas. La página del material dice qué.</p>' in hoja
@@ -177,7 +180,7 @@ def test_la_pagina_del_curso_es_un_tablero_con_lo_que_sigue_las_sesiones_y_la_pr
 
 def test_sin_preparacion_lista_la_preparacion_va_abierta_y_arriba(entorno):
     cliente.post("/cursos", data={"nombre": "Curso vacío"})
-    hoja = cliente.get("/cursos/curso-vacio").text.split('<main class="hoja">')[1]
+    hoja = cliente.get("/cursos/curso-vacio").text.split('<main class="hoja" id="principal" tabindex="-1">')[1]
     assert '<p class="sigue-paso">Sube las fuentes del curso.</p>' in hoja
     assert '<details class="prep" id="fuentes" open>' in hoja and "sesiones-tablero" not in hoja
 
@@ -191,11 +194,40 @@ def test_la_entrega_resume_en_una_linea_muestra_las_decisiones_y_pliega_los_deta
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     assert "1 archivo y 2 decisiones pendientes." in pagina
     assert '<ul class="entrega-archivos" aria-label="Archivos">' in pagina and "<span>La lectura.</span>" in pagina
-    assert "Decisiones pendientes: decide si las aceptas</h3>" in pagina and "<li>Una.</li>" in pagina
-    assert '<details class="detalle">' in pagina and "Detalles de la entrega: qué probé</summary>" in pagina
+    assert "Decisiones pendientes: al aprobar, las aceptas</h3>" in pagina and "<li>Una.</li>" in pagina
+    assert '<details class="detalle">' in pagina and "Detalles de la entrega</summary>" in pagina
     _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00")
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     assert "Aprobaste con 2 decisiones pendientes</h3>" in pagina   # después de aprobar siguen a la vista
+
+
+def test_aprobar_dice_junto_al_boton_que_acepta_las_decisiones(sesion):  # noqa: F811
+    entrega = {"pregunta": "¿Apruebas la lectura?", "secciones": [
+        {"clave": "archivos", "titulo": "Archivos", "lineas": ["S1_Lectura.docx: la lectura.",
+                                                              "S1_Lectura_Verificacion.xlsx: los hallazgos."]},
+        {"clave": "pendientes", "titulo": "Decisiones pendientes", "lineas": ["Una.", "Otra."]}]}
+    _poner(sesion, "lectura", estado="con pendientes", entrega=entrega)
+    form = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text.split('class="aprobar">')[1].split("</form>")[0]
+    assert "Al aprobar aceptas las 2 decisiones pendientes de arriba." in form
+    assert 'href="/cursos/scrum/sesiones/1/descargar/S1_Lectura_Verificacion.xlsx"' in form
+
+
+def test_un_material_aprobado_cierra_con_lo_que_sigue_y_pliega_lo_que_gasta(sesion):  # noqa: F811
+    _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00")
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    bloque = pagina.split('<div class="bloque-accion">')[1].split("</section>")[0]
+    assert "La lectura está aprobada.</strong>" in bloque and 'class="boton"' in bloque
+    assert bloque.index('<details class="otras-acciones">') < bloque.index("Generar de nuevo")
+    assert 'class="saltar" href="#principal"' in pagina and 'id="principal"' in pagina
+
+
+def test_si_todo_esta_aprobado_pero_desactualizado_el_siguiente_paso_lo_dice(sesion):  # noqa: F811
+    for clave in servidor.MATERIALES:
+        _poner(sesion, clave, estado="aprobada", aprobada="2026-10-15T10:00:00")
+    _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00", desactualizado=True)
+    siguiente = servidor._vista_de_materiales(sesion, "scrum", 1)["siguiente"]
+    assert siguiente["texto"] == ("Los materiales de esta sesión están aprobados, pero la lectura quedó desactualizada: "
+                                  "la ficha cambió después. Decide si la generas de nuevo.")
 
 
 def test_las_acciones_van_juntas_con_un_solo_boton_principal(sesion):  # noqa: F811
@@ -283,7 +315,7 @@ def test_el_panel_aparece_en_todas_las_paginas_del_curso_y_no_en_el_inicio(sesio
                 f"/cursos/scrum/fuentes/{fuente}"):
         pagina = cliente.get(url).text
         assert '<nav class="panel" id="panel" aria-label="Cursos">' in pagina, url
-        assert '<main class="hoja">' in pagina, url
+        assert '<main class="hoja" id="principal" tabindex="-1">' in pagina, url
     (sesion.parent / "_sistema" / "ultimo_curso.txt").unlink()           # sin último curso, el inicio es la lista
     assert 'id="panel"' not in cliente.get("/").text
 
@@ -332,7 +364,7 @@ def test_una_falla_no_se_presenta_como_decision_ni_con_la_lista_de_generar(sesio
     assert '<h3 class="alerta">Lo que impide aprobar</h3>' in pagina
     impide = pagina.split("Lo que impide aprobar</h3>")[1].split("</ol>")[0]
     assert "FALLA" in impide and "Afirmación sin fuente" not in impide
-    assert "Decisiones pendientes: decide si la aceptas</h3>" in pagina
+    assert "Decisiones pendientes: al aprobar, la aceptas</h3>" in pagina
     assert "Todo está listo para generar" not in pagina and "resolverlas en las fichas" not in pagina
 
 
@@ -732,14 +764,14 @@ def test_el_tablero_muestra_la_actividad_web_con_su_estado(sesion):  # noqa: F81
     """Fase 8e (decisión 57): la actividad web es un material más del tablero, con su ícono y su estado."""
     for clave in ("lectura", "diapositivas", "laboratorio"):
         _poner(sesion, clave, estado="aprobada", aprobada="2026-10-15T10:00:00")
-    hoja = cliente.get("/cursos/scrum").text.split('<main class="hoja">')[1]
+    hoja = cliente.get("/cursos/scrum").text.split('<main class="hoja" id="principal" tabindex="-1">')[1]
     assert '<a class="ficha-material vacia" href="/cursos/scrum/sesiones/1/materiales/actividad">' in hoja
     assert '<use href="#i-actividad"/>' in hoja
     # La lectura figura aprobada sin su contenido: el tablero pide completar lo que falta, en la actividad.
     assert "Sesión 1: completa lo que falta para generar la actividad web." in hoja
     _poner(sesion, "actividad", estado="con fallas")
-    hoja = cliente.get("/cursos/scrum").text.split('<main class="hoja">')[1]
+    hoja = cliente.get("/cursos/scrum").text.split('<main class="hoja" id="principal" tabindex="-1">')[1]
     assert '<a class="ficha-material error" href="/cursos/scrum/sesiones/1/materiales/actividad">' in hoja
     _poner(sesion, "actividad", estado="aprobada", aprobada="2026-10-21T10:00:00")
-    hoja = cliente.get("/cursos/scrum").text.split('<main class="hoja">')[1]
+    hoja = cliente.get("/cursos/scrum").text.split('<main class="hoja" id="principal" tabindex="-1">')[1]
     assert '<a class="ficha-material bien" href="/cursos/scrum/sesiones/1/materiales/actividad">' in hoja

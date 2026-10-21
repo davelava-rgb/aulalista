@@ -11,7 +11,7 @@
 {% set base = "/cursos/" ~ curso ~ "/sesiones/" ~ sesion ~ "/materiales/" ~ m.clave %}
 <section class="material" id="{{ m.clave }}" data-estado="{{ e.estado or '' }}" data-avance="{{ (e.avance or []) | length }}" aria-labelledby="t-{{ m.clave }}">
   <p class="volver"><a href="/cursos/{{ curso }}">Volver a las sesiones del curso</a></p>
-  <p class="donde">Material {{ m.numero }} de {{ total }} de la sesión {{ sesion }}</p>
+  <p class="donde">{% if m.incluido %}Material {{ incluidos.index(m.clave) + 1 }} de {{ incluidos | length }} de la sesión {{ sesion }}{% else %}Sesión {{ sesion }}{% endif %}</p>
   <div class="cabeza">
     <h1 id="t-{{ m.clave }}">{{ m.titulo }}</h1>
     {{ indicador(m.situacion) }}
@@ -23,7 +23,7 @@
   </ol>
   {% endif %}
   {% if not puede_empezar %}
-  <p>Falta confirmar la ficha del curso. Ningún material empieza sin ella. Queda confirmada al guardarla completa.</p>
+  <p class="estado-material">Falta confirmar la ficha del curso. Ningún material empieza sin ella. Queda confirmada al guardarla completa.</p>
   {% endif %}
   {# El siguiente paso solo se dice si está en otra página: si es este material, ya lo dicen el recorrido y el botón. #}
   {% if siguiente.ancla != m.clave %}
@@ -41,7 +41,7 @@
     {% if e.estado == "trabajando" %}AulaLista trabaja en {{ m.el }}. Esta página se actualiza sola.
     {# Aprobada, verificada y con fallas no llevan frase: el indicador y el recorrido ya lo dicen. #}
     {% elif e.estado == "con pendientes" %}{{ "Listas" if m.plural else forma(m, "List") }}, con pendientes. Míralos abajo y decide: puedes aprobar{{ m.lo }} igual.
-    {% elif e.estado == "error" %}Se {{ "detuvieron" if m.plural else "detuvo" }} por un error antes de terminar. Prueba otra vez con los botones de abajo. Si se repite, copia el detalle y envíalo.
+    {% elif e.estado == "error" %}Se {{ "detuvieron" if m.plural else "detuvo" }} por un error antes de terminar. Prueba otra vez con los botones de abajo. Si se repite, abre «Detalle del error»: dice qué falló.
     {% elif e.estado == "detenida" %}{{ forma(m, "Detenid") }} por ti. Puedes generar{{ m.lo }} de nuevo.
     {% endif %}
   </p>
@@ -78,14 +78,14 @@
   <ol class="decisiones">{% for l in fallas %}<li>{{ l }}</li>{% endfor %}</ol>
   {% endif %}
   {% if decisiones %}
-  <h3>{% if e.estado == "aprobada" %}Aprobaste con {{ decisiones | length }} {{ "decisión pendiente" if decisiones | length == 1 else "decisiones pendientes" }}{% else %}{{ pendientes[0].titulo }}: decide si {{ "las" if decisiones | length > 1 else "la" }} aceptas{% endif %}</h3>
+  <h3>{% if e.estado == "aprobada" %}Aprobaste con {{ decisiones | length }} {{ "decisión pendiente" if decisiones | length == 1 else "decisiones pendientes" }}{% else %}{{ pendientes[0].titulo }}: al aprobar, {{ "las" if decisiones | length > 1 else "la" }} aceptas{% endif %}</h3>
   <ol class="decisiones">{% for l in decisiones %}<li>{{ l }}</li>{% endfor %}</ol>
   {% endif %}
   {% endif %}
   {% set otras = secciones | rejectattr("clave", "in", ["archivos", "pendientes"] if ver_pendientes else ["archivos"]) | list %}
   {% if otras or n_avisos %}
   <details class="detalle">
-    <summary>Detalles de la entrega: {% for s in otras %}{{ s.titulo | lower }}{{ ", " if not loop.last }}{% endfor %}{% if n_avisos %} y avisos de diseño{% endif %}</summary>
+    <summary>Detalles de la entrega{% if n_avisos %}, con {{ n_avisos }} {{ "aviso" if n_avisos == 1 else "avisos" }} de diseño{% endif %}</summary>
     {% for s in otras %}
     <h3>{{ s.titulo }}</h3>
     <ul class="lista">{% for l in s.lineas %}<li>{{ l }}</li>{% endfor %}</ul>
@@ -98,7 +98,8 @@
   {% endif %}
   {% endif %}
 
-  {% if e.avance %}
+  {# En un material aprobado, el avance ya no ayuda: la entrega dice lo que quedó. #}
+  {% if e.avance and e.estado != "aprobada" %}
   <details class="avance-bloque" {% if e.estado == "trabajando" %}open{% endif %}>
     <summary>Avance</summary>
     <ol class="avance" aria-live="polite">{% for a in e.avance %}<li>{{ a }}</li>{% endfor %}</ol>
@@ -108,19 +109,31 @@
   {# Todas las acciones del material juntas, en un recuadro, con un solo botón principal. #}
   {% set aprobable = e.estado in ("verificada", "con pendientes") and not e.desactualizado and e.entrega %}
   {% set generado = e.estado in ("verificada", "con pendientes", "aprobada") and not e.desactualizado %}
+  {% set listo = e.estado == "aprobada" and not e.desactualizado %}
   <div class="bloque-accion">
     {% if aprobable %}
+    {# Aprobar también acepta las decisiones pendientes: se dice junto al botón, con el Excel que las detalla. #}
+    {% set n_decisiones = (decisiones | default([])) | length %}
+    {% set excel = namespace(nombre="") %}
+    {% for l in (archivos[0].lineas if archivos else []) %}{% if "Verificacion" in l.split(": ", 1)[0] %}{% set excel.nombre = l.split(": ", 1)[0] %}{% endif %}{% endfor %}
     <form method="post" action="{{ base }}/aprobar" class="aprobar">
       <p><strong>{{ e.entrega.pregunta }}</strong></p>
+      {% if n_decisiones %}
+      <p class="consecuencia">Al aprobar aceptas {{ "la decisión pendiente" if n_decisiones == 1 else "las " ~ n_decisiones ~ " decisiones pendientes" }} de arriba.{% if excel.nombre %} El detalle está en <a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/descargar/{{ excel.nombre }}">{{ excel.nombre }}</a>.{% endif %}</p>
+      {% endif %}
       <button type="submit">Aprobar {{ m.el }}</button>
     </form>
+    {% elif listo %}
+    {# El material aprobado cierra con lo que sigue, no con botones que gastan: esos quedan plegados abajo. #}
+    <p class="cierre"><strong>{{ m.el | capitalize }} {{ "están" if m.plural else "está" }} {{ forma(m, "aprobad") }}.</strong></p>
+    {% if siguiente.ancla %}<p><a class="boton" href="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/{{ siguiente.ancla }}">{{ siguiente.texto.rstrip(".") }}</a></p>{% endif %}
     {% elif e.estado == "con fallas" %}
     <p><strong>No se {{ "pueden" if m.plural else "puede" }} aprobar: {{ "tienen" if m.plural else "tiene" }} fallas del verificador</strong>, el programa que revisa cada material sin IA. Para aprobar{{ m.lo }}, genéra{{ m.lo }} de nuevo. Si una falla viene de un dato de las fichas, corrígelo antes.</p>
     {% endif %}
 
     {# La lista «antes de generar» solo va cuando aún no hay nada generado que revisar. #}
     {% if (not e.estado or e.estado in ("detenida", "error") or e.desactualizado) and (listos or m.faltan.ficha or m.faltan.otros) %}
-    <p class="antes">{% if m.faltan.ficha or m.faltan.otros or not puede_empezar %}Antes de generar {{ m.el }}:{% else %}Todo está listo para generar {{ m.el }}.{% endif %}</p>
+    <p class="antes">{% if m.faltan.ficha or m.faltan.otros or not puede_empezar %}Antes de generar {{ m.el }}:{% elif e.desactualizado %}{{ m.el | capitalize }} {{ "siguen" if m.plural else "sigue" }} una versión anterior de las fichas. Para entregar{{ m.lo }}, genéra{{ m.lo }} de nuevo.{% else %}Todo está listo para generar {{ m.el }}.{% endif %}</p>
     <ul class="listo">
       {% for l in listos %}<li class="si">{{ l }}</li>{% endfor %}
       {% for f in m.faltan.ficha %}<li class="no">Falta en la <a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">ficha de la sesión</a>: {{ f }}</li>{% endfor %}
@@ -128,8 +141,10 @@
     </ul>
     {% endif %}
 
+    {% if listo %}<details class="otras-acciones"><summary>Otras acciones</summary>{% endif %}
     {% if m.gasto_corrida %}
-    <p class="nota">Desde que pulsaste Generar: {{ m.gasto_corrida.llamadas }} {{ "llamada" if m.gasto_corrida.llamadas == 1 else "llamadas" }}, {{ usd(m.gasto_corrida.costo_usd) }} estimados.{% if e.revisor %} Incluye el revisor independiente.{% endif %}</p>
+    {# Mientras trabaja, el gasto va en vivo; después, es lo que gastó la última generación. #}
+    <p class="nota" id="gasto-generacion">{{ "Desde que pulsaste Generar:" if e.estado == "trabajando" else "La última generación:" }} {{ m.gasto_corrida.llamadas }} {{ "llamada" if m.gasto_corrida.llamadas == 1 else "llamadas" }}, {{ usd(m.gasto_corrida.costo_usd) }} estimados.{% if e.revisor %} Incluye el revisor independiente.{% endif %}</p>
     {% endif %}
     {% if m.reanudable %}
     <form method="post" action="{{ base }}/reanudar" class="accion">
@@ -139,7 +154,7 @@
     {% endif %}
     {% set bloqueado = not puede_empezar or m.faltan.ficha or m.faltan.otros or e.estado == "trabajando" %}
     <form method="post" action="{{ base }}" class="accion"
-          {% if ficha_por_preparar %}data-preparar="Preparando la ficha de la sesión… puede tardar unos minutos"{% endif %}
+          {% if ficha_por_preparar %}data-preparar="Preparando la ficha…"{% endif %}
           {% if e.estado == "aprobada" %}data-confirmar="{{ m.el | capitalize }} ya {{ 'están' if m.plural else 'está' }} {{ forma(m, 'aprobad') }}. Si {{ m.lo }} generas de nuevo, AulaLista {{ m.lo }} reemplaza, gasta tokens y tendrás que aprobar{{ m.lo }} otra vez. ¿Generar de nuevo?"{% endif %}>
       <button type="submit" {% if bloqueado %}disabled aria-describedby="motivo-{{ m.clave }}"{% endif %}{% if generado or aprobable or m.reanudable %} class="secundario"{% endif %}>
         {{ 'Generar de nuevo' if e.estado else m.generar }}
@@ -149,16 +164,17 @@
         {% elif ficha_por_preparar and e.estado != "trabajando" %}Antes de generar, AulaLista prepara el plan de la sesión, revisa sus ejercicios y confirma su ficha. {{ gasta(terminos) }} y tarda unos minutos más.
         {% elif m.faltan.ficha or m.faltan.otros %}Espera a que se complete lo de arriba.
         {% elif e.estado == "trabajando" %}Ya está en curso.
-        {% elif m.gasto_corrida and m.costo_ref and m.costo_ref.sesion == sesion %}{{ gasta(terminos) }}, como la vez anterior (arriba). Tarda unos minutos.
+        {% elif m.gasto_corrida and m.costo_ref and m.costo_ref.sesion == sesion %}{{ gasta(terminos) }}, como la última generación. Tarda unos minutos.
         {% else %}{{ gasta(terminos) }}. {{ costo(m.costo_ref, "La última vez" ~ ("" if not m.costo_ref or m.costo_ref.sesion == sesion else " (sesión " ~ m.costo_ref.sesion ~ ")")) }} Tarda unos minutos.{% endif %}
       </span>
     </form>
     {% if generado and m.revisor is not false %}
     <form method="post" action="{{ base }}/revisor" class="accion">
       <button type="submit" class="secundario" aria-describedby="revisor-{{ m.clave }}">Pedir revisor independiente</button>
-      <span class="nota" id="revisor-{{ m.clave }}">Opcional. Otra sesión de Claude lee {{ m.el }} sin ver borradores. No corrige: lo que encuentre queda pendiente. Tope: 2 USD. {{ costo(costo_revisor) }}</span>
+      <span class="nota" id="revisor-{{ m.clave }}">Opcional. Otra sesión de Claude lee {{ m.el }} sin ver los borradores ni las correcciones. No corrige: lo que encuentre queda pendiente. {{ gasta(terminos) }}. Tope: 2 USD. {{ costo(costo_revisor) }}</span>
     </form>
     {% endif %}
+    {% if listo %}</details>{% endif %}
     {% if e.estado == "trabajando" %}
     <form method="post" action="{{ base }}/detener" class="accion">
       <button type="submit" class="secundario">Detener</button>
@@ -168,6 +184,8 @@
   </div>
   {% endif %}
 </section>
+{# Cuando el estado cambia mientras se espera, el lector de pantalla lo anuncia. #}
+<p class="sr" id="anuncio" role="status"></p>
 {% endblock %}
 
 {% block scripts %}
@@ -199,10 +217,12 @@
           const lista = actual.querySelector("ol.avance"), nuevos = otra.querySelectorAll("ol.avance li");
           if (lista) for (let i = lista.children.length; i < nuevos.length; i++) lista.append(nuevos[i].cloneNode(true));
           actual.dataset.avance = otra.dataset.avance;
-          const nota = otra.querySelector(":scope > p.nota"), notaActual = actual.querySelector(":scope > p.nota");
+          const nota = otra.querySelector("#gasto-generacion"), notaActual = actual.querySelector("#gasto-generacion");
           if (nota && notaActual) notaActual.textContent = nota.textContent;
         } else {
           actual.replaceWith(otra);
+          const indicador = otra.querySelector(".indicador"), anuncio = document.getElementById("anuncio");
+          if (indicador && anuncio) anuncio.textContent = "Nuevo estado: " + indicador.textContent.trim() + ".";
         }
       });
       ["recorrido", "siguiente"].forEach((id) => {
