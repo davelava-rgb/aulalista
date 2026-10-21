@@ -843,8 +843,9 @@ async def confirmar_sesion(carpeta_curso: Path, curso: str, sesion: int, consult
     if problemas:
         almacen.guardar(carpeta_curso, "sesion", sesion, ficha, "revision de ejercicios")
         raise almacen.FichaIncompleta(problemas)
+    anterior = almacen.ultima_confirmada(carpeta_curso, sesion)
     ficha["confirmada"] = True
     almacen.guardar(carpeta_curso, "sesion", sesion, ficha, "confirmada")
     ruta = verificacion.escribir(carpeta_curso, sesion)
-    return {"verificacion": ruta, "desactualizados": almacen.marcar_desactualizados(carpeta_curso, sesion)}
+    return {"verificacion": ruta, "desactualizados": almacen.marcar_desactualizados(carpeta_curso, sesion, anterior)}
 

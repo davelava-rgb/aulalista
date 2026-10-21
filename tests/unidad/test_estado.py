@@ -54,6 +54,26 @@ def test_cambiar_solo_los_materiales_de_la_sesion_no_desactualiza_lo_generado(se
     assert comun.estado(sesion, 1, "diapositivas")["desactualizado"] is True
 
 
+def test_una_sesion_sin_huella_tampoco_se_desactualiza_por_cambiar_solo_los_materiales(sesion):  # noqa: F811
+    # Sin «trabajando» no se guarda la huella: así quedaron las sesiones generadas antes de que existiera.
+    comun.actualizar(sesion, 1, "laboratorio", estado="aprobada")
+    assert "huella_fichas" not in almacen.cargar_estado(sesion, 1)
+    anterior = almacen.ultima_confirmada(sesion, 1)
+    assert anterior is not None
+    _cambiar(sesion, "materiales.cuales", "diapositivas y laboratorio")
+    assert almacen.marcar_desactualizados(sesion, 1, anterior) == []
+    assert almacen.cargar_estado(sesion, 1)["huella_fichas"] == almacen.huella_de_fichas(sesion, 1)
+    _cambiar(sesion, "lectura.cuidado", "Otro riesgo")
+    assert almacen.marcar_desactualizados(sesion, 1, anterior) == ["laboratorio"]
+
+
+def test_una_sesion_sin_huella_ni_confirmacion_anterior_se_desactualiza_entera(sesion):  # noqa: F811
+    # Así llega un cambio de la ficha del curso: no hay con qué comparar y se marca todo, como antes.
+    comun.actualizar(sesion, 1, "laboratorio", estado="aprobada")
+    _cambiar(sesion, "materiales.cuales", "diapositivas y laboratorio")
+    assert almacen.marcar_desactualizados(sesion, 1) == ["laboratorio"]
+
+
 def test_la_ficha_no_pide_confirmar_un_cambio_solo_de_materiales(sesion):  # noqa: F811
     comun.actualizar(sesion, 1, "lectura", estado="aprobada")
     pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text

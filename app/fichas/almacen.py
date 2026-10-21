@@ -67,6 +67,11 @@ def nueva(tipo: str) -> dict:
 def cargar(carpeta_curso: Path, tipo: str, sesion: int | None = None) -> dict:
     ruta = ruta_ficha(carpeta_curso, tipo, sesion)
     ficha = json.loads(ruta.read_text(encoding="utf-8")) if ruta.exists() else nueva(tipo)
+    return _al_dia(carpeta_curso, ficha)
+
+
+def _al_dia(carpeta_curso: Path, ficha: dict) -> dict:
+    """La ficha guardada como la usa AulaLista hoy: sin marcas en los valores y con los valores por omisión."""
     poner_nombre_del_curso(carpeta_curso, ficha)
     quitar_faltas_viejas(ficha)
     revision = ficha.get("revision_ejercicios") or {}
@@ -507,22 +512,44 @@ def guardar_estado(carpeta_curso: Path, sesion: int, estado: dict) -> None:
 CAMPOS_SIN_EFECTO = ("materiales.cuales",)
 
 
-def huella_de_fichas(carpeta_curso: Path, sesion: int) -> str:
-    """Cambia si cambia un campo de las dos fichas que usan los materiales."""
+def huella_de_fichas(carpeta_curso: Path, sesion: int, ficha_sesion: dict | None = None) -> str:
+    """Cambia si cambia un campo de las dos fichas que usan los materiales. Con `ficha_sesion`, la de esa versión."""
+    curso = cargar(carpeta_curso, "curso")
+    ficha_sesion = ficha_sesion or cargar(carpeta_curso, "sesion", sesion)
     datos = {
-        "curso": {k: valor(cargar(carpeta_curso, "curso"), k) for k in sorted(cargar(carpeta_curso, "curso")["campos"])},
-        "sesion": {k: valor(cargar(carpeta_curso, "sesion", sesion), k)
-                   for k in sorted(cargar(carpeta_curso, "sesion", sesion)["campos"]) if k not in CAMPOS_SIN_EFECTO},
+        "curso": {k: valor(curso, k) for k in sorted(curso["campos"])},
+        "sesion": {k: valor(ficha_sesion, k) for k in sorted(ficha_sesion["campos"]) if k not in CAMPOS_SIN_EFECTO},
     }
     return hashlib.sha256(json.dumps(datos, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
 
-def marcar_desactualizados(carpeta_curso: Path, sesion: int) -> list[str]:
+def ultima_confirmada(carpeta_curso: Path, sesion: int) -> dict | None:
+    """La ficha de la sesión como quedó en su última confirmación guardada. None si nunca se confirmó."""
+    carpeta = _carpeta_versiones(carpeta_curso, "sesion", sesion)
+    for ruta in sorted(carpeta.glob("*.json"), reverse=True) if carpeta.exists() else []:
+        try:
+            ficha = json.loads(ruta.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if ficha.get("confirmada"):
+            return _al_dia(carpeta_curso, ficha)
+    return None
+
+
+def marcar_desactualizados(carpeta_curso: Path, sesion: int, anterior: dict | None = None) -> list[str]:
     """Los materiales ya generados no se entregan hasta validarlos con las fichas nuevas. Si las fichas dicen lo mismo
-    que cuando se generó el último material (solo cambió qué materiales se producen), no se marca ninguno."""
+    que cuando se generó el último material (solo cambió qué materiales se producen), no se marca ninguno.
+    `anterior` es la ficha de la sesión en su confirmación previa: sirve para las sesiones generadas antes de que se
+    guardara la huella de las fichas, que si no quedarían todas desactualizadas por cualquier cambio."""
     with CANDADO_ESTADO:
         estado = cargar_estado(carpeta_curso, sesion)
-        if estado.get("huella_fichas") and estado["huella_fichas"] == huella_de_fichas(carpeta_curso, sesion):
+        actual = huella_de_fichas(carpeta_curso, sesion)
+        if not estado.get("huella_fichas") and anterior is not None                 and huella_de_fichas(carpeta_curso, sesion, anterior) == actual:
+            # Lo no marcado sigue a las fichas de ahora: desde aquí la sesión ya tiene su huella.
+            estado["huella_fichas"] = actual
+            guardar_estado(carpeta_curso, sesion, estado)
+            return []
+        if estado.get("huella_fichas") and estado["huella_fichas"] == actual:
             return []
         marcados = []
         for nombre, material in estado["materiales"].items():
