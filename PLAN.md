@@ -244,7 +244,9 @@ Fases de la etapa 8 (decisión 57). Cada fase termina con sus pruebas en verde y
 | 8d. Pruebas en navegador | Playwright recorre la página (sección 5.7) y escribe su informe en la entrega | Sin IA: la referencia corregida pasa; sembrados con un botón de 30 px, un desborde en celular, un error de JavaScript, un puntaje mal sumado y un avance que no se recupera al recargar | Ve en la entrega qué revisó Playwright en cada tamaño y modo |
 | 8e. Entrega e interfaz | El HTML en `materiales/`, la entrega del SPEC §8, el estado en el tablero y el costo de la corrida. Se actualizan CLAUDE.md, SPEC.md y SKILL.md | Pruebas de las páginas existentes en verde. El tablero muestra la actividad con su estado | Genera la actividad de una sesión real desde el tablero y la abre desde `materiales/` |
 
-Costo: el diseñador escribe una página completa con Opus. Se mide en la primera sesión real de la fase 8c y se reporta antes de seguir.
+Costo: el diseñador escribe una página completa con Opus. Medido al cerrar la fase 8c, con el contenido de prueba de 4 pasos y 5 preguntas: 0,90 USD en 2 llamadas (diseño y un arreglo), unos 5 minutos. El recorrido en el navegador (fase 8d) no gasta tokens y tarda unos 10 segundos por página.
+
+Estado: las fases 8a a 8e están terminadas (2026-10-21). CLAUDE.md, SPEC.md y SKILL.md ya dicen las dos excepciones de la decisión 57: los puntos de la actividad web y su página escrita en HTML por el diseñador.
 
 Reglas de las fichas (etapa 4):
 

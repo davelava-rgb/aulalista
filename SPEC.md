@@ -47,6 +47,7 @@ Por cada sesión, hasta seis materiales:
 | 3 | Guía de laboratorio y archivos de práctica | Word, más Excel y Word en un .zip | De 3 a 5 ejercicios |
 | 4 | Guía del profesor | Word | Una sección por ejercicio |
 | 5 | Práctica interactiva | Un solo archivo HTML | De 5 a 7 estaciones |
+| 5b | Actividad web (PLAN.md §0, decisión 57) | Un solo archivo HTML, diseñado a medida | De 4 a 6 pasos, solo preguntas cerradas, con puntos |
 | 6 | Evaluación práctica (PBQ) y su clave | Dos Word, más un .zip aparte | 3 preguntas por defecto |
 
 Cada material lleva además su archivo de verificación: `S[sesión]_[material]_Verificacion.xlsx`.
@@ -62,7 +63,7 @@ Nombres de archivo:
 2. El software propone la ficha de la sesión y el profesor la confirma.
 3. El software revisa cada ejercicio de la ficha con tres preguntas: ¿funciona solo?, ¿tiene definido su archivo y su problema sembrado?, ¿se ejecuta sin llenar nada a mano?
 4. El software escribe el vocabulario de la sesión: un solo nombre y un solo orden por concepto.
-5. El software produce un material a la vez, en este orden: lectura, diapositivas, laboratorio con guía del profesor, práctica interactiva, evaluación.
+5. El software produce un material a la vez, en este orden: lectura, diapositivas, laboratorio con guía del profesor, práctica interactiva, actividad web, evaluación.
 6. Cada material usa el anterior como fuente.
 7. El software valida el material, lo entrega y espera la aprobación del profesor.
 8. Si el profesor pide cambios, el software los aplica, valida de nuevo y vuelve a esperar.
@@ -71,7 +72,7 @@ Nombres de archivo:
 
 Estas reglas se convierten en pruebas automáticas del proyecto.
 
-- **Sin tiempos ni puntajes.** Ningún material muestra minutos, cronómetros, puntos, notas ni porcentajes.
+- **Sin tiempos ni puntajes.** Ningún material muestra minutos, cronómetros, puntos, notas ni porcentajes. Única excepción: la actividad web muestra los puntos de cada pregunta y su suma, como orientación (PLAN.md §0, decisión 57).
 - **Lenguaje claro.** Una idea por oración. Sin jerga. Todo término inevitable se define la primera vez.
 - **Sin datos inventados.** El software no inventa cifras reales, estudios ni funciones de herramientas.
 - **Fuentes copiadas.** Toda afirmación sobre el contenido de una fuente sale de un pasaje copiado de una fuente del curso. Se puede decir con otras palabras si no cambia el sentido.
@@ -113,7 +114,7 @@ La validación tiene dos pasadas (`PLAN.md` §0, decisión 22). El programa revi
 - que cada cita entre comillas aparezca tal cual en una fuente;
 - que cada operación escrita dé el resultado escrito;
 - que cada dato fijo use el valor de la ficha;
-- que no haya tiempos, puntajes ni emojis;
+- que no haya tiempos, puntajes ni emojis (la actividad web puede mostrar puntos);
 - que no se usen variantes de un concepto clave;
 - que cada archivo mencionado exista;
 - las frases de relleno, las palabras imprecisas y las frases de la lista de lenguaje de IA.
@@ -135,6 +136,7 @@ Los errores se corrigen una sola vez. Después se repite el verificador y la rev
 | Laboratorio y archivos | Datos del caso, cálculos, nombres de archivo y ejecución de cada ejercicio |
 | Guía del profesor | Que cada respuesta sea la que sale al ejecutar el ejercicio |
 | Práctica interactiva | Que cada caso tenga una sola respuesta y que la página funcione |
+| Actividad web | Cada pregunta contra la lectura validada, las fuentes y las fichas; una sola respuesta correcta; que la página sea fiel al contenido aprobado y funcione en un navegador |
 | Evaluación y clave | Datos nuevos, cálculos, ejecución de cada pregunta y que ningún otro material dé la respuesta |
 
 Las revisiones del programa se aplican a todos los materiales. Sin archivo de verificación completo, el software no entrega el material.
@@ -211,14 +213,14 @@ Cada etapa termina con sus pruebas en verde y un commit.
 5. Lectura en Word, con la identidad visual, las dos pasadas, el revisor independiente opcional y el formato de entrega.
 6. Diapositivas.
 7. Laboratorio, archivos de práctica, imágenes y guía del profesor.
-8. Práctica interactiva en HTML.
+8. Actividad web en HTML (PLAN.md §0, decisión 57; reemplaza a la práctica interactiva, decisión 34).
 9. Evaluación práctica y clave.
 
 ## 13. El software está listo cuando
 
 - Genera los seis materiales de una sesión real a partir de sus dos fichas.
 - El programa verificador termina sin fallas en los seis materiales.
-- Ningún material contiene tiempos ni puntajes.
+- Ningún material contiene tiempos ni puntajes, salvo los puntos de la actividad web.
 - Cada oración de cada material tiene en el Excel su pasaje de fuente y su veredicto. Ninguna queda "sin fuente".
 - Ningún material contiene relleno ni frases de la lista de lenguaje de IA.
 - Cada ejercicio y cada pregunta se ejecuta de principio a fin con sus archivos.

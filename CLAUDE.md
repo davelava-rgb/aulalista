@@ -29,13 +29,14 @@ Si encuentras una contradicción nueva entre estos documentos, avísale al profe
 - El verificador es `.claude/skills/material-de-clase/scripts/verificar.py`. No usa IA. El formato de `verificacion.json` está escrito al inicio de ese archivo.
 - El agente escribe el contenido como datos estructurados. Los generadores de `app/materiales/` crean los archivos. El agente no escribe Word, PowerPoint ni HTML a mano.
 - Excepción (`PLAN.md` §0, decisión 32): el diseño de las diapositivas lo escribe el agente diseñador como programa pptxgenjs, con el contenido ya aprobado. Corre con Node con permisos limitados, sin require ni red, y un programa comprueba que todo su texto salga tal cual del contenido.
+- Excepción (`PLAN.md` §0, decisión 57): la página del alumno de la actividad web la escribe el agente diseñador en HTML, a medida, con el contenido ya aprobado. AulaLista pone ese contenido tal cual en la página. Un programa comprueba que todo el texto salga de él y que la página no cargue nada de afuera, y Playwright la recorre como un alumno.
 - Office instalado (Word, PowerPoint, Excel) se controla con `pywin32` solo desde `app/office.py`. Siempre se cierra la aplicación al terminar.
 
 ## Reglas que no se negocian (SPEC §6)
 
 Cada regla tiene una prueba automática. Si una regla no tiene prueba, la etapa no está terminada.
 
-- Sin tiempos ni puntajes en ningún material.
+- Sin tiempos ni puntajes en ningún material. Única excepción: la actividad web muestra los puntos de cada pregunta y su suma, como orientación (`PLAN.md` §0, decisión 57). Tampoco muestra tiempos.
 - Lenguaje claro: una idea por oración, sin jerga, término inevitable definido la primera vez.
 - Sin datos inventados: ni cifras reales, ni estudios, ni funciones de herramientas.
 - Toda afirmación sobre el contenido de una fuente sale de un pasaje copiado de una fuente del curso. Se puede decir con otras palabras si no cambia el sentido (`PLAN.md` §0, decisiones 15 y 18).

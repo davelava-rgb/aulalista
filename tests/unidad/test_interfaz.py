@@ -726,3 +726,20 @@ def test_el_boton_cursos_abre_y_cierra_el_panel(sesion):  # noqa: F811
     assert 'boton.textContent = abierto ? "Cerrar" : "Cursos";' in script
     assert 'barra.hidden = false;' in script and "poner(false);" in script     # empieza plegado
     assert 'if (evento.target.closest("a")) poner(false);' in script           # elegir un enlace lo cierra
+
+
+def test_el_tablero_muestra_la_actividad_web_con_su_estado(sesion):  # noqa: F811
+    """Fase 8e (decisión 57): la actividad web es un material más del tablero, con su ícono y su estado."""
+    for clave in ("lectura", "diapositivas", "laboratorio"):
+        _poner(sesion, clave, estado="aprobada", aprobada="2026-10-15T10:00:00")
+    hoja = cliente.get("/cursos/scrum").text.split('<main class="hoja">')[1]
+    assert '<a class="ficha-material vacia" href="/cursos/scrum/sesiones/1/materiales/actividad">' in hoja
+    assert '<use href="#i-actividad"/>' in hoja
+    # La lectura figura aprobada sin su contenido: el tablero pide completar lo que falta, en la actividad.
+    assert "Sesión 1: completa lo que falta para generar la actividad web." in hoja
+    _poner(sesion, "actividad", estado="con fallas")
+    hoja = cliente.get("/cursos/scrum").text.split('<main class="hoja">')[1]
+    assert '<a class="ficha-material error" href="/cursos/scrum/sesiones/1/materiales/actividad">' in hoja
+    _poner(sesion, "actividad", estado="aprobada", aprobada="2026-10-21T10:00:00")
+    hoja = cliente.get("/cursos/scrum").text.split('<main class="hoja">')[1]
+    assert '<a class="ficha-material bien" href="/cursos/scrum/sesiones/1/materiales/actividad">' in hoja

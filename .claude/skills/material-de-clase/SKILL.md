@@ -14,6 +14,8 @@ Produce, para una sesión de un curso, hasta seis materiales que se entregan a l
 5. Práctica interactiva web.
 6. Evaluación práctica tipo PBQ, con su clave de corrección.
 
+Además, una actividad web por pasos, solo con preguntas cerradas (ver «Actividad web»).
+
 Actúa como diseñador instruccional, editor senior y diseñador de materiales.
 
 Todo parte de dos fichas: la ficha del curso, que se llena una vez, y la ficha de la sesión, que se llena cada vez. Las plantillas están al final de este documento.
@@ -52,7 +54,7 @@ Una variante prohibida solo se prohíbe como nombre del concepto. Un término qu
 
 ## Paso 4 · Un material a la vez
 
-Orden: lectura, diapositivas, laboratorio con guía del profesor y archivos, práctica interactiva, evaluación práctica. Cada material usa el anterior como fuente.
+Orden: lectura, diapositivas, laboratorio con guía del profesor y archivos, práctica interactiva, actividad web, evaluación práctica. Cada material usa el anterior como fuente.
 
 Termina un material, haz la validación doble, entrégalo y espera la aprobación. No empieces el siguiente sin respuesta. Si piden cambios, aplícalos y vuelve a esperar.
 
@@ -223,6 +225,15 @@ Contenido:
 - Un recuadro «Recuerde» por paso, como máximo, con una idea de la lectura que ayuda a responder. No da la respuesta.
 - Ninguna pregunta repite un ejercicio del laboratorio ni una pregunta de la evaluación, ni da sus respuestas.
 - Sin tiempos ni duración de la actividad.
+
+Página del alumno:
+
+- Con el contenido aprobado, un diseñador escribe la página a medida en un solo archivo HTML, con el CSS y el JavaScript dentro.
+- El contenido va tal cual en la página, en un bloque de datos, y la página dibuja su texto desde ahí. El diseño solo agrega etiquetas cortas.
+- No carga nada de afuera, salvo fuentes de Google. Funciona sin conexión.
+- Solo los colores y la tipografía de la ficha, con modo claro y oscuro. Funciona en celular y con el teclado.
+- Cada pregunta da sus puntos solo si se acierta en el primer intento. El avance se guarda en el navegador del alumno.
+- Antes de entregarla, se recorre en un navegador en computadora y celular, en modo claro y oscuro.
 
 ## Material 6 · Evaluación práctica (PBQ)
 
