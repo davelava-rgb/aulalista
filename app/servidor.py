@@ -417,6 +417,15 @@ async def _accion_ficha(request: Request, curso: str, tipo: str, sesion: int | N
                 mensaje = corregido + " " + await _guardar_y_confirmar(carpeta, curso, tipo, sesion)
             except almacen.FichaIncompleta as error:
                 mensaje, errores = corregido + " La revisión todavía encuentra problemas.", error.errores
+        elif accion == "guardar" and tipo == "sesion" and not almacen.cargar(carpeta, tipo, sesion)["confirmada"]:
+            # En la sesión, Guardar prepara el plan, lo acepta, revisa los ejercicios y confirma (decisión 54).
+            resultado = await asyncio.to_thread(
+                lambda: asyncio.run(flujo.preparar_y_confirmar(carpeta, curso, sesion))
+            )
+            mensaje = " ".join(resultado["mensajes"])
+            if resultado["errores"]:
+                mensaje = " ".join(["Ficha guardada.", *resultado["mensajes"], "Todavía no está confirmada."])
+                errores = resultado["errores"]
         elif accion == "guardar":
             # Guardar también confirma: una ficha completa queda confirmada (decisión 28).
             mensaje = await _guardar_y_confirmar(carpeta, curso, tipo, sesion)
@@ -466,9 +475,9 @@ async def accion_ficha_del_curso(request: Request, curso: str):
 @app.get("/cursos/{curso}/sesiones/{sesion}/ficha")
 def ver_ficha_de_la_sesion(request: Request, curso: str, sesion: int):
     _exigir_ficha_del_curso(_carpeta(curso), curso)
-    # Lo que la ficha corta toma de la del curso, sin IA (decisión 54). Antes de la propuesta: la IA no lo cambia.
+    # Lo que la ficha corta toma de la del curso, sin IA (decisión 54). La ficha ya no se propone sola al abrirla:
+    # el plan lo prepara «Guardar», así abrir una ficha nunca gasta.
     flujo.llenar_desde_el_curso(_carpeta(curso), sesion)
-    _proponer_si_corresponde(curso, "sesion", sesion)
     return _pagina_ficha(request, curso, "sesion", sesion, *_AVISOS_FICHA.pop(_url_ficha(curso, sesion), ("", None)))
 
 

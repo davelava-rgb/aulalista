@@ -345,8 +345,11 @@ def _errores_de_la_sesion(ficha: dict) -> list[str]:
     """Lo que se exige para confirmar la ficha de la sesión. Los datos de cada material se exigen al
     producir ese material (PLAN.md §0, decisión 16): ver errores_del_material()."""
     if not vocabulario(ficha):
-        return ["Escribe al menos un concepto clave del vocabulario."]
+        return [SIN_VOCABULARIO]
     return []
+
+
+SIN_VOCABULARIO = "Escribe al menos un concepto clave del vocabulario."
 
 
 def errores_del_material(ficha: dict, material: str) -> list[str]:

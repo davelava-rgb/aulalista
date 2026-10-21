@@ -291,20 +291,31 @@
 
   {% set ocupada = propuesta.estado == "trabajando" %}
   <div class="acciones">
-    {% if hay_propuestos and not ficha.confirmada %}
+    {# En la sesión, Guardar ya acepta lo propuesto y la ficha no se propone aparte (decisión 54). #}
+    {% set aceptar_aparte = hay_propuestos and not ficha.confirmada and not sesion %}
+    {% if aceptar_aparte %}
     <button type="submit" name="accion" value="aceptar" {% if ocupada %}disabled{% endif %}>Aceptar lo propuesto y guardar</button>
     {% endif %}
-    <button type="submit" name="accion" value="guardar" id="guardar-ficha" {% if hay_propuestos and not ficha.confirmada %}class="secundario"{% endif %} {% if ocupada %}disabled{% endif %}
+    <button type="submit" name="accion" value="guardar" id="guardar-ficha" {% if aceptar_aparte %}class="secundario"{% endif %} {% if ocupada %}disabled{% endif %}
+            {% if sesion %}data-ocupado="Preparando el plan… puede tardar unos minutos"{% endif %}
             {% if ficha.confirmada and generados %}data-confirmar="Esta ficha está confirmada. Si guardas el cambio, hay que generar de nuevo {{ generados_texto }}, con gasto de tokens. ¿Guardar?"{% endif %}>Guardar</button>
     {% if modo_lectura %}<button type="button" class="secundario" id="cancelar-seccion">Cancelar</button>{% endif %}
+    {% if not sesion %}
     <button type="submit" name="accion" value="proponer" class="secundario" {% if ocupada %}disabled{% endif %}>Proponer desde las fuentes</button>
+    {% endif %}
     <p class="sin-guardar" id="sin-guardar" role="status" hidden>Hay cambios sin guardar.</p>
     {% if ficha.confirmada and generados %}
     <p class="aviso-guardar">Ficha confirmada: guardar un cambio desactualiza {{ generados_texto }}.</p>
     {% endif %}
   </div>
+  {% if sesion %}
+  <p class="nota">«Guardar» guarda la ficha y prepara con IA lo que falte del plan de la sesión. Después acepta lo
+    propuesto, revisa los ejercicios, los corrige una vez si hace falta y confirma la ficha. Si el plan ya está
+    completo, solo revisa los ejercicios. {{ gasta(terminos) }}. {{ costo(costos.proponer, "La última propuesta") }}</p>
+  {% else %}
   <p class="nota">«Guardar» guarda la ficha y, si está completa, la confirma. «Proponer desde las fuentes» y
     «Completar» solo llenan campos vacíos y {{ gasta(terminos, "gastan") }}. {{ costo(costos.proponer, "La última propuesta") }}</p>
+  {% endif %}
 </form>
 
 {% if versiones %}
@@ -527,7 +538,7 @@
     if (boton) {
       boton.textContent = boton.value === "proponer" ? "Leyendo las fuentes… puede tardar"
         : boton.value.startsWith("completar.") ? "Completando… puede tardar"
-        : boton.value === "corregir_ejercicios" ? "Corrigiendo… puede tardar" : "Guardando…";
+        : boton.value === "corregir_ejercicios" ? "Corrigiendo… puede tardar" : boton.dataset.ocupado || "Guardando…";
       setTimeout(() => document.querySelectorAll("#form-ficha button").forEach((b) => (b.disabled = true)), 0);
     }
   });

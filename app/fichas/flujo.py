@@ -838,6 +838,55 @@ async def corregir_ejercicios(carpeta_curso: Path, curso: str, sesion: int, cons
 
 # ---------- Confirmación ----------
 
+# ---------- «Guardar» en la ficha de la sesión (PLAN.md §0, decisión 54, fase 2) ----------
+
+# AulaLista no genera la evaluación (decisión 37): el plan no la necesita para estar listo.
+_MATERIALES_DEL_PLAN = ("lectura", "diapositivas", "laboratorio")
+
+
+def plan_por_preparar(ficha: dict) -> bool:
+    """El plan de la sesión no alcanza para producir sus materiales: falta el vocabulario o algo que un material pide."""
+    if not almacen.vocabulario(ficha):
+        return True
+    materiales = almacen.materiales_de_la_sesion(ficha)
+    return any(almacen.errores_del_material(ficha, m) for m in _MATERIALES_DEL_PLAN if m in materiales)
+
+
+async def preparar_y_confirmar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.query) -> dict:
+    """Lo que hace «Guardar»: la IA llena lo que falte del plan, lo propuesto se acepta, los ejercicios se revisan y,
+    si la revisión encuentra problemas, se corrigen una vez y se revisan de nuevo. Si todo cumple, la ficha queda
+    confirmada. El profesor no revisa el plan antes; queda en la ficha para revisarlo cuando quiera.
+    Devuelve {mensajes, errores}: lo que se hizo y lo que impide confirmar."""
+    mensajes = []
+    ficha = almacen.cargar(carpeta_curso, "sesion", sesion)
+    if not almacen.cargar(carpeta_curso, "curso")["confirmada"]:
+        raise FichaDelCursoSinConfirmar("Guarda primero la ficha del curso completa: así queda confirmada.")
+    antes = [e for e in almacen.errores(ficha) if e != almacen.SIN_VOCABULARIO]   # el vocabulario lo prepara la IA
+    if antes:
+        return {"mensajes": mensajes, "errores": antes}     # lo que falta en la ficha corta va primero, sin gastar
+    if plan_por_preparar(ficha):
+        resumen = await proponer(carpeta_curso, curso, "sesion", sesion, consulta=consulta)
+        mensajes.append(f"Preparé el plan de la sesión: {resumen['de_las_fuentes'] + resumen['propuestos']} datos.")
+        ficha = almacen.cargar(carpeta_curso, "sesion", sesion)
+    if aceptar_propuestos(ficha):
+        almacen.guardar(carpeta_curso, "sesion", sesion, ficha, "plan aceptado")
+    for intento in (1, 2):
+        try:
+            await confirmar_sesion(carpeta_curso, curso, sesion, consulta=consulta)
+            mensajes.append("Ficha de la sesión guardada y confirmada. Se escribió verificacion.json.")
+            return {"mensajes": mensajes, "errores": []}
+        except almacen.FichaIncompleta as error:
+            ficha = almacen.cargar(carpeta_curso, "sesion", sesion)
+            if intento == 2 or not ejercicios_con_problemas(problemas_de_ejercicios_guardados(ficha)):
+                return {"mensajes": mensajes, "errores": error.errores}
+        # Una sola corrección de lo que encontró la revisión (decisión 22); lo corregido también se acepta.
+        mensajes.append(await corregir_ejercicios(carpeta_curso, curso, sesion, consulta=consulta))
+        ficha = almacen.cargar(carpeta_curso, "sesion", sesion)
+        if aceptar_propuestos(ficha):
+            almacen.guardar(carpeta_curso, "sesion", sesion, ficha, "corrección aceptada")
+    return {"mensajes": mensajes, "errores": []}
+
+
 def confirmar_curso(carpeta_curso: Path) -> dict:
     ficha = almacen.cargar(carpeta_curso, "curso")
     lista = almacen.errores(ficha)
