@@ -39,6 +39,8 @@ Las rutas son relativas a la carpeta donde está verificacion.json. Solo "sesion
   "vocabulario": [{"concepto": "Manifiesto Ágil", "variantes": ["Agile", "manifiesto agile"]}],
   "nunca_se_incluye": ["objetivos de aprendizaje", "requisitos previos", "glosario"],
   "permitidos": ["notas del profesor", "puntos de historia"],   # frases que no son tiempos ni puntajes
+  "permite_puntajes": false,                     # true solo en la actividad web: sus puntos no son FALLA
+                                                 # (PLAN.md §0, decisión 57). Los tiempos siguen siendo FALLA
   "carpeta_practica": "materiales/practica",     # o null si el material no tiene archivos de práctica
   "limites": {
     "paginas_max": 6,                            # Word: páginas contadas por el Word instalado
@@ -414,6 +416,7 @@ class Configuracion:
     vocabulario: list[dict]
     nunca_se_incluye: list[str]
     permitidos: list[str]
+    permite_puntajes: bool
     carpeta_practica: Path | None
     limites: dict
     cita_min_palabras: int
@@ -506,6 +509,7 @@ def leer_configuracion(ruta: Path) -> Configuracion:
         vocabulario=datos.get("vocabulario", []),
         nunca_se_incluye=datos.get("nunca_se_incluye", []),
         permitidos=datos.get("permitidos", ["notas del profesor"]),
+        permite_puntajes=bool(datos.get("permite_puntajes", False)),
         carpeta_practica=_ruta(carpeta, practica) if practica else None,
         limites=datos.get("limites", {}),
         cita_min_palabras=int(datos.get("cita_min_palabras", 5)),
@@ -649,6 +653,8 @@ def revisar_oracion(o: Oracion, cfg: Configuracion, hallazgos: list[Hallazgo]) -
     sin_permitidos = _texto_sin_permitidos(normal, cfg.permitidos)
 
     for nivel, regla, patron in TIEMPOS_Y_PUNTAJES:
+        if regla == "puntaje" and cfg.permite_puntajes:
+            continue
         m = patron.search(sin_permitidos)
         if m:
             agregar(nivel, regla, f"dice «{m.group(0).strip()}»")

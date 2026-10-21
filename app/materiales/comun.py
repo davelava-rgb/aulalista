@@ -22,7 +22,7 @@ FICHAS = (FICHA_DEL_CURSO, FICHA_DE_LA_SESION)
 # Subcarpeta de materiales/ con lo que usa AulaLista y no el profesor: contenido, explicaciones, imágenes, el JSON
 # del verificador, el programa del diseñador (decisión 42). En materiales/ quedan solo los archivos para el profesor.
 TRABAJO = "_trabajo"
-MATERIALES = {"Lectura": "lectura", "Diapositivas": "diapositivas", "Laboratorio": "laboratorio"}
+MATERIALES = {"Lectura": "lectura", "Diapositivas": "diapositivas", "Laboratorio": "laboratorio", "Actividad": "actividad"}
 
 
 def ordenar_materiales(carpeta: Path) -> None:

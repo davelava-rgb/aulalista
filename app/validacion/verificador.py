@@ -37,7 +37,11 @@ LIMITES = {
     # SKILL.md, «Material 3»: de 3 a 5 ejercicios y «Mejora el resultado» siempre con «(opcional)».
     "Laboratorio": {"conteos": [{"nombre": "ejercicios", "patron": r"^Ejercicio \d+", "min": 3, "max": 5}],
                     "titulos_con": [{"patron": "^Mejora el resultado", "debe_contener": "(opcional)"}]},
+    # La cantidad de pasos y las preguntas las revisa app/materiales/actividad.py: no son conteos de texto.
+    "Actividad web": {},
 }
+# Solo la actividad web muestra puntos (PLAN.md §0, decisión 57 c). Los tiempos siguen siendo FALLA en todos.
+CON_PUNTAJES = ("Actividad web",)
 
 
 def configuracion_del_material(carpeta_sesion: Path, material: str, carpeta_practica: str | None = None,
@@ -47,7 +51,7 @@ def configuracion_del_material(carpeta_sesion: Path, material: str, carpeta_prac
     con material de referencia no tiene máximo de páginas: PLAN.md §0, decisión 23)."""
     base = json.loads((carpeta_sesion / "verificacion.json").read_text(encoding="utf-8"))
     base.update(material=material, limites=LIMITES.get(material, {}) if limites is None else limites,
-                carpeta_practica=carpeta_practica)
+                carpeta_practica=carpeta_practica, permite_puntajes=material in CON_PUNTAJES)
     ruta = carpeta_sesion / f"verificacion_{material.lower().replace(' ', '_')}.json"
     ruta.write_text(json.dumps(base, ensure_ascii=False, indent=2), encoding="utf-8")
     return ruta

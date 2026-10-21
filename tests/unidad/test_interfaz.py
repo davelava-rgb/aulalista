@@ -44,7 +44,7 @@ def test_la_sesion_abre_el_material_del_siguiente_paso_sin_la_evaluacion(sesion)
     assert "Siguiente paso:" not in pagina   # el siguiente paso es este material: lo dicen el recorrido y el botón
     otra = cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
     assert 'Siguiente paso:</strong>' in otra and 'materiales/lectura" data-atajo="s" aria-keyshortcuts="S">Genera la lectura.</a>' in otra
-    assert "Material 1 de 3 de la sesión 1" in pagina
+    assert "Material 1 de 4 de la sesión 1" in pagina
 
 
 def test_sin_la_ficha_de_la_sesion_confirmada_la_sesion_abre_su_material(sesion):  # noqa: F811
@@ -163,7 +163,7 @@ def test_la_pagina_del_curso_es_un_tablero_con_lo_que_sigue_las_sesiones_y_la_pr
     assert '<p class="sigue-etiqueta" id="t-sigue">Lo que sigue</p>' in hoja
     assert '<p class="sigue-paso">Sesión 1: completa lo que falta para generar las diapositivas.</p>' in hoja
     assert '<p class="sigue-motivo">Falta información para generarlas. La página del material dice qué.</p>' in hoja
-    assert "Faltan las diapositivas y el laboratorio." in hoja
+    assert "Faltan las diapositivas, el laboratorio y la actividad web." in hoja
     assert '<a class="boton" href="/cursos/scrum/sesiones/1/materiales/diapositivas" data-atajo="s" aria-keyshortcuts="S">Ir a las diapositivas</a>' in hoja
     assert '<a class="ficha-material bien" href="/cursos/scrum/sesiones/1/materiales/lectura">' in hoja
     assert "Aprobada el 15 de octubre" in hoja
@@ -351,13 +351,13 @@ def test_el_curso_se_llama_igual_en_todas_partes_y_los_terminos_se_definen(sesio
 
 def test_el_inicio_muestra_el_avance_de_cada_curso_y_enlaza_lo_que_sigue(sesion):  # noqa: F811
     pagina = cliente.get("/").text
-    assert "0 de 6 materiales aprobados en 2 sesiones." in pagina
+    assert "0 de 8 materiales aprobados en 2 sesiones." in pagina
     assert '<strong>Sigue:</strong> <a href="/cursos/scrum/sesiones/1/materiales/lectura" data-atajo="s" aria-keyshortcuts="S">Sesión 1: genera la lectura.</a>' in pagina
     _poner(sesion, "lectura", estado="con fallas")
     pagina = cliente.get("/").text
     assert '<p class="curso-problema">Sesión 1: lectura con fallas.</p>' in pagina
     assert pagina.count('<span class="tramo error">') == 1
-    for clave in ("lectura", "diapositivas", "laboratorio"):
+    for clave in ("lectura", "diapositivas", "laboratorio", "actividad"):
         _poner(sesion, clave, estado="aprobada", aprobada="2026-10-15T10:00:00")
     pagina = cliente.get("/").text
     # La 1 ya está. La 2 no necesita su ficha confirmada: se confirma al generar (decisión 55).
@@ -535,13 +535,13 @@ def test_las_secciones_de_la_ficha_se_pliegan_y_editar_alterna_con_cancelar(sesi
 
 def test_el_resumen_de_un_curso_dice_su_avance_en_una_linea(sesion):  # noqa: F811
     r = servidor._resumen_de_curso("scrum")
-    assert (r["avance"], r["alerta"]) == ("0 de 6", False)
+    assert (r["avance"], r["alerta"]) == ("0 de 8", False)
     _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00")
-    assert servidor._resumen_de_curso("scrum")["avance"] == "1 de 6"
+    assert servidor._resumen_de_curso("scrum")["avance"] == "1 de 8"
     _poner(sesion, "diapositivas", estado="con fallas")
     assert servidor._resumen_de_curso("scrum")["alerta"] is True         # el punto rojo del panel
     for n in (1, 2):
-        for clave in ("lectura", "diapositivas", "laboratorio"):
+        for clave in ("lectura", "diapositivas", "laboratorio", "actividad"):
             comun.actualizar(sesion, n, clave, estado="aprobada", aprobada="2026-10-15T10:00:00")
     r = servidor._resumen_de_curso("scrum")
     assert (r["avance"], r["alerta"]) == ("Completo", False)
@@ -604,7 +604,7 @@ def test_el_panel_muestra_todos_los_cursos_y_solo_el_abierto_con_sesiones(sesion
     assert '<a href="/cursos/scrum" class="panel-titulo" aria-current="page">' in panel
     assert '<a href="/cursos/excel" class="panel-otro">' in panel
     assert '<span class="panel-avance">Sin ficha</span>' in panel
-    assert '<span class="panel-avance">0 de 6</span>' in panel
+    assert '<span class="panel-avance">0 de 8</span>' in panel
     panel = _panel_de(cliente.get("/cursos/excel").text)                     # otro curso abierto
     assert '<a href="/cursos/scrum" class="panel-otro">' in panel and '<div class="panel-sesiones">' not in panel
     assert "Las sesiones aparecen al confirmar la ficha del curso." in panel

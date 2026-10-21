@@ -186,6 +186,25 @@ def test_control_limpio_no_marca_nada(sesion, tmp_path):
     assert resultado.resumen() == f"Oraciones: {len(ORACIONES_LIMPIAS) + 2} · Fallas: 0 · Avisos: 0"
 
 
+PUNTAJES = [c for c in CASOS_POR_ORACION if c[3] == "puntaje"]
+TIEMPOS = [c for c in CASOS_POR_ORACION if c[3] == "tiempo"]
+
+
+@pytest.mark.parametrize("ident, oracion, nivel, regla", PUNTAJES, ids=[c[0] for c in PUNTAJES])
+def test_la_actividad_web_puede_mostrar_puntos(sesion, tmp_path, ident, oracion, nivel, regla):
+    """Decisión 57 c: con «permite_puntajes», un puntaje no es falla. Sin esa opción sigue siéndolo (arriba)."""
+    guardar_config(sesion, material="Actividad web", permite_puntajes=True)
+    material = word(tmp_path / "S1_Actividad.docx", [oracion])
+    assert [h.regla for h in correr(sesion, [material]).hallazgos] == []
+
+
+@pytest.mark.parametrize("ident, oracion, nivel, regla", TIEMPOS, ids=[c[0] for c in TIEMPOS])
+def test_la_actividad_web_tampoco_muestra_tiempos(sesion, tmp_path, ident, oracion, nivel, regla):
+    guardar_config(sesion, material="Actividad web", permite_puntajes=True)
+    material = word(tmp_path / "S1_Actividad.docx", [oracion])
+    assert ("FALLA", "tiempo") in [(h.nivel, h.regla) for h in correr(sesion, [material]).hallazgos]
+
+
 def test_lenguaje_de_ia_dentro_de_una_cita_es_aviso(sesion, tmp_path):
     material = word(tmp_path / "S1_Laboratorio.docx", ["El borrador decía «es importante destacar»."])
     resultado = correr(sesion, [material])

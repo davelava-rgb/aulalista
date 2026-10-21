@@ -153,7 +153,7 @@
         {% else %}{{ gasta(terminos) }}. {{ costo(m.costo_ref, "La última vez" ~ ("" if not m.costo_ref or m.costo_ref.sesion == sesion else " (sesión " ~ m.costo_ref.sesion ~ ")")) }} Tarda unos minutos.{% endif %}
       </span>
     </form>
-    {% if generado %}
+    {% if generado and m.revisor is not false %}
     <form method="post" action="{{ base }}/revisor" class="accion">
       <button type="submit" class="secundario" aria-describedby="revisor-{{ m.clave }}">Pedir revisor independiente</button>
       <span class="nota" id="revisor-{{ m.clave }}">Opcional. Otra sesión de Claude lee {{ m.el }} sin ver borradores. No corrige: lo que encuentre queda pendiente. Tope: 2 USD. {{ costo(costo_revisor) }}</span>

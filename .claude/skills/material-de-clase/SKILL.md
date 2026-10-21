@@ -86,6 +86,7 @@ Termina un material, haz la validación doble, entrégalo y espera la aprobació
 - Ningún material asigna tiempo a una actividad: ni minutos, ni cronómetros, ni cuentas regresivas.
 - Ningún material asigna puntos, notas ni porcentajes a una actividad.
 - Esta regla vale para todos los materiales, también para la evaluación práctica y la práctica interactiva.
+- Única excepción: la actividad web lleva puntos por pregunta y su suma, como orientación. Tampoco muestra tiempos.
 
 ### Neutralidad de herramientas (si la ficha la pide)
 
@@ -205,6 +206,23 @@ Documento aparte, con el mismo diseño. Por cada ejercicio:
 - Botones de al menos 44 px. Íconos, no solo color, para lo correcto y lo incorrecto. Foco visible. Soporte para lectores de pantalla. Modo claro y oscuro.
 - Hover solo en pantallas con puntero. Animaciones breves, solo con transform y opacity. Sin animación en acciones de teclado. Respeto por la preferencia de movimiento reducido.
 - Prueba cada estación en tamaño de computadora y de celular, en modo claro y oscuro, y confirma que no haya errores.
+
+## Actividad web
+
+Una página que el alumno recorre por pasos para reforzar el tema de la sesión. Es distinta de la práctica interactiva: no tiene estaciones (PLAN.md §0, decisión 57). El redactor escribe solo el contenido; el diseño se hace después, con el contenido ya aprobado.
+
+Contenido:
+
+- Un caso propio de la actividad, ficticio y coherente con el caso del curso y sus datos fijos. Sus cifras van en tablas o gráficos y cuadran entre sí: si una tabla trae una fila «Total», esa fila es la suma de las demás.
+- De 4 a 6 pasos, en el orden del tema. Cada paso tiene un título con una acción concreta, una introducción breve y de 1 a 4 preguntas.
+- Solo preguntas cerradas: opción única, opción múltiple, ordenar, relacionar o clasificar. Ninguna pide escribir, redactar ni explicar con sus palabras.
+- Cada pregunta tiene una sola respuesta correcta y se responde con los datos del caso y lo que enseñó la lectura. Si una pregunta admite dos respuestas defendibles, rediséñala.
+- Cada opción, correcta o incorrecta, trae su explicación. La explicación de una opción correcta dice por qué lo es. La de una incorrecta dice qué confunde y cuál es la idea correcta. Las opciones incorrectas salen de errores comunes del tema, no de absurdos.
+- Sin «todas las anteriores» ni «ninguna de las anteriores».
+- Cada pregunta tiene sus puntos: un número entero de 1 a 3. La página los suma. El puntaje es una orientación: la nota la pone el profesor.
+- Un recuadro «Recuerde» por paso, como máximo, con una idea de la lectura que ayuda a responder. No da la respuesta.
+- Ninguna pregunta repite un ejercicio del laboratorio ni una pregunta de la evaluación, ni da sus respuestas.
+- Sin tiempos ni duración de la actividad.
 
 ## Material 6 · Evaluación práctica (PBQ)
 
@@ -448,5 +466,5 @@ FICHA DE LA SESIÓN
   Respuesta correcta:
 
 6. Materiales de esta sesión
-- Cuáles se producen (por defecto, los cuatro):
+- Cuáles se producen (por defecto, los cinco):
 ```

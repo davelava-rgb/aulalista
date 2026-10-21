@@ -17,7 +17,7 @@ from app.config import RAIZ, FaltaClave
 from app.fichas import almacen, controles, flujo
 from app.fichas import plantillas as plantillas_fichas
 from app.fuentes import convertir
-from app.materiales import diapositivas, laboratorio, lectura
+from app.materiales import actividad, diapositivas, laboratorio, lectura
 
 app = FastAPI(title="AulaLista")
 app.mount("/estaticos", StaticFiles(directory=RAIZ / "web" / "estaticos"), name="estaticos")
@@ -549,6 +549,10 @@ MATERIALES = {
     laboratorio.CLAVE: {"modulo": laboratorio, "numero": 3, "titulo": "Laboratorio y archivos de práctica",
                         "corto": "Laboratorio", "el": "el laboratorio", "plural": False, "o": "o", "lo": "lo",
                         "aprobado": "Laboratorio aprobado.", "generar": "Generar laboratorio"},
+    # Fase 8a de la decisión 57: el contenido y su vista; sin revisor independiente hasta la fase 8b.
+    actividad.CLAVE: {"modulo": actividad, "numero": 4, "titulo": "Actividad web", "corto": "Actividad",
+                      "el": "la actividad web", "plural": False, "o": "a", "lo": "la", "revisor": False,
+                      "aprobado": "Actividad web aprobada.", "generar": "Generar actividad web"},
 }
 
 # La práctica interactiva, la guía del profesor y la evaluación no se generan (PLAN.md §0, decisiones 34, 35 y 37).
@@ -778,7 +782,7 @@ def _frase_de_sesion(s: dict) -> str:
         frase += f" {'Un material tiene' if len(problemas) == 1 else f'{len(problemas)} materiales tienen'} problemas."
     if faltan:
         verbo = "Falta" if len(faltan) == 1 and not faltan[0]["plural"] else "Faltan"
-        frase += f" {verbo} " + " y ".join(m["el"] for m in faltan) + "."
+        frase += f" {verbo} " + _y([m["el"] for m in faltan]) + "."
     return frase
 
 
@@ -939,6 +943,9 @@ def revisor_del_material(curso: str, sesion: int, material: str):
     datos = _material(material)
     carpeta = _carpeta(curso)
     destino = _url_material(curso, sesion, material)
+    if not datos.get("revisor", True):
+        mensaje = f"El revisor independiente todavía no revisa {datos['el']}."
+        return RedirectResponse(destino + "?mensaje=" + quote(mensaje), status_code=303)
     if datos["modulo"].estado(carpeta, sesion).get("estado") not in ("verificada", "con pendientes", "aprobada"):
         generado = "generadas" if datos["plural"] else "generada"
         mensaje = f"El revisor revisa {datos['el']} ya {generado} y sin fallas."
@@ -983,4 +990,6 @@ def descargar(curso: str, sesion: int, archivo: str):
     ruta = carpeta / Path(archivo).name
     if not ruta.is_file():
         raise HTTPException(404, "Ese archivo no existe.")
-    return FileResponse(ruta, filename=ruta.name)
+    # Una página HTML se abre en el navegador, para leerla sin guardarla antes.
+    en_linea = ruta.suffix.lower() == ".html"
+    return FileResponse(ruta, filename=ruta.name, content_disposition_type="inline" if en_linea else "attachment")

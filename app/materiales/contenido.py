@@ -422,3 +422,124 @@ ESQUEMA_LABORATORIO = _objeto({
     "pasajes": ESQUEMA_LECTURA["properties"]["pasajes"],
     "decisiones": ESQUEMA_LECTURA["properties"]["decisiones"],
 })
+
+
+# ---------- Actividad web (SKILL.md, «Actividad web», y PLAN.md §0, decisión 57) ----------
+
+# Solo preguntas cerradas: la página corrige sola, sin IA (decisión 57 b).
+TIPOS_DE_PREGUNTA = ("opcion_unica", "opcion_multiple", "ordenar", "relacionar", "clasificar")
+PUNTOS_POR_PREGUNTA = (1, 3)
+
+
+class Opcion(BaseModel):
+    texto: str
+    correcta: bool
+    explicacion: str
+
+
+class Elemento(BaseModel):
+    """Un elemento para ordenar (el orden de la lista es el correcto) o para clasificar (con su categoría)."""
+    texto: str
+    explicacion: str
+    categoria: str = ""
+
+
+class Par(BaseModel):
+    izquierda: str
+    derecha: str
+    explicacion: str
+
+
+class Pregunta(BaseModel):
+    """Cada tipo usa su lista: opciones (opción única y múltiple), elementos (ordenar y clasificar, este con
+    categorías) o pares (relacionar). Un programa revisa que el tipo y sus listas cuadren."""
+    tipo: Literal["opcion_unica", "opcion_multiple", "ordenar", "relacionar", "clasificar"]
+    enunciado: str
+    puntos: int = Field(ge=PUNTOS_POR_PREGUNTA[0], le=PUNTOS_POR_PREGUNTA[1])
+    opciones: list[Opcion] = Field(default_factory=list)
+    elementos: list[Elemento] = Field(default_factory=list)
+    pares: list[Par] = Field(default_factory=list)
+    categorias: list[str] = Field(default_factory=list)
+
+
+class Serie(BaseModel):
+    nombre: str
+    valores: list[float] = Field(min_length=2)
+
+
+class Grafico(BaseModel):
+    titulo: str
+    eje_x: str
+    eje_y: str
+    categorias: list[str] = Field(min_length=2)
+    series: list[Serie] = Field(min_length=1, max_length=3)
+
+    @model_validator(mode="after")
+    def un_valor_por_categoria(self):
+        if any(len(s.valores) != len(self.categorias) for s in self.series):
+            raise ValueError("cada serie debe tener un valor por categoría")
+        return self
+
+
+class Caso(BaseModel):
+    titulo: str
+    parrafos: list[str] = Field(min_length=1)
+    tablas: list[Tabla] = Field(default_factory=list)
+    graficos: list[Grafico] = Field(default_factory=list)
+
+
+class Paso(BaseModel):
+    titulo: str
+    introduccion: list[str] = Field(min_length=1)
+    recuerde: str = ""
+    preguntas: list[Pregunta] = Field(min_length=1, max_length=4)
+
+
+class Actividad(BaseModel):
+    titulo: str
+    presentacion: list[str] = Field(min_length=1, max_length=3)
+    caso: Caso
+    # De 4 a 6 lo revisa un programa, para pedir la corrección; el tope solo frena una respuesta rota.
+    pasos: list[Paso] = Field(min_length=1, max_length=8)
+    pasajes: list[Pasaje] = Field(default_factory=list)
+    decisiones: list[Decision] = Field(default_factory=list)
+
+    @property
+    def puntaje_total(self) -> int:
+        return sum(p.puntos for paso in self.pasos for p in paso.preguntas)
+
+
+_TEXTO = {"type": "string"}
+ESQUEMA_ACTIVIDAD = _objeto({
+    "titulo": _TEXTO,
+    "presentacion": TEXTOS,
+    "caso": _objeto({
+        "titulo": _TEXTO,
+        "parrafos": TEXTOS,
+        "tablas": {"type": "array", "items": ESQUEMA_TABLA},
+        "graficos": {"type": "array", "items": _objeto({
+            "titulo": _TEXTO, "eje_x": _TEXTO, "eje_y": _TEXTO, "categorias": TEXTOS,
+            "series": {"type": "array", "items": _objeto({
+                "nombre": _TEXTO, "valores": {"type": "array", "items": {"type": "number"}}})},
+        })},
+    }),
+    "pasos": {"type": "array", "items": _objeto({
+        "titulo": _TEXTO,
+        "introduccion": TEXTOS,
+        "recuerde": _TEXTO,
+        "preguntas": {"type": "array", "items": _objeto({
+            "tipo": {"type": "string", "enum": list(TIPOS_DE_PREGUNTA)},
+            "enunciado": _TEXTO,
+            "puntos": {"type": "integer"},
+            "opciones": {"type": "array", "items": _objeto({
+                "texto": _TEXTO, "correcta": {"type": "boolean"}, "explicacion": _TEXTO})},
+            "elementos": {"type": "array", "items": _objeto({
+                "texto": _TEXTO, "explicacion": _TEXTO, "categoria": _TEXTO})},
+            "pares": {"type": "array", "items": _objeto({
+                "izquierda": _TEXTO, "derecha": _TEXTO, "explicacion": _TEXTO})},
+            "categorias": TEXTOS,
+        })},
+    })},
+    "pasajes": ESQUEMA_LECTURA["properties"]["pasajes"],
+    "decisiones": ESQUEMA_LECTURA["properties"]["decisiones"],
+})

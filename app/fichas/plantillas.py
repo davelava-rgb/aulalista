@@ -160,7 +160,7 @@ FICHA_DE_LA_SESION = (
             ), encabezado="- Preguntas (por defecto, 3; repite este bloque por cada una)", sangria="  "),
         )),
         Seccion("6. Materiales de esta sesión", (
-            _c("materiales.cuales", "Cuáles se producen (por defecto, los cuatro)"),
+            _c("materiales.cuales", "Cuáles se producen (por defecto, los cinco)"),
         )),
     ),
 )
