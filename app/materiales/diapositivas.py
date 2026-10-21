@@ -41,7 +41,8 @@ MATERIAL = "Diapositivas"
 CLAVE = "diapositivas"
 VUELTAS_DEL_VERIFICADOR = comun.VUELTAS_DEL_VERIFICADOR
 FIJAS = contenido_.FIJAS                    # portada, idea central, «Aplícalo así», «Cuidado con» y cierre
-ARREGLOS_DE_DISENO = 3                      # decisión 32: correcciones del diseñador, contando la de la revisión visual
+ARREGLOS_DE_DISENO = 4                      # decisión 56: correcciones del diseñador, contando las de la revisión visual
+REVISIONES_VISUALES = 2                     # decisión 56: la primera, sobre el primer diseño que corre, aunque tenga fallas
 LIMITES = verificador.LIMITES[MATERIAL]
 FUENTE_LECTURA = "lectura aprobada"        # así se llama la lectura entre las fuentes de la revisión
 SECCIONES_DE_LA_SKILL = ("Reglas comunes", "Paso 3 · Vocabulario de la sesión", "Material 2 · Diapositivas")
@@ -252,6 +253,9 @@ CÓMO ENTREGAR LAS DIAPOSITIVAS
     «proceso»; algo que se repite → «ciclo»; un tema con sus partes → «mapa»; tipos, principios o roles → «tarjetas»;
     dos criterios → «matriz»; cifras → «cifras» o «grafica».
   - El texto de cada diapositiva aparece tal cual en la presentación: escríbelo como debe leerse.
+  - Cada diapositiva de «diapositivas» y la idea central muestran {contenido_.MAX_PALABRAS} palabras como máximo, sin contar
+    el título. Lo que no cabe va a las notas del profesor. Pasar un detalle a las notas no es una decisión: no lo
+    anotes en «decisiones».
 - Frases cortas, no párrafos: una idea por frase, que se lea de un vistazo.
 {{contenido}}
 - notas: en todas, también en la portada, la idea central, «Aplícalo así» y «Cuidado con». En «destacar», qué
@@ -514,6 +518,7 @@ def _validar(datos: dict, contenido_lectura: Lectura | None) -> tuple[Diapositiv
     else:
         problemas += _orden_de_la_lectura(contenido, contenido_lectura)
     problemas += _cifras_de_las_graficas(contenido, contenido_lectura)
+    problemas += _palabras(contenido)
     problemas += _frase_de_cierre(contenido)
     return (None if problemas else contenido), problemas
 
@@ -541,6 +546,22 @@ def _cifras_de_las_graficas(contenido: Diapositivas, contenido_lectura: Lectura 
         if faltan:
             problemas.append(f"FALLA · estructura · diapositiva {numero} («{d.titulo}»): usa cifras que no "
                              f"están en {de_donde}: {', '.join(faltan)}. Usa solo cifras de la fuente o cambia el recurso.")
+    return problemas
+
+
+def _palabras(contenido: Diapositivas) -> list[str]:
+    """Decisión 56: 40 palabras como máximo por diapositiva de concepto y en la idea central, sin el título. El
+    diseñador no puede acortar el texto: el contenido llega ya con el largo que se lee en una diapositiva."""
+    maximo = contenido_.MAX_PALABRAS
+    problemas = []
+    idea = sum(len(f.split()) for f in contenido.idea_central.frases)
+    if idea > maximo:
+        problemas.append(f"FALLA · estructura · idea central: tiene {idea} palabras; el máximo es {maximo}. Acórtala.")
+    for numero, d in enumerate(contenido.diapositivas, start=3):
+        palabras = sum(len(t.split()) for t in d.textos_visibles())
+        if palabras > maximo:
+            problemas.append(f"FALLA · estructura · diapositiva {numero} («{d.titulo}»): muestra {palabras} palabras; el "
+                             f"máximo es {maximo}, sin el título. Deja lo esencial y pasa el detalle a las notas.")
     return problemas
 
 
@@ -668,6 +689,7 @@ class _Trabajo:
         self.descartados: list[dict] = []
         self.revision_visual: list[dict] = []
         self.diseno: dict = {}
+        self.diseno_corrio = False       # el último programa del diseñador corrió y se midió (decisión 56)
         self.ajustes: list[str] = []     # recuadros con el margen recortado en el PowerPoint actual (decisión 39)
         self.usar_disenador = False
         self.vuelta = 0
@@ -736,7 +758,9 @@ class _Trabajo:
 
     async def probar_diseno(self, codigo: str, datos_: dict, carpeta: Path) -> list[str]:
         """Corre el programa del diseñador y revisa su PowerPoint: controles del diseño, medición con PowerPoint y
-        verificador. Devuelve los problemas; vacío si el diseño se puede entregar."""
+        verificador. Devuelve los problemas; vacío si el diseño se puede entregar. Si el programa corre, se mide
+        aunque falle un control: el arreglo y la revisión visual necesitan las imágenes (decisión 56)."""
+        self.medicion, self.diseno_corrio = None, False
         problemas = disenador.revisar_codigo(codigo)
         if problemas:
             return problemas
@@ -750,16 +774,24 @@ class _Trabajo:
             self.diseno["ajustes_sin_ia"] = self.diseno.get("ajustes_sin_ia", 0) + len(ajustes)
             self.avance(f"Diseño, ajuste sin IA: {'; '.join(ajustes)}.")
         problemas = disenador.revisar_pptx(self.rutas["pptx"], self.contenido, self.portada, self.identidad)
-        if problemas:
-            return problemas
         fallas, _ = self.medir_y_verificar()
+        self.diseno_corrio = True
         self.avance(f"Diseño medido con PowerPoint y verificado: {self.resultado.resumen()}.")
-        return [comun.texto_de(h) for h in fallas]
+        return problemas + [comun.texto_de(h) for h in fallas]
+
+    def imagenes_de(self, problemas: list[str]) -> list[tuple[str, bytes]]:
+        """Las imágenes de las diapositivas que nombran los problemas: el arreglo ve cómo quedaron (decisión 56)."""
+        imagenes = self.medicion.imagenes if self.medicion else []
+        nombres = titulos(self.contenido)
+        return [(f"Diapositiva {n} («{nombres[n - 1]}»), como se ve ahora", imagenes[n - 1].read_bytes())
+                for n in disenador.diapositivas_de(problemas, todas=False) if n <= min(len(imagenes), len(nombres))]
 
     async def disenar(self) -> None:
-        """Decisión 31: con el contenido aprobado, el agente diseñador escribe la presentación. Se corrige hasta
-        ARREGLOS_DE_DISENO veces, contando la ronda de la revisión visual. Si no queda bien, se entrega la versión
-        base del programa y el diseño queda como pendiente."""
+        """Decisiones 32 y 56: con el contenido aprobado, el agente diseñador escribe la presentación. Se corrige hasta
+        ARREGLOS_DE_DISENO veces, viendo las imágenes de las diapositivas con problemas. La revisión visual corre
+        sobre el primer diseño que se mide, aunque tenga fallas, y otra vez sobre un diseño sin fallas. Si al final
+        quedan diapositivas con fallas, esas van en su versión base y quedan como pendientes; si no se puede, se
+        entrega toda la versión base."""
         carpeta = self.rutas["contenido"].parent / "diseno"
         base = carpeta / "base.pptx"
         carpeta.mkdir(parents=True, exist_ok=True)
@@ -773,44 +805,70 @@ class _Trabajo:
         respuesta = await agente.consultar(disenador.pedido_de_diseno(total), tarea="diseno",
                                            esquema=disenador.ESQUEMA_DISENO, etapa="diseño", **comun_)
         partes, faltan = disenador.fusionar(None, respuesta, total)
-        bueno, visual_hecha, problemas = None, False, []
+        bueno, visuales, tecnicos = None, 0, []
+        self.revision_visual = []
         self.diseno = {"arreglos": 0, "notas": respuesta.get("notas", ""), "rondas": []}
         for intento in range(ARREGLOS_DE_DISENO + 1):
             codigo = disenador.armar(partes)
-            problemas = faltan or await self.probar_diseno(codigo, datos_, carpeta)
-            self._registrar_ronda("diseño" if intento == 0 else f"arreglo {intento}", problemas)
-            if not problemas:
+            self.diseno_corrio = False
+            tecnicos = faltan or await self.probar_diseno(codigo, datos_, carpeta)
+            self._registrar_ronda("diseño" if intento == 0 else f"arreglo {intento}", tecnicos)
+            if not tecnicos:
                 bueno = carpeta / "aprobado.pptx"
                 shutil.copyfile(self.rutas["pptx"], bueno)
                 ajustes_bueno = list(self.ajustes)
                 (carpeta / "aprobado.js").write_text(codigo, encoding="utf-8")
-                if visual_hecha:
-                    break
-                visual_hecha = True
-                problemas = await revision_visual(self)
-                self._registrar_ronda("revisión visual", problemas)
-                if not problemas:
-                    break
-            if intento == ARREGLOS_DE_DISENO:
+            propuestas = []
+            if self.diseno_corrio and visuales < REVISIONES_VISUALES and (not tecnicos or visuales == 0):
+                visuales += 1
+                propuestas = await revision_visual(self)
+                self._registrar_ronda(f"revisión visual {visuales}", propuestas)
+            problemas = tecnicos + propuestas
+            if not problemas or intento == ARREGLOS_DE_DISENO:
                 break
             self.diseno["arreglos"] += 1
             self.avance(f"Diseño: el diseñador corrige {comun.cuantos(len(problemas), 'problema')}.")
-            respuesta = await agente.consultar(disenador.pedido_de_arreglo(partes, problemas), tarea="arreglo_diseno",
-                                               esquema=disenador.ESQUEMA_DISENO, etapa=f"diseño, arreglo {intento + 1}",
-                                               **comun_)
+            imagenes = self.imagenes_de(problemas)
+            pedido = disenador.pedido_de_arreglo(partes, problemas, con_imagenes=bool(imagenes))
+            datos_pedido = {"tarea": "arreglo_diseno", "esquema": disenador.ESQUEMA_DISENO,
+                            "etapa": f"diseño, arreglo {intento + 1}", **comun_}
+            respuesta = (await agente.consultar_con_imagenes(pedido, imagenes, **datos_pedido) if imagenes
+                         else await agente.consultar(pedido, **datos_pedido))
             partes, faltan = disenador.fusionar(partes, respuesta, total)
-        if bueno is None:
-            self.diseno.update(estado="base", problemas=problemas)
-            self.avance("Diseño: no quedó sin fallas. Entrego la versión base y lo dejo como pendiente.")
-            shutil.copyfile(base, self.rutas["pptx"])
-            self.ajustes = ajustes_base
-        else:
+        if not tecnicos:
             self.diseno.update(estado="diseñada", problemas=[])
-            if problemas:                       # el último arreglo rompió algo: vale el último diseño sin fallas
-                shutil.copyfile(bueno, self.rutas["pptx"])
-                self.ajustes = ajustes_bueno
-        if bueno is None or problemas:
+            return
+        if bueno is not None:                   # el último arreglo rompió algo: vale el último diseño sin fallas
+            self.diseno.update(estado="diseñada", problemas=[])
+            shutil.copyfile(bueno, self.rutas["pptx"])
+            self.ajustes = ajustes_bueno
             await self.probar_diseno_final()
+            return
+        if self.diseno_corrio and await self.mezclar_con_base(base, tecnicos):
+            return
+        self.diseno.update(estado="base", problemas=tecnicos)
+        self.avance("Diseño: no quedó sin fallas. Entrego la versión base y lo dejo como pendiente.")
+        shutil.copyfile(base, self.rutas["pptx"])
+        self.ajustes = ajustes_base
+        await self.probar_diseno_final()
+
+    async def mezclar_con_base(self, base: Path, problemas: list[str]) -> bool:
+        """Decisión 56: las diapositivas que siguen con fallas van en su versión base y el resto queda diseñado.
+        Solo si cada falla nombra su diapositiva y la mezcla pasa la medición y el verificador."""
+        numeros = disenador.diapositivas_de(problemas)
+        if not numeros or len(numeros) >= self.contenido.total:
+            return False
+        if not disenador.con_diapositivas_base(self.rutas["pptx"], base, numeros):
+            return False
+        self.ajustes = []
+        fallas, _ = self.medir_y_verificar(explicar=False)
+        if fallas:
+            return False
+        self.diseno.update(estado="mixta", base=numeros, problemas=problemas)
+        self.avance(f"Diseño: {'las diapositivas' if len(numeros) > 1 else 'la diapositiva'} "
+                    f"{', '.join(map(str, numeros))} siguen con fallas y van en su versión base. El resto queda "
+                    "diseñado. Lo dejo como pendiente.")
+        return True
 
     def _registrar_ronda(self, ronda: str, problemas: list[str]) -> None:
         """Guarda los problemas de cada ronda del diseño, para saber cuáles se repiten y cuánto cuestan."""
@@ -882,7 +940,7 @@ Señala solo las que tienen un problema de diseño real:
 - monótona: se parece demasiado a las anteriores (texto o cajas una tras otra);
 - recurso: su contenido se entendería mejor con otro recurso (organigrama, proceso, ciclo, mapa, tarjetas, matriz,
   cifras, gráfica, columnas o pasos).
-No señales la portada ni el cierre. No propongas contenido nuevo: solo cómo mostrar lo que ya está.
+No propongas contenido nuevo: solo cómo mostrar lo que ya está.
 El texto está aprobado y se muestra completo: no propongas quitarlo, acortarlo ni pasarlo a las notas.
 Para cada una, di el número, el problema en una frase y una propuesta concreta (por ejemplo: «pasar a organigrama con
 el Consejo arriba», «repartir las frases en tres tarjetas»). Si ninguna tiene problemas, devuelve la lista vacía."""
@@ -898,8 +956,8 @@ ESQUEMA_VISUAL = {
 
 
 async def revision_visual(trabajo) -> list[str]:
-    """Decisión 31: Sonnet mira una sola vez las imágenes del diseño ya medido. Devuelve sus propuestas como
-    problemas para el diseñador. Sin imágenes (PowerPoint no las guardó) no se hace."""
+    """Decisiones 30 y 56: Opus mira las imágenes del diseño ya medido, todas, también la portada y el cierre.
+    Devuelve sus propuestas como problemas para el diseñador. Sin imágenes (PowerPoint no las guardó) no se hace."""
     imagenes = trabajo.medicion.imagenes if trabajo.medicion else []
     if not imagenes or trabajo.contenido is None:
         return []
@@ -910,8 +968,8 @@ async def revision_visual(trabajo) -> list[str]:
                         for n, ruta in enumerate(imagenes, start=1)],
         tarea="revision_visual", esquema=ESQUEMA_VISUAL, curso=trabajo.curso, sesion=f"S{trabajo.sesion}",
         material=CLAVE, etapa="revisión visual", consulta=trabajo.consulta)
-    cambios = [c for c in respuesta["cambios"] if 2 < c["numero"] < len(nombres)]
-    trabajo.revision_visual = cambios
+    cambios = [c for c in respuesta["cambios"] if 1 <= c["numero"] <= len(nombres)]
+    trabajo.revision_visual += cambios
     trabajo.avance(f"Revisión visual: {comun.cuantos(len(cambios), 'cambio')} de diseño.")
     return [f"DISEÑO · diapositiva {c['numero']} («{nombres[c['numero'] - 1]}»): {c['problema']} "
             f"Propuesta: {c['propuesta']}" for c in cambios]
@@ -1058,7 +1116,8 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, medir, disenar
     final = trabajo.contenido
     decisiones = final.decisiones if final else []
     sin_fuente = [f"Afirmación sin fuente: {d.texto}" for d in decisiones if d.tipo == "sin fuente"]
-    diseno_pendiente = [f"Diseño: {p}" for p in trabajo.diseno.get("problemas", [])] if trabajo.diseno.get("estado") == "base" else []
+    diseno_pendiente = ([f"Diseño: {p}" for p in trabajo.diseno.get("problemas", [])]
+                        if trabajo.diseno.get("estado") in ("base", "mixta") else [])
     estado_final = "con fallas" if trabajo.fallas else (
         "con pendientes" if pendientes or sin_fuente or diseno_pendiente else "verificada")
     if trabajo.resultado is not None:
@@ -1190,6 +1249,10 @@ def _entrega(material: dict) -> dict:
             f"{comun.cuantos(len(visual), 'cambio')} de diseño, que el diseñador aplicó: "
             + "; ".join(f"diapositiva {v['numero']}, {v['propuesta'].rstrip('.')}" for v in visual) + "."
             if visual else "sin cambios."))
+    elif diseno.get("estado") == "mixta":
+        valide.append(f"Diseño (decisión 56): lo dibujó el agente diseñador, salvo las diapositivas "
+                      f"{', '.join(map(str, diseno.get('base', [])))}, que siguieron con fallas y van en su versión "
+                      "base; lo que quedó abierto está en «Decisiones pendientes».")
     elif diseno.get("estado") == "base":
         valide.append("Diseño (decisión 32): el agente diseñador no logró una versión sin fallas. Entrego la versión base "
                       "del programa; lo que quedó abierto está en «Decisiones pendientes».")

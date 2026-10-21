@@ -575,30 +575,84 @@ def _con_disenador():
     return respuesta_por_partes(Diapositivas.model_validate(LIMPIAS).total)
 
 
+def _textos_del_pedido(prompt) -> tuple[str, list[str]]:
+    """El texto de un pedido con imágenes (consultar_con_imagenes) y sus etiquetas de imagen."""
+    async def leer():
+        return [m async for m in prompt]
+    contenido = asyncio.run(leer())[0]["message"]["content"]
+    textos = [c["text"] for c in contenido if c["type"] == "text"]
+    con_imagen = [contenido[i - 1]["text"] for i, c in enumerate(contenido) if c["type"] == "image"]
+    return textos[-1], con_imagen
+
+
+VISUAL_VACIA = {"cambios": []}
+
+
 def test_con_el_contenido_aprobado_el_disenador_dibuja_y_la_revision_visual_pide_un_arreglo(con_lectura):
     diseno = _con_disenador()
     visual = {"cambios": [{"numero": 4, "problema": "Una tabla con mucho texto.", "propuesta": "Pasar a tarjetas."},
-                          {"numero": 1, "problema": "La portada.", "propuesta": "Nada."}]}   # la portada no se toca
+                          {"numero": 1, "problema": "La portada sin fuerza.", "propuesta": "Título más grande."}]}
     material, consulta = generar(con_lectura, LIMPIAS, medir=medir_con_imagenes, disenar=True,
-                                 despues=(diseno, visual, diseno))
+                                 despues=(diseno, visual, diseno, VISUAL_VACIA))
     assert material["estado"] == "verificada", material.get("problemas")
     assert material["diseno"]["estado"] == "diseñada" and material["diseno"]["arreglos"] == 1
     assert consulta.llamadas[2]["options"].output_format["schema"] == disenador_esquema()
     sistema = consulta.llamadas[2]["options"].system_prompt
     assert "module.exports = async (h)" in Path(sistema["path"]).read_text(encoding="utf-8")
     assert consulta.llamadas[4]["options"].system_prompt == sistema           # el mismo archivo: se lee de caché
-    assert consulta.llamadas[2]["options"].model == "claude-opus-5-5"
-    assert consulta.llamadas[4]["options"].model == "claude-sonnet-5-5"       # el arreglo es una corrección
+    # Decisión 56: el diseño, la revisión visual y los arreglos van con Opus.
+    assert {consulta.llamadas[n]["options"].model for n in (2, 3, 4, 5)} == {"claude-opus-5-5"}
     rondas = [r["ronda"] for r in material["diseno"]["rondas"]]
-    assert rondas == ["diseño", "revisión visual", "arreglo 1"]
-    arreglo = consulta.llamadas[4]["prompt"]
+    assert rondas == ["diseño", "revisión visual 1", "arreglo 1", "revisión visual 2"]
+    arreglo, imagenes = _textos_del_pedido(consulta.llamadas[4]["prompt"])
     assert "DISEÑO · diapositiva 4 («Qué valora más»): Una tabla con mucho texto. Propuesta: Pasar a tarjetas." in arreglo
-    assert "La portada." not in arreglo and "PROGRAMA ACTUAL, POR PARTES:" in arreglo
-    assert material["revision_visual"] == [visual["cambios"][0]]
+    assert "DISEÑO · diapositiva 1" in arreglo and "PROGRAMA ACTUAL, POR PARTES:" in arreglo   # la portada también
+    assert "Míralas para encontrar la causa" in arreglo
+    assert imagenes == ["Diapositiva 1 («Portada»), como se ve ahora", "Diapositiva 4 («Qué valora más»), como se ve ahora"]
+    assert material["revision_visual"] == visual["cambios"]
     entrega = {s["clave"]: s["lineas"] for s in material["entrega"]["secciones"]}
     assert any("lo dibujó el agente diseñador con 1 ícono" in l for l in entrega["valide"])
     assert any("Revisión visual de las imágenes" in l and "Pasar a tarjetas" in l for l in entrega["valide"])
     assert len(Presentation(diapositivas.archivos(con_lectura, 1)["pptx"]).slides) == 15
+
+
+def _diseno_con_texto_ajeno(numero: int) -> dict:
+    """El diseño de prueba con una frase inventada en la diapositiva `numero`: un control la rechaza siempre."""
+    diseno = _con_disenador()
+    return {**diseno, "diapositivas": [
+        {**d, "codigo": d["codigo"] + ("\nh.pres.slides[h.pres.slides.length - 1].addText('Scrum nació en Japón en "
+                                       "1986 y hoy lo usan todas las empresas del mundo.', { x: 0.5, y: 6.5, w: 9, "
+                                       "h: 0.5, fontSize: 14 });" if d["numero"] == numero else "")}
+        for d in diseno["diapositivas"]]}
+
+
+def test_la_revision_visual_corre_aunque_el_primer_diseno_tenga_fallas_y_el_arreglo_ve_las_imagenes(con_lectura):
+    """Decisión 56: la primera revisión visual no espera un diseño sin fallas, y el arreglo recibe la imagen de cada
+    diapositiva con problemas."""
+    material, consulta = generar(con_lectura, LIMPIAS, medir=medir_con_imagenes, disenar=True,
+                                 despues=(_diseno_con_texto_ajeno(3), VISUAL_VACIA, _con_disenador(), VISUAL_VACIA))
+    assert material["diseno"]["estado"] == "diseñada", material.get("problemas")
+    rondas = [r["ronda"] for r in material["diseno"]["rondas"]]
+    assert rondas == ["diseño", "revisión visual 1", "arreglo 1", "revisión visual 2"]
+    arreglo, imagenes = _textos_del_pedido(consulta.llamadas[4]["prompt"])
+    assert "Scrum nació en Japón" in arreglo
+    assert imagenes == ["Diapositiva 3 («El Manifiesto Ágil»), como se ve ahora"]
+
+
+def test_las_diapositivas_que_siguen_con_fallas_van_en_su_version_base_y_el_resto_queda_disenado(con_lectura):
+    """Decisión 56: ya no es todo o nada."""
+    malo = _diseno_con_texto_ajeno(3)
+    material, consulta = generar(con_lectura, LIMPIAS, medir=medir_con_imagenes, disenar=True,
+                                 despues=(malo, VISUAL_VACIA, *(malo,) * diapositivas.ARREGLOS_DE_DISENO))
+    assert material["diseno"]["estado"] == "mixta" and material["diseno"]["base"] == [3]
+    assert material["estado"] == "con pendientes"
+    assert any("Diseño: FALLA · diseño · diapositiva 3" in p for p in material["problemas"])
+    presentacion = Presentation(diapositivas.archivos(con_lectura, 1)["pptx"])
+    textos = [" ".join(f.text_frame.text for f in s.shapes if f.has_text_frame) for s in presentacion.slides]
+    assert "Scrum nació en Japón" not in textos[2] and "EL MANIFIESTO ÁGIL" in textos[2]   # la versión base
+    assert "EL MANIFIESTO ÁGIL" not in textos[3] and "Qué valora más" in textos[3]           # el diseño
+    entrega = {s["clave"]: s["lineas"] for s in material["entrega"]["secciones"]}
+    assert any("salvo las diapositivas 3" in l for l in entrega["valide"])
 
 
 def test_si_el_diseno_no_queda_bien_se_entrega_la_version_base(con_lectura):
@@ -711,6 +765,38 @@ def test_no_se_reanuda_si_las_fichas_cambiaron(con_lectura):
     with pytest.raises(diapositivas.NoSePuedeEmpezar):
         asyncio.run(diapositivas.reanudar(con_lectura, "scrum", 1, consulta=consulta_en_secuencia(),
                                           medir=medir_sin_desbordes, disenar=False))
+
+
+def test_una_diapositiva_de_concepto_muestra_40_palabras_como_maximo():
+    """Decisión 56: el diseñador no puede acortar el texto, así que el contenido llega con el largo de una diapositiva."""
+    largas = copy.deepcopy(LIMPIAS)
+    largas["diapositivas"][0]["frases"] = [" ".join(["palabra"] * 41)]
+    largas["idea_central"]["frases"] = [" ".join(["idea"] * 41)]
+    _, problemas = diapositivas._validar(largas, None)
+    assert any("diapositiva 3" in p and "muestra 4" in p and "el máximo es 40" in p for p in problemas), problemas
+    assert any("idea central: tiene 41 palabras; el máximo es 40" in p for p in problemas)
+    justas = copy.deepcopy(LIMPIAS)
+    justas["diapositivas"][0]["frases"] = [" ".join(["palabra"] * 30)]
+    assert not [p for p in diapositivas._validar(justas, None)[1] if "palabras" in p]
+
+
+def test_la_version_base_muestra_la_introduccion_de_las_columnas_y_el_titulo_de_la_tabla(tmp_path):
+    """La versión base es la que se entrega cuando falla el diseño: tampoco puede omitir texto."""
+    datos = copy.deepcopy(LIMPIAS)
+    datos["diapositivas"][0] = diapositiva(MANIFIESTO, "Dos miradas", "columnas", frases=["Dos formas de verlo."],
+                                           columnas=[{"titulo": "Antes", "frases": ["Plan fijo."]},
+                                                     {"titulo": "Ahora", "frases": ["Plan que cambia."]}])
+    datos["diapositivas"][1] = diapositiva(MANIFIESTO, "Los valores", "tabla", frases=[],
+                                           tabla={"titulo": "Valores del manifiesto", "encabezados": ["Valor", "Frente a"],
+                                                  "filas": [["Personas", "Procesos"]]})
+    contenido = Diapositivas.model_validate(datos)
+    identidad = estilo.Identidad(**estilo.PALETA_SOBRIA, tipografia="Calibri", logo=None)
+    ruta = generador.generar_diapositivas(contenido, identidad, Portada("Scrum Master con IA", "Sesión 1", "Diapositivas"),
+                                          tmp_path / "S1_Diapositivas.pptx")
+    p = Presentation(ruta)
+    textos = [" ".join(f.text_frame.text for f in s.shapes if f.has_text_frame) for s in p.slides]
+    assert "Dos formas de verlo." in textos[2]
+    assert "Valores del manifiesto" in textos[3]
 
 
 def test_la_revision_visual_no_propone_quitar_texto_ni_pasarlo_a_las_notas():

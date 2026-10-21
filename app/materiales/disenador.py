@@ -10,6 +10,8 @@ pptxgenjs que dibuja ese contenido, con íconos y la identidad visual de la fich
 La medición con PowerPoint, el verificador y la revisión visual corren después, en diapositivas.py.
 """
 
+import copy
+import io
 import json
 import os
 import re
@@ -29,8 +31,9 @@ from app.materiales.docx import Portada, lineas_de_contacto
 from app.materiales.estilo import Identidad
 
 LETRA_MINIMA = 12                       # puntos (decisión 32)
-PALABRAS_DE_UNA_ETIQUETA = 4            # «EJEMPLO», «1 · Qué es el gobierno de datos», «Cuidado con»
+PALABRAS_DE_UNA_ETIQUETA = 8            # «EJEMPLO», «Hoy» frente a «Con agilidad» (decisión 56)
 SEGUNDOS_MAXIMOS = 180
+MEDIO_MILIMETRO = 18000                 # EMU: la base mide 33,867 cm y pptxgenjs, 13,333 pulgadas
 EJECUTOR = RAIZ / "app" / "disenador" / "ejecutar.js"
 NODE_MODULES = RAIZ / "node_modules"
 PROHIBIDO = re.compile(
@@ -106,7 +109,7 @@ CÓMO ES EL PROGRAMA
   función async sin parámetros que crea esa sola diapositiva con h.pres.addSlide() y usa lo definido en «comun».
 - No uses require, import, process, fs, fetch ni nada fuera de «h». Un programa que los use se rechaza.
 - «h» trae:
-  - h.pres: la presentación de pptxgenjs, ya en 16:9 (10 × 5,625 pulgadas). Crea cada diapositiva con
+  - h.pres: la presentación de pptxgenjs, ya en 16:9 (13,333 × 7,5 pulgadas; h.ancho y h.alto). Crea cada diapositiva con
     h.pres.addSlide() y agrega texto, formas, tablas, gráficas e imágenes con su API.
   - h.colores: principal, acento, advertencia, fondo, texto, blanco y gris, en hexadecimal sin «#». Usa SOLO estos
     colores. Para un tono más suave usa «transparency» en el relleno, no otro color.
@@ -137,26 +140,32 @@ EL TEXTO
   notas y no agregues afirmaciones. Solo los encabezados de una tabla se pueden omitir, si la composición los deja
   claros.
 - Solo puedes agregar etiquetas cortas de {etiqueta} palabras como máximo: «EJEMPLO», «Primer principio», «vs»,
-  números de paso, el número de diapositiva.
+  «Hoy» frente a «Con agilidad», números de paso, el número de diapositiva. Una etiqueta nombra o ubica; nunca afirma
+  algo nuevo sobre el tema.
 - Puedes unir con « · » textos del contenido o de la portada y una etiqueta corta: «1 · Qué es el gobierno de
   datos», el pie con el curso y la sesión. Los números y los separadores no cuentan como palabras.
 - El «tipo» de cada diapositiva del contenido es una sugerencia: elige la composición que mejor muestre su contenido.
 
 EL DISEÑO
-- Varía las composiciones: no repitas la misma dos veces seguidas. Combina, por ejemplo: tarjetas con ícono y título;
-  dos columnas con un círculo «vs» entre ellas; un diagrama radial con la idea al centro; una línea o espectro con dos
-  extremos; pasos numerados con círculos; un recuadro de cita destacada sobre el color principal; una tabla con
-  encabezado de color; un panel lateral con la idea clave; un organigrama; cifras grandes.
-- Íconos en casi todas las diapositivas: dentro de un círculo del color principal o junto al título de cada tarjeta.
-- Jerarquía clara: arriba, una etiqueta pequeña en mayúsculas con el número y el nombre del bloque, en el color de
-  acento; debajo, el título; abajo, un pie discreto con el curso y la sesión, y el número de diapositiva.
-- Etiquetas en forma de píldora (ROUNDED_RECTANGLE con el color de acento) para «EJEMPLO», «Primer principio», etc.
-- Resalta en negrita y en color las palabras clave de una frase.
-- Portada y cierre: fondo del color principal, título grande en blanco, una composición gráfica con íconos a un lado,
-  el docente y el contacto. La idea central, sobre el color principal también.
-- «Cuidado con» lleva el color de advertencia y un ícono de alerta; «Aplícalo así», pasos numerados.
-- Aire: márgenes de 0,4 pulgadas como mínimo y espacio entre los bloques. Ningún texto puede salirse de su recuadro:
-  calcula el alto según el largo del texto y el tamaño de letra. Títulos de 22 a 28 puntos; texto de {minimo} a 16.
+Reglas fijas:
+- Solo los colores y la tipografía de la ficha. «Cuidado con» lleva el color de advertencia.
+- Letra de {minimo} puntos o más. Ningún texto puede salirse de su recuadro: calcula el alto según el largo del texto
+  y el tamaño de letra.
+- Márgenes de 0,4 pulgadas como mínimo y espacio entre los bloques.
+Lo demás lo decides tú, como un diseñador de presentaciones:
+- Cada diapositiva tiene un punto focal: lo más importante se ve primero, grande y con contraste.
+- Elige la composición por el contenido y varíala a lo largo de la presentación. Ideas, no obligaciones: tarjetas con
+  ícono, dos columnas con un «vs», un diagrama radial, una línea con dos extremos, pasos numerados, una cita
+  destacada sobre el color principal, una tabla con encabezado de color, un panel lateral con la idea clave, un
+  organigrama, cifras grandes.
+- El tamaño de letra sigue a la jerarquía: una frase destacada o una cifra puede ir muy grande (hasta 44 puntos); los
+  títulos, de 24 a 36; el cuerpo, lo más grande que quepa con aire.
+- Usa íconos cuando ayuden a entender o a ubicar, no por llenar.
+- Si te sirven, una etiqueta con el bloque arriba del título, un pie con el curso y la sesión, el número de
+  diapositiva y etiquetas en forma de píldora para «EJEMPLO». No son obligatorios.
+- Puedes resaltar en negrita o en color las palabras clave de una frase.
+- Portada, idea central y cierre: composiciones con más fuerza visual que el resto, con el docente y el contacto en la
+  portada.
 """
 
 
@@ -186,9 +195,11 @@ def pedido_de_diseno(total: int) -> str:
     ])
 
 
-def pedido_de_arreglo(partes: "Partes", problemas: list[str]) -> str:
+def pedido_de_arreglo(partes: "Partes", problemas: list[str], con_imagenes: bool = False) -> str:
     return "\n".join([
         "Corrige el programa según la guía y los datos de tus instrucciones.",
+        *(["Arriba van las imágenes de las diapositivas con problemas, como se ven ahora. Míralas para encontrar la "
+           "causa de cada problema antes de cambiar el código."] if con_imagenes else []),
         "",
         "PROGRAMA ACTUAL, POR PARTES:",
         "// comun", partes.comun,
@@ -382,6 +393,70 @@ def _texto_de_la_diapositiva(diapositiva) -> set[str]:
             for grafica in figura.chart.plots:
                 textos += [str(c) for c in grafica.categories] + [s.name or "" for s in grafica.series]
     return set(re.findall(r"\w+", _normal(" ".join(textos))))
+
+
+def diapositivas_de(problemas: list[str], todas: bool = True) -> list[int]:
+    """Los números de diapositiva que nombran los problemas. Con `todas`, vacío si algún problema no nombra
+    ninguna: una falla del documento entero (la cantidad, un programa que no corre) no se arregla por diapositiva."""
+    numeros = [re.findall(r"diapositiva (\d+)", p, flags=re.I) for p in problemas]
+    if todas and not all(numeros):
+        return []
+    return sorted({int(n) for lista in numeros for n in lista})
+
+
+def _con_geometria(forma) -> None:
+    """Un marcador toma su geometría del diseño de la diapositiva. Copiado fuera de él, sin marcador, necesita la
+    suya: un rectángulo, como el título de la versión base."""
+    propiedades = forma.find(qn("p:spPr"))
+    if propiedades is None or propiedades.find(qn("a:prstGeom")) is not None or propiedades.find(qn("a:custGeom")) is not None:
+        return
+    geometria = propiedades.makeelement(qn("a:prstGeom"), {"prst": "rect"})
+    geometria.append(geometria.makeelement(qn("a:avLst"), {}))
+    posicion = propiedades.find(qn("a:xfrm"))
+    if posicion is not None:
+        posicion.addnext(geometria)
+    else:
+        propiedades.insert(0, geometria)
+
+
+def con_diapositivas_base(ruta: Path, base: Path, numeros: list[int]) -> bool:
+    """Decisión 56: cambia en el PowerPoint del diseño las diapositivas `numeros` por las de la versión base, con sus
+    formas e imágenes. Las notas quedan: son las del contenido en las dos. Devuelve False sin tocar nada si las dos
+    presentaciones no tienen el mismo tamaño y la misma cantidad, o si una diapositiva base tiene una gráfica."""
+    destino, origen = Presentation(ruta), Presentation(base)
+    mismo_tamano = (abs(destino.slide_width - origen.slide_width) <= MEDIO_MILIMETRO
+                    and abs(destino.slide_height - origen.slide_height) <= MEDIO_MILIMETRO)
+    if not mismo_tamano or len(destino.slides) != len(origen.slides) or not all(1 <= n <= len(origen.slides) for n in numeros):
+        return False
+    for n in numeros:
+        fuente, meta = origen.slides[n - 1], destino.slides[n - 1]
+        nuevas = {}
+        for clave, relacion in fuente.part.rels.items():
+            tipo = relacion.reltype.rsplit("/", 1)[-1]
+            if tipo in ("slideLayout", "notesSlide"):
+                continue
+            if relacion.is_external or tipo != "image":
+                return False
+            _, nuevas[clave] = meta.part.get_or_add_image_part(io.BytesIO(relacion.target_part.blob))
+        arbol = meta.shapes._spTree
+        for elemento in list(arbol)[2:]:            # los dos primeros son las propiedades del grupo
+            arbol.remove(elemento)
+        fondo = meta._element.cSld.bg
+        if fondo is not None:
+            meta._element.cSld.remove(fondo)
+        for elemento in list(fuente.shapes._spTree)[2:]:
+            copia = copy.deepcopy(elemento)
+            for marcador in list(copia.iter(qn("p:ph"))):   # el título base es un marcador de su propio diseño
+                forma = marcador.getparent().getparent().getparent()
+                marcador.getparent().remove(marcador)
+                _con_geometria(forma)
+            for nodo in copia.iter():
+                for atributo in (qn("r:embed"), qn("r:link"), qn("r:id")):
+                    if nodo.get(atributo) in nuevas:
+                        nodo.set(atributo, nuevas[nodo.get(atributo)])
+            arbol.append(copia)
+    destino.save(ruta)
+    return True
 
 
 def _notas_del_contenido(contenido: Diapositivas) -> list[str]:

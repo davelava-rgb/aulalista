@@ -741,6 +741,18 @@ def _introduccion(diapositiva, identidad: Identidad, frases: list[str], arriba, 
     return arriba + alto_frases + Cm(0.2), alto - alto_frases - Cm(0.2)
 
 
+def _titulo_de_tabla(diapositiva, identidad: Identidad, titulo: str, arriba, alto):
+    """El título de la tabla, arriba de ella, en el color principal. Devuelve el espacio que queda."""
+    alto_titulo = Cm(0.9)
+    marco = _caja(diapositiva, MARGEN, arriba, CUERPO_ANCHO, alto_titulo)
+    marco.margin_top = marco.margin_bottom = 0
+    marco.vertical_anchor = MSO_ANCHOR.MIDDLE
+    corrida = marco.paragraphs[0].add_run()
+    corrida.text = titulo
+    _letra(corrida, identidad, TAMANO_MINIMO, estilo.para_texto(identidad.principal), negrita=True)
+    return arriba + alto_titulo, alto - alto_titulo
+
+
 def _de_concepto(presentacion, identidad: Identidad, d: Diapositiva, avance: tuple[int, int]) -> None:
     diapositiva = _nueva(presentacion)
     _titulo(diapositiva, d.titulo, identidad, d.bloque, avance)
@@ -757,6 +769,7 @@ def _de_concepto(presentacion, identidad: Identidad, d: Diapositiva, avance: tup
         recuadro(diapositiva, identidad, MARGEN, arriba + (alto - medida[1]) // 2, CUERPO_ANCHO, alto, d.frases,
                  titulo="Ejemplo", color_borde=identidad.acento, medida=medida)
     elif d.tipo == "columnas":
+        arriba, alto = _introduccion(diapositiva, identidad, d.frases, arriba, alto)
         ancho = (CUERPO_ANCHO - SEPARACION) // 2
         # Las dos columnas con la misma letra y el mismo alto, para que se comparen a la vista.
         medidas = [medida_de_recuadro(c.frases, ancho, alto, c.titulo, base=26) for c in d.columnas]
@@ -772,6 +785,8 @@ def _de_concepto(presentacion, identidad: Identidad, d: Diapositiva, avance: tup
             marco = _caja(diapositiva, MARGEN, arriba, CUERPO_ANCHO, alto_frases)
             _escribir(marco, d.frases, identidad, tamano_que_cabe(d.frases, CUERPO_ANCHO, alto_frases, 24))
             arriba, alto = arriba + alto_frases, alto - alto_frases
+        if d.tabla.titulo:
+            arriba, alto = _titulo_de_tabla(diapositiva, identidad, d.tabla.titulo, arriba, alto)
         tabla(diapositiva, identidad, d.tabla, arriba, alto)
     _notas(diapositiva, d.notas)
 

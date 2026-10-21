@@ -274,7 +274,8 @@ def test_las_etiquetas_y_el_pie_unidos_con_punto_medio_se_aceptan(tmp_path, cont
 
 
 def test_un_texto_ajeno_unido_con_punto_medio_sigue_siendo_ajeno(tmp_path, contenido):
-    malo = DISENO.replace("`${i + 1} · Bloque`", "`${i + 1} · Scrum · nació en Japón en 1986 y lo usan`")
+    malo = DISENO.replace("`${i + 1} · Bloque`",
+                          "`${i + 1} · Scrum · nació en Japón en 1986 y hoy lo usan todas las empresas`")
     corrida, salida = correr(tmp_path, contenido, malo)
     assert corrida.ok, corrida.error
     assert "nació en Japón" in " ".join(disenador.revisar_pptx(salida, contenido, PORTADA, IDENTIDAD))
@@ -307,3 +308,30 @@ def test_el_texto_que_el_diseno_quita_o_pasa_a_las_notas_vuelve_al_disenador(tmp
     assert corrida.ok, corrida.error
     problemas = " ".join(disenador.revisar_pptx(salida, contenido, PORTADA, IDENTIDAD))
     assert f"falta el texto «{contenido.aplicalo.frases[0][:120]}»" in problemas
+
+
+# ---------- Decisión 56 ----------
+
+def test_una_etiqueta_de_hasta_ocho_palabras_se_acepta(tmp_path, contenido):
+    bien = DISENO.replace("`${i + 1} · Bloque`", "`${i + 1} · Lo que el equipo mira cada día aquí`")
+    corrida, salida = correr(tmp_path, contenido, bien)
+    assert corrida.ok, corrida.error
+    assert disenador.revisar_pptx(salida, contenido, PORTADA, IDENTIDAD) == []
+
+
+def test_el_diseno_tiene_el_tamano_de_la_version_base(tmp_path, contenido):
+    """Así una diapositiva base puede reemplazar a una diseñada sin cambiar de escala."""
+    from app.materiales import pptx as generador
+    corrida, salida = correr(tmp_path, contenido)
+    assert corrida.ok, corrida.error
+    diseno = Presentation(salida)
+    assert abs(diseno.slide_width - generador.ANCHO) <= disenador.MEDIO_MILIMETRO
+    assert abs(diseno.slide_height - generador.ALTO) <= disenador.MEDIO_MILIMETRO
+
+
+def test_diapositivas_de_lee_los_numeros_de_los_problemas():
+    problemas = ["FALLA · diseño · diapositiva 9: el texto «x» no está tal cual.",
+                 "FALLA · desborde · S1_Diapositivas.pptx · diapositiva 15: Diapositiva 15 («Y»): no cabe."]
+    assert disenador.diapositivas_de(problemas) == [9, 15]
+    assert disenador.diapositivas_de([*problemas, "FALLA · diseño · hay 14 diapositivas; deben ser 15."]) == []
+    assert disenador.diapositivas_de([*problemas, "FALLA · diseño · el programa no corrió"], todas=False) == [9, 15]

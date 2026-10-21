@@ -226,11 +226,16 @@ async def consultar_con_imagenes(
     etapa: str,
     sesion: str = "-",
     material: str = "-",
+    sistema: Path | None = None,
     consulta: Consulta = query,
 ) -> dict:
     """Pedido con imágenes PNG y respuesta en JSON validado contra `esquema`. Mismo envío que leer_imagen:
-    cada imagen va precedida de su etiqueta, y el pedido va al final. Sin herramientas."""
-    opciones = opciones_base(tarea, leer_clave(), output_format={"type": "json_schema", "schema": esquema})
+    cada imagen va precedida de su etiqueta, y el pedido va al final. Sin herramientas. Con `sistema`, como en
+    consultar: el mensaje de sistema se lee de ese archivo y se guarda en caché."""
+    extra = {"output_format": {"type": "json_schema", "schema": esquema}}
+    if sistema is not None:
+        extra["system_prompt"] = {"type": "file", "path": str(sistema)}
+    opciones = opciones_base(tarea, leer_clave(), **extra)
     contenido = []
     for etiqueta, imagen in imagenes:
         contenido.append({"type": "text", "text": etiqueta})

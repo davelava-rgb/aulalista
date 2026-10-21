@@ -44,14 +44,14 @@ async function main() {
   if (typeof disenar !== "function") throw new Error("El diseño debe exportar una función: module.exports = async (h) => { ... }");
 
   const pres = new pptxgen();
-  pres.layout = "LAYOUT_16x9";          // 10 × 5,625 pulgadas
+  pres.layout = "LAYOUT_WIDE";          // 13,333 × 7,5 pulgadas: el tamaño de la versión base (decisión 56)
   pres.theme = { headFontFace: datos.tipografia, bodyFontFace: datos.tipografia };
   const iconosUsados = new Set();
 
   const h = Object.freeze({
     pres,
-    ancho: 10,
-    alto: 5.625,
+    ancho: 13.333,
+    alto: 7.5,
     colores: Object.freeze({ ...datos.colores }),
     fuente: datos.tipografia,
     minimo: datos.letra_minima,

@@ -119,8 +119,7 @@ TIPOS_DE_DIAPOSITIVA = TIPOS_DE_TEXTO + TIPOS_GRAFICOS
 ELEMENTOS_POR_TIPO = {"proceso": (3, 6), "ciclo": (3, 6), "organigrama": (2, 5), "mapa": (3, 6), "matriz": (4, 4),
                       "tarjetas": (2, 6), "grafica": (2, 6), "cifras": (1, 3)}
 CON_CIFRAS = ("grafica", "cifras")
-MAX_PALABRAS = 30          # por diapositiva de concepto, sin el título (decisión 30)
-MAX_TABLAS = 2
+MAX_PALABRAS = 40          # por diapositiva de concepto y en la idea central, sin el título (decisión 56)
 
 
 class Notas(BaseModel):

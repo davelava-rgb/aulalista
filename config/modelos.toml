@@ -69,10 +69,11 @@ modelo = "claude-sonnet-5-5"
 tope_usd = 0.40
 max_turns = 15
 
-# Revisión visual de las diapositivas: mira la imagen de cada una y propone cambios de diseño (decisión 30).
+# Revisión visual de las diapositivas: mira la imagen de cada una y propone cambios de diseño (decisiones 30 y 56).
+# Con Opus: es la mirada de diseñador que le falta al programa (decisión 56).
 [revision_visual]
-modelo = "claude-sonnet-5-5"
-tope_usd = 0.60
+modelo = "claude-opus-5-5"
+tope_usd = 1.50
 max_turns = 3
 
 # Corrección de las diapositivas que nombran los problemas (desborde, palabras, diseño): devuelve solo esas
@@ -105,10 +106,10 @@ tope_usd = 4.00
 max_turns = 3
 esfuerzo = "medium"
 
-# Arreglos del diseñador: corrige solo las diapositivas que nombran los problemas. Es una corrección, así que va
-# con Sonnet, como las demás correcciones (decisión 41).
+# Arreglos del diseñador: corrige solo las diapositivas que nombran los problemas, viendo su imagen. Va con Opus,
+# como el diseño: con Sonnet, los arreglos no veían la causa de un desborde (decisión 56).
 [arreglo_diseno]
-modelo = "claude-sonnet-5-5"
-tope_usd = 1.00
+modelo = "claude-opus-5-5"
+tope_usd = 2.00
 max_turns = 3
 esfuerzo = "medium"
