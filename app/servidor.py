@@ -549,9 +549,9 @@ MATERIALES = {
     laboratorio.CLAVE: {"modulo": laboratorio, "numero": 3, "titulo": "Laboratorio y archivos de práctica",
                         "corto": "Laboratorio", "el": "el laboratorio", "plural": False, "o": "o", "lo": "lo",
                         "aprobado": "Laboratorio aprobado.", "generar": "Generar laboratorio"},
-    # Fase 8a de la decisión 57: el contenido y su vista; sin revisor independiente hasta la fase 8b.
+    # Decisión 57: el contenido validado y su vista (fases 8a y 8b). La página del alumno llega en la fase 8c.
     actividad.CLAVE: {"modulo": actividad, "numero": 4, "titulo": "Actividad web", "corto": "Actividad",
-                      "el": "la actividad web", "plural": False, "o": "a", "lo": "la", "revisor": False,
+                      "el": "la actividad web", "plural": False, "o": "a", "lo": "la",
                       "aprobado": "Actividad web aprobada.", "generar": "Generar actividad web"},
 }
 

@@ -45,14 +45,16 @@ def posibles_inconsistencias(bloques: list[Bloque]) -> list[str]:
 
 LECTURA, DIAPOSITIVAS, LABORATORIO = "Lectura", "Diapositivas", "Laboratorio"
 GUIA, PRACTICA, EVALUACION = "Guía del profesor", "Práctica interactiva", "Evaluación"
-TODOS = frozenset({LECTURA, DIAPOSITIVAS, LABORATORIO, GUIA, PRACTICA, EVALUACION})
+ACTIVIDAD = "Actividad web"   # PLAN.md §0, decisión 57: preguntas cerradas, sin ejercicios que se ejecuten
+TODOS = frozenset({LECTURA, DIAPOSITIVAS, LABORATORIO, GUIA, PRACTICA, ACTIVIDAD, EVALUACION})
 CON_EJERCICIOS = frozenset({LABORATORIO, GUIA, PRACTICA, EVALUACION})
 LO_REVISA_EL_PROGRAMA = frozenset()   # el verificador y las pruebas del diseño: no van a la IA
 SIN_LECTURA_NI_DIAPOSITIVAS = TODOS - {LECTURA, DIAPOSITIVAS}   # PLAN.md §0, decisión 20
 
 # Las cuatro preguntas por bloque. La segunda y la cuarta son para ejercicios y pasos que el alumno ejecuta:
 # la lectura y las diapositivas solo responden la primera y la tercera (PLAN.md §0, decisión 20).
-CAMPOS_POR_MATERIAL = {LECTURA: ["que_puede_hacer", "dos_lecturas"], DIAPOSITIVAS: ["que_puede_hacer", "dos_lecturas"]}
+CAMPOS_POR_MATERIAL = {LECTURA: ["que_puede_hacer", "dos_lecturas"], DIAPOSITIVAS: ["que_puede_hacer", "dos_lecturas"],
+                       ACTIVIDAD: ["que_puede_hacer", "dos_lecturas"]}
 
 
 def campos_de(material: str) -> list[str]:

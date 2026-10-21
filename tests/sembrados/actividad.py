@@ -102,3 +102,24 @@ CASOS = [
         {"texto": "Tres", "explicacion": "Son tres.", "categoria": ""})), "es «opcion_unica» y trae «elementos»"),
     ("pocos pasos", _con(lambda d: d["pasos"].pop()), "Pasos: tiene 3; van de 4 a 6"),
 ]
+
+
+def _con_porcentajes(filas) -> dict:
+    """El caso con una tabla de cifras y su porcentaje del total."""
+    def cambio(d):
+        d["caso"]["tablas"].append({"titulo": "Pedidos por canal", "encabezados": ["Canal", "Pedidos", "Parte del total"],
+                                    "filas": filas})
+    return _con(cambio)
+
+
+CON_PORCENTAJES_LIMPIA = _con_porcentajes(
+    [["Tienda", "60", "63 %"], ["Teléfono", "35", "37 %"], ["Total", "95", "100 %"]])
+
+CASOS += [
+    ("porcentaje mal calculado", _con_porcentajes(
+        [["Tienda", "60", "70 %"], ["Teléfono", "35", "30 %"], ["Total", "95", "100 %"]]),
+     "en «Tienda», «Parte del total» dice 70 %, pero 60 de 95 es el 63 %"),
+    ("porcentajes que no suman cien", _con_porcentajes(
+        [["Tienda", "60", "63 %"], ["Teléfono", "35", "37 %"], ["Total", "95", "90 %"]]),
+     "la fila «Total» dice 90 % en «Parte del total», pero las filas suman 100"),
+]

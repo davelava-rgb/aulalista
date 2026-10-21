@@ -1,21 +1,25 @@
-"""Actividad web: el contenido como datos, sus revisiones sin IA y una vista para revisarlo (PLAN.md §0, decisión 57).
+"""Actividad web: el contenido como datos, su validación en dos pasadas y una vista para revisarlo (PLAN.md §0,
+decisión 57; fases 8a y 8b del plan).
 
-Fase 8a del plan. Flujo:
+Flujo:
 1. Comprueba las fichas y, si la sesión produce la lectura, que esté aprobada: la actividad sale de ella.
 2. El agente redacta el contenido: el caso, los pasos y las preguntas cerradas con sus explicaciones y puntos.
 3. Un programa revisa lo que el esquema no puede: de 4 a 6 pasos, una sola respuesta correcta, una explicación en
-   cada opción, ninguna respuesta abierta y las filas «Total» de las tablas que suman.
-4. El generador crea la vista del contenido en HTML y el verificador la revisa. Esta actividad sí muestra puntos;
-   los tiempos siguen siendo FALLA. Las fallas se corrigen hasta VUELTAS_DEL_VERIFICADOR veces.
-5. Entrega en el formato del SPEC §8. El profesor la aprueba desde la página.
+   cada opción, ninguna respuesta abierta, y las sumas y los porcentajes de las tablas del caso.
+4. Primera pasada: el generador crea la vista del contenido en HTML y el verificador la revisa. Esta actividad sí
+   muestra puntos; los tiempos siguen siendo FALLA. Las fallas se corrigen hasta VUELTAS_DEL_VERIFICADOR veces.
+5. Segunda pasada: la revisión del contenido con IA, por bloque, contra la lectura aprobada, las fuentes y las fichas.
+   Una sola corrección; después, el verificador y la revisión solo de los bloques que cambiaron (decisión 22).
+6. Entrega en el formato del SPEC §8. El profesor la aprueba desde la página. El revisor independiente es opcional.
 
-La revisión del contenido con IA llega en la fase 8b y el diseño de la página del alumno, en la 8c.
+El diseño de la página del alumno llega en la fase 8c.
 """
 
 import asyncio
 import html
 import json
 import re
+import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -23,9 +27,10 @@ from pydantic import ValidationError
 
 from app import agente, entrega, skill, tokens
 from app.fichas import almacen, referencia, verificacion
-from app.materiales import comun, estilo, lectura
+from app.materiales import comun, diapositivas, estilo, lectura
 from app.materiales.contenido import ESQUEMA_ACTIVIDAD, PUNTOS_POR_PREGUNTA, Actividad, Lectura, Pregunta
-from app.validacion import excel, verificador
+from app.validacion import excel, pasada2, revision, revisor, verificador
+from app.validacion.pasajes import Corpus
 
 MATERIAL = "Actividad web"
 CLAVE = "actividad"
@@ -43,7 +48,7 @@ class NoSePuedeEmpezar(RuntimeError):
 
 
 class NoSePuedeRevisar(RuntimeError):
-    """El revisor independiente de la actividad llega con la fase 8b."""
+    """El revisor independiente opcional necesita una actividad generada sin fallas abiertas."""
 
 
 class NoSePuedeAprobar(RuntimeError):
@@ -60,6 +65,7 @@ def archivos(carpeta_curso: Path, sesion: int) -> dict[str, Path]:
         "contenido": trabajo / "contenido.json",
         "explicaciones": trabajo / "explicaciones.json",
         "sistema": trabajo / "sistema_correccion.txt",
+        "revision": trabajo / "revisor",
     }
 
 
@@ -93,10 +99,16 @@ def _lectura_lista(carpeta_curso: Path, sesion: int) -> list[str]:
     return []
 
 
-def _texto_de_la_lectura(carpeta_curso: Path, sesion: int) -> list[str]:
+def lectura_aprobada(carpeta_curso: Path, sesion: int) -> Lectura | None:
     if not usa_lectura(carpeta_curso, sesion):
+        return None
+    return Lectura.model_validate(comun.leer_json(lectura.archivos(carpeta_curso, sesion)["contenido"]))
+
+
+def _texto_de_la_lectura(carpeta_curso: Path, sesion: int) -> list[str]:
+    contenido = lectura_aprobada(carpeta_curso, sesion)
+    if contenido is None:
         return []
-    contenido = Lectura.model_validate(comun.leer_json(lectura.archivos(carpeta_curso, sesion)["contenido"]))
     lineas = ["", "LECTURA APROBADA DE LA SESIÓN (la actividad sale de ella):", *contenido.idea_central]
     for b in contenido.bloques:
         lineas += [f"## {b.subtitulo}", *b.parrafos, f"Ejemplo: {b.ejemplo.titulo}", *b.ejemplo.parrafos]
@@ -262,24 +274,49 @@ def _numero(celda: str, decimal: str) -> float | None:
         return None
 
 
-def _revisar_totales(actividad: Actividad, decimal: str) -> list[str]:
-    """Cada fila «Total» es la suma de las demás filas de su tabla, columna por columna."""
-    fallas = []
-    for tabla in actividad.caso.tablas:
-        totales = [f for f in tabla.filas if TOTAL.match(f[0])]
-        filas = [f for f in tabla.filas if not TOTAL.match(f[0])]
-        for total in totales:
-            for columna in range(1, len(tabla.encabezados)):
-                escrito = _numero(total[columna], decimal)
-                valores = [_numero(f[columna], decimal) for f in filas]
-                if escrito is None or not valores or None in valores:
-                    continue
-                suma = sum(valores)
-                if abs(suma - escrito) > 0.005 * max(1, abs(escrito)):
-                    fallas.append(_falla(f"Caso, tabla «{tabla.titulo}»",
-                                         f"la fila «{total[0]}» dice {total[columna]} en «{tabla.encabezados[columna]}», "
-                                         f"pero las filas suman {suma:g}."))
+def _es_porcentaje(filas: list[list[str]], columna: int) -> bool:
+    celdas = [f[columna] for f in filas if f[columna].strip()]
+    return bool(celdas) and all("%" in c for c in celdas)
+
+
+def _revisar_tabla(tabla, decimal: str) -> list[str]:
+    """Cada fila «Total» es la suma de las demás, columna por columna. Una columna de porcentajes sale de la columna
+    de cifras que tiene a su izquierda: cada fila es su parte del total. Los porcentajes admiten un punto de
+    redondeo."""
+    fallas, donde = [], f"Caso, tabla «{tabla.titulo}»"
+    totales = [f for f in tabla.filas if TOTAL.match(f[0])]
+    filas = [f for f in tabla.filas if not TOTAL.match(f[0])]
+    columnas = range(1, len(tabla.encabezados))
+    porcentajes = {c for c in columnas if _es_porcentaje(filas, c)}
+    for total in totales:
+        for columna in columnas:
+            escrito = _numero(total[columna], decimal)
+            valores = [_numero(f[columna], decimal) for f in filas]
+            if escrito is None or not valores or None in valores:
+                continue
+            suma = sum(valores)
+            margen = 1 if columna in porcentajes else 0.005 * max(1, abs(escrito))
+            if abs(suma - escrito) > margen:
+                fallas.append(_falla(donde, f"la fila «{total[0]}» dice {total[columna]} en «{tabla.encabezados[columna]}», "
+                                            f"pero las filas suman {suma:g}."))
+    for columna in sorted(porcentajes):
+        base = next((c for c in range(columna - 1, 0, -1) if c not in porcentajes), None)
+        if base is None:
+            continue
+        cifras = [_numero(f[base], decimal) for f in filas]
+        partes = [_numero(f[columna], decimal) for f in filas]
+        if None in cifras or None in partes or not sum(cifras):
+            continue
+        for fila, cifra, parte in zip(filas, cifras, partes):
+            calculado = cifra / sum(cifras) * 100
+            if abs(calculado - parte) > 1:
+                fallas.append(_falla(donde, f"en «{fila[0]}», «{tabla.encabezados[columna]}» dice {fila[columna]}, pero "
+                                            f"{fila[base]} de {sum(cifras):g} es el {calculado:.0f} %."))
     return fallas
+
+
+def _revisar_totales(actividad: Actividad, decimal: str) -> list[str]:
+    return [f for tabla in actividad.caso.tablas for f in _revisar_tabla(tabla, decimal)]
 
 
 def revisar(actividad: Actividad, decimal: str = ",") -> list[str]:
@@ -380,6 +417,58 @@ def vista_html(actividad: Actividad, identidad: estilo.Identidad, decimal: str =
             + "".join(partes) + "</body></html>")
 
 
+# ---------- Segunda pasada: la revisión del contenido ----------
+
+# Marcas del programa dentro de los bloques: dicen qué opción es correcta. No son texto del material.
+CORRECTA, INCORRECTA, EXPLICACION = "[opción correcta]", "[opción incorrecta]", "[explicación]"
+
+INDICACIONES_DE_REVISION = (
+    f"Este material es una actividad de preguntas cerradas. Su fuente es la lectura aprobada (en los pasajes, "
+    f"«{diapositivas.FUENTE_LECTURA}»), además de las fuentes del curso y las fichas. El caso de la actividad es "
+    "ficticio: sus nombres y cifras no son «dato inventado» si no contradicen las fichas. Las líneas entre corchetes "
+    f"son marcas del programa: {CORRECTA} e {INCORRECTA} van antes del texto de cada opción, y {EXPLICACION} antes de "
+    "su explicación. El texto de una opción incorrecta afirma algo falso a propósito: no es error. Su explicación, en "
+    "cambio, siempre debe ser verdadera: compara cada explicación con la lectura, también la de una opción incorrecta. "
+    "Sí es error: una opción marcada correcta que contradice la lectura o el caso; una opción marcada incorrecta que "
+    "también es una respuesta defendible («ambigüedad»: la pregunta tendría dos respuestas); una explicación que "
+    "contradice la lectura («contradice la fuente»); o una pregunta que no se puede responder con el caso y la "
+    "lectura («vacío»). En «oracion», copia el texto sin la marca.")
+
+
+def _marca(correcta: bool) -> str:
+    return CORRECTA if correcta else INCORRECTA
+
+
+def bloques_de(contenido: Actividad) -> list[pasada2.Bloque]:
+    """La actividad por bloques: la presentación con el caso, y cada paso con sus preguntas."""
+    separar = verificador.verificar.separar_oraciones
+
+    def oraciones(*textos):
+        return [o for t in textos if t for o in separar(t)]
+
+    caso = contenido.caso
+    filas = [" | ".join(f) for t in caso.tablas for f in [t.encabezados, *t.filas]]
+    filas += [f"{g.titulo}: " + "; ".join(f"{c} = " + ", ".join(f"{s.nombre} {s.valores[i]:g}" for s in g.series)
+                                          for i, c in enumerate(g.categorias)) for g in caso.graficos]
+    bloques = [pasada2.Bloque("Presentación y caso", oraciones(contenido.titulo, *contenido.presentacion, caso.titulo,
+                                                                 *caso.parrafos) + filas)]
+    for i, paso in enumerate(contenido.pasos, start=1):
+        lineas = oraciones(paso.titulo, *paso.introduccion, paso.recuerde)
+        for p in paso.preguntas:
+            lineas += oraciones(p.enunciado)
+            for o in p.opciones:
+                lineas += [_marca(o.correcta), *oraciones(o.texto), EXPLICACION, *oraciones(o.explicacion)]
+            if p.tipo == "ordenar":
+                lineas.append("[orden correcto]")
+            for e in p.elementos:
+                lineas += ([f"[categoría: {e.categoria}]"] if p.tipo == "clasificar" else []) + oraciones(e.texto)
+                lineas += [EXPLICACION, *oraciones(e.explicacion)]
+            for x in p.pares:
+                lineas += [f"[par] {x.izquierda} → {x.derecha}", EXPLICACION, *oraciones(x.explicacion)]
+        bloques.append(pasada2.Bloque(f"Paso {i}. {paso.titulo}", lineas))
+    return bloques
+
+
 # ---------- Generación ----------
 
 def _decimal(carpeta_curso: Path, sesion: int) -> str:
@@ -394,6 +483,7 @@ def _limpiar(rutas: dict[str, Path]) -> None:
             rutas[clave].unlink(missing_ok=True)
         except OSError:
             pass
+    shutil.rmtree(rutas["revision"], ignore_errors=True)
 
 
 async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.query) -> dict:
@@ -432,14 +522,30 @@ class _Trabajo:
         self.contenido: Actividad | None = None
         self.explicaciones: dict[str, str] = {}
         self.historial: list[dict] = []
-        self.correcciones = {"verificador": 0}
+        self.correcciones = {"verificador": 0, "revisión": 0}
         self.datos_agregados: list[str] = []
         self.resultado = None
         self.fallas: list[str] = []
+        self.descartados: list[dict] = []
+        self.lectura = lectura_aprobada(carpeta_curso, sesion)
+        self.consulta = consulta
         self.vuelta = 0
 
     def avance(self, texto: str) -> None:
         _avance(self.carpeta_curso, self.sesion, texto)
+
+    def corpus(self) -> Corpus:
+        """Las fuentes del curso y las fichas, más la lectura aprobada como una fuente más."""
+        extras = [diapositivas.fuente_de_la_lectura(self.lectura)] if self.lectura is not None else []
+        return Corpus.del_curso(self.carpeta_curso, self.sesion, extras=extras)
+
+    async def revisar(self, bloques: list[pasada2.Bloque], etapa: str) -> revision.Resultado:
+        resultado = await revision.ejecutar(
+            bloques, corpus=self.corpus(), anclas=[p.model_dump() for p in self.contenido.pasajes],
+            curso=self.curso, sesion=self.sesion, material=CLAVE, nombre_material=MATERIAL, etapa=etapa,
+            indicaciones=INDICACIONES_DE_REVISION, consulta=self.consulta)
+        self.descartados += resultado.descartados
+        return resultado
 
     async def verificar(self) -> bool:
         """Revisa el contenido, genera la vista y corre el verificador. Corrige hasta VUELTAS_DEL_VERIFICADOR veces.
@@ -500,7 +606,9 @@ class _Trabajo:
 
 async def _generar(carpeta_curso, curso, sesion, rutas, consulta) -> dict:
     inicio = tokens.lineas(curso)
-    skill.comprobar(secciones=SECCIONES_DE_LA_SKILL)   # antes de gastar tokens
+    # Antes de gastar tokens: la skill tiene todo lo que usarán la redacción, la revisión y el revisor.
+    skill.comprobar(secciones=SECCIONES_DE_LA_SKILL + pasada2.SECCIONES_DE_LA_SKILL + revisor.SECCIONES_DE_LA_SKILL,
+                    subsecciones=revisor.SUBSECCIONES_DE_LA_SKILL)
     trabajo = _Trabajo(carpeta_curso, curso, sesion, rutas, consulta)
     verificador.verificar.leer_configuracion(verificador.configuracion_del_material(trabajo.carpeta_sesion, MATERIAL))
     _limpiar(rutas)
@@ -508,23 +616,33 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta) -> dict:
     trabajo.avance("Leyendo la lectura y las fichas, y redactando la actividad web.")
     trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion), tarea="redaccion",
                                            esquema=ESQUEMA_ACTIVIDAD, etapa="redacción", **trabajo.comun)
-    await trabajo.verificar()
+    # Primera pasada: el verificador. La IA solo revisa una actividad sin fallas mecánicas (SPEC §9).
+    errores: list[revision.Error] = []
+    revisados = 0
+    if await trabajo.verificar():
+        # Segunda pasada: la revisión del contenido, por bloque, con una sola corrección.
+        errores, revisados = await comun.revisar_y_corregir(trabajo, bloques_de)
 
+    pendientes = [e for e in errores if e.estado == "pendiente"]
     final = trabajo.contenido
     decisiones = final.decisiones if final else []
     sin_fuente = [f"Afirmación sin fuente: {d.texto}" for d in decisiones if d.tipo == "sin fuente"]
-    estado_final = "con fallas" if trabajo.fallas else ("con pendientes" if sin_fuente else "verificada")
+    estado_final = "con fallas" if trabajo.fallas else ("con pendientes" if pendientes or sin_fuente else "verificada")
     if trabajo.resultado is not None:
         excel.solo_hallazgos(rutas["excel"], "Sección")
         excel.agregar_historial(rutas["excel"], [
             {**h, "resolucion": f"Enviado a corrección en la vuelta {h['vuelta']}." + ("" if trabajo.fallas else " Resuelto.")}
-            for h in trabajo.historial] + comun.filas_de_decisiones(decisiones, rutas["vista"].name))
+            for h in trabajo.historial]
+            + comun.filas_de_revision(errores, trabajo.descartados, rutas["vista"].name)
+            + comun.filas_de_decisiones(decisiones, rutas["vista"].name))
     material = _actualizar(
         carpeta_curso, sesion,
         estado=estado_final,
         resumen=trabajo.resultado.resumen() if trabajo.resultado else "",
-        problemas=trabajo.fallas + sin_fuente,
+        problemas=trabajo.fallas + [e.describir() for e in pendientes] + sin_fuente,
         correcciones=trabajo.correcciones,
+        revision={"bloques": revisados, "errores": len(errores), "corregidos": sum(e.estado == "corregido" for e in errores),
+                  "pendientes": len(pendientes), "descartados": len(trabajo.descartados)},
         datos_agregados=trabajo.datos_agregados,
         avisos_de_diseno=trabajo.identidad.avisos,
         avisos_explicados=sum(1 for h in (trabajo.resultado.hallazgos if trabajo.resultado else [])
@@ -541,7 +659,8 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta) -> dict:
     )
     _actualizar(carpeta_curso, sesion, entrega=_entrega(material))
     trabajo.avance({"verificada": "Contenido de la actividad listo para tu aprobación.",
-                    "con pendientes": f"Contenido listo, con {comun.cuantos(len(sin_fuente), 'pendiente')} para que decidas.",
+                    "con pendientes": f"Contenido listo, con {comun.cuantos(len(pendientes) + len(sin_fuente), 'pendiente')} "
+                                      "para que decidas.",
                     "con fallas": "El contenido de la actividad quedó con fallas."}[estado_final])
     return _estado(carpeta_curso, sesion)
 
@@ -555,18 +674,33 @@ def _entrega(material: dict) -> dict:
         f"{material['pasos']} pasos, {material['preguntas']} preguntas y {material['puntaje_total']} puntos en total.",
         f"{archivos_['excel']}: el archivo de verificación, con la hoja Hallazgos.",
     ]
-    probe = ["Revisé cada pregunta con un programa: una sola respuesta correcta, una explicación en cada opción, "
-             "ninguna respuesta abierta y las filas «Total» del caso que suman."]
+    probe = ["Revisé cada pregunta con un programa: una sola respuesta correcta, una explicación en cada opción y "
+             "ninguna respuesta abierta. Rehice las sumas y los porcentajes de las tablas del caso."]
+    r = material.get("revision") or {}
     valide = [f"Verificador: {material['resumen']}." if material["resumen"] else "El verificador no llegó a correr.",
               *([f"Avisos explicados en la hoja Hallazgos: {material['avisos_explicados']}."]
                 if material.get("avisos_explicados") else []),
               *([f"Avisos informativos: {material['avisos_informativos']}. Están en la hoja Hallazgos; no obligan a corregir."]
                 if material.get("avisos_informativos") else []),
-              f"Fallas corregidas: {material['correcciones']['verificador']}.",
-              f"Costo de esta actividad: {material['costo']['llamadas']} llamadas, "
-              f"{material['costo']['costo_usd']:.2f} USD estimados."]
-    no_pude = ["La revisión del contenido con IA todavía no corre en la actividad: llega en la fase 8b del plan.",
-               "La página del alumno todavía no se diseña: llega en la fase 8c del plan."]
+              f"Fallas corregidas: {material['correcciones']['verificador']}."]
+    if r.get("bloques"):
+        texto = (f"Revisión del contenido contra la lectura, las fuentes y las fichas: {comun.cuantos(r['bloques'], 'bloque')}, "
+                 f"{comun.cuantos(r['errores'], 'error')} con prueba")
+        if r["errores"]:
+            texto += f" ({comun.cuantos(r['corregidos'], 'corregido')} y {comun.cuantos(r['pendientes'], 'pendiente')})"
+        valide.append(texto + ".")
+        if r.get("descartados"):
+            valide.append(f"El programa descartó {comun.cuantos(r['descartados'], 'error')} de la revisión porque su "
+                          "prueba no existe.")
+    rev = material.get("revisor") or {}
+    if rev:
+        valide.append(f"Revisor independiente (lo pediste tú): {comun.cuantos(rev['hallazgos'], 'hallazgo')} con prueba"
+                      + (f", {rev['descartados']} descartados" if rev.get("descartados") else "")
+                      + f". Costo: {rev['costo']['costo_usd']:.2f} USD estimados.")
+    valide.append(f"Costo de esta actividad: {material['costo']['llamadas']} llamadas, "
+                  f"{material['costo']['costo_usd']:.2f} USD estimados.")
+    no_pude = (["La revisión del contenido no corrió porque quedaron fallas del verificador."] if not r.get("bloques") else [])
+    no_pude.append("La página del alumno todavía no se diseña: llega en la fase 8c del plan.")
     decisiones = material["decisiones"]
     decidi = [d["texto"] for d in decisiones if d["tipo"] == "decisión"]
     decidi += [f"Dato nuevo del caso, agregado a la ficha del curso: {d}" for d in material["datos_agregados"]]
@@ -577,8 +711,48 @@ def _entrega(material: dict) -> dict:
                             pendientes=material["problemas"], no_pude=no_pude, decidi=decidi)
 
 
+# ---------- Revisor independiente opcional (PLAN.md §0, decisión 22) ----------
+
 async def revisar_con_revisor(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.query) -> dict:
-    raise NoSePuedeRevisar("El revisor independiente de la actividad web llega con la fase 8b del plan.")
+    """Una sesión nueva de Opus revisa la actividad ya generada. No corrige: lo que encuentra queda pendiente."""
+    material = _estado(carpeta_curso, sesion)
+    previo = material.get("estado")
+    if previo not in ("verificada", "con pendientes", "aprobada"):
+        raise NoSePuedeRevisar("El revisor independiente revisa una actividad generada y sin fallas del verificador.")
+    rutas = archivos(carpeta_curso, sesion)
+    contenido = Actividad.model_validate(comun.leer_json(rutas["contenido"]))
+    oraciones = comun.leer_json(rutas["verificacion_json"])["oraciones"]
+    inicio = tokens.lineas(curso)
+    _actualizar(carpeta_curso, sesion, estado="trabajando", previo=previo)
+    _avance(carpeta_curso, sesion, "Revisor independiente: una sesión nueva lee la actividad final, las fuentes y las fichas.")
+    try:
+        resultado = await revisor.ejecutar(
+            oraciones, ronda=1, carpeta=rutas["revision"] / "ronda_1", carpeta_curso=carpeta_curso, curso=curso,
+            sesion=sesion, material=CLAVE, nombre_material=MATERIAL, bloques=bloques_de(contenido), consulta=consulta)
+    except asyncio.CancelledError:
+        marcar_detenida(carpeta_curso, sesion)
+        raise
+    except Exception as error:
+        _avance(carpeta_curso, sesion, f"El revisor independiente se detuvo por un error: {error}")
+        _actualizar(carpeta_curso, sesion, estado=previo, previo="")
+        raise
+    hallazgos = resultado.hallazgos
+    excel.agregar_historial(rutas["excel"], [
+        {"nivel": "REVISOR", "seccion": rutas["vista"].name, "oracion": h.oracion, "regla": f"revisor independiente: {h.defecto}",
+         "detalle": f"{h.explicacion} Prueba: «{h.prueba}» ({h.fuente}).", "resolucion": "Pendiente: decides tú."}
+        for h in hallazgos] + [
+        {"nivel": "REVISOR", "seccion": rutas["vista"].name, "oracion": "", "regla": "revisor independiente: lista de verificación",
+         "detalle": f"{p['pregunta']} {p['detalle']}", "resolucion": "Informativo."} for p in resultado.lista_no])
+    material = _actualizar(
+        carpeta_curso, sesion, estado="con pendientes" if hallazgos else previo, previo="",
+        aprobada="" if hallazgos else material.get("aprobada", ""),
+        problemas=material.get("problemas", []) + [h.describir() for h in hallazgos],
+        revisor={"hallazgos": len(hallazgos), "descartados": len(resultado.descartados), "lista": len(resultado.lista_no),
+                 "costo": tokens.total(curso, sesion=f"S{sesion}", material=CLAVE, desde_linea=inicio)})
+    _actualizar(carpeta_curso, sesion, entrega=_entrega(material))
+    _avance(carpeta_curso, sesion, f"Revisor independiente: {comun.cuantos(len(hallazgos), 'hallazgo')} con prueba"
+            + (", pendientes para que decidas." if hallazgos else "."))
+    return _estado(carpeta_curso, sesion)
 
 
 def aprobar(carpeta_curso: Path, sesion: int) -> dict:

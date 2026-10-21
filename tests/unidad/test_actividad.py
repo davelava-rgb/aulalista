@@ -15,7 +15,7 @@ from app.materiales.contenido import Actividad
 from tests.conftest import consulta_en_secuencia
 from tests.sembrados.actividad import CASOS, LIMPIA, PUNTAJE_LIMPIO
 from tests.unidad.test_lectura import LIMPIA as LECTURA_LIMPIA
-from tests.unidad.test_lectura import cambios, sesion  # noqa: F401
+from tests.unidad.test_lectura import SIN_ERRORES, cambios, error, revision, sesion  # noqa: F401
 
 cliente = TestClient(servidor.app)
 
@@ -26,8 +26,10 @@ def lectura_aprobada(carpeta, numero=1):
     comun.actualizar(carpeta, numero, lectura.CLAVE, estado="aprobada", aprobada="2026-10-21T10:00:00")
 
 
-def generar(carpeta, *salidas):
-    consulta = consulta_en_secuencia(*salidas)
+def generar(carpeta, *salidas, revisar=True):
+    """revisar=True agrega al final la revisión del contenido sin errores (fase 8b). Si quedan fallas del
+    verificador, la revisión no corre y esa respuesta queda sin usar."""
+    consulta = consulta_en_secuencia(*salidas, *([SIN_ERRORES] if revisar else []))
     material = asyncio.run(actividad.generar(carpeta, "scrum", 1, consulta=consulta))
     return material, consulta
 
@@ -97,7 +99,7 @@ def test_la_ficha_ofrece_la_actividad_web_entre_los_materiales():
 
 # ---------- Generación ----------
 
-def test_un_contenido_limpio_queda_verificado_con_una_llamada(sesion):  # noqa: F811
+def test_un_contenido_limpio_queda_verificado_con_dos_llamadas(sesion):  # noqa: F811
     lectura_aprobada(sesion)
     material, consulta = generar(sesion, copy.deepcopy(LIMPIA))
     rutas = actividad.archivos(sesion, 1)
@@ -106,7 +108,9 @@ def test_un_contenido_limpio_queda_verificado_con_una_llamada(sesion):  # noqa: 
     assert (material["pasos"], material["preguntas"], material["puntaje_total"]) == (4, 5, PUNTAJE_LIMPIO)
     assert rutas["vista"].exists() and rutas["excel"].exists()
     assert json.loads(rutas["contenido"].read_text(encoding="utf-8"))["titulo"] == LIMPIA["titulo"]
-    assert len(consulta.llamadas) == 1   # sin revisión con IA hasta la fase 8b
+    assert len(consulta.llamadas) == 2   # redacción y revisión del contenido (decisión 22)
+    assert consulta.llamadas[1]["options"].model == "claude-sonnet-5-5"
+    assert material["revision"] == {"bloques": 5, "errores": 0, "corregidos": 0, "pendientes": 0, "descartados": 0}
     pedido, opciones = consulta.llamadas[0]["prompt"], consulta.llamadas[0]["options"]
     assert opciones.model == "claude-opus-5-5" and opciones.tools == ["Read", "Grep", "Glob"]
     assert "## Actividad web" in pedido and "Única excepción: la actividad web lleva puntos" in pedido
@@ -125,7 +129,7 @@ def test_un_tiempo_es_falla_y_se_corrige_por_oraciones(sesion):  # noqa: F811
     datos["presentacion"].append("La actividad dura 20 minutos.")
     material, consulta = generar(sesion, datos, cambios(("La actividad dura 20 minutos.", "")))
     assert material["estado"] == "verificada"
-    assert len(consulta.llamadas) == 2 and material["correcciones"] == {"verificador": 1}
+    assert len(consulta.llamadas) == 3 and material["correcciones"] == {"verificador": 1, "revisión": 0}
     assert "«oraciones»" in consulta.llamadas[1]["prompt"]
     assert "20 minutos" not in actividad.archivos(sesion, 1)["contenido"].read_text(encoding="utf-8")
 
@@ -146,7 +150,9 @@ def test_si_las_fallas_siguen_no_se_puede_aprobar(sesion):  # noqa: F811
     roto = copy.deepcopy(LIMPIA)
     roto["pasos"][0]["preguntas"][0]["opciones"][1]["correcta"] = True
     sigue = {"actividad": roto, "explicaciones": [], "datos_nuevos": []}
-    material, _ = generar(sesion, roto, *[copy.deepcopy(sigue) for _ in range(actividad.VUELTAS_DEL_VERIFICADOR)])
+    material, consulta = generar(sesion, roto, *[copy.deepcopy(sigue) for _ in range(actividad.VUELTAS_DEL_VERIFICADOR)],
+                                 revisar=False)
+    assert len(consulta.llamadas) == 1 + actividad.VUELTAS_DEL_VERIFICADOR   # con fallas, la revisión no corre
     assert material["estado"] == "con fallas"
     with pytest.raises(actividad.NoSePuedeAprobar):
         actividad.aprobar(sesion, 1)
@@ -170,10 +176,89 @@ def test_la_pagina_de_la_actividad_genera_y_abre_la_vista_en_el_navegador(sesion
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/actividad").text
     assert "<h1 id=\"t-actividad\">Actividad web</h1>" in pagina
     assert "S1_Actividad_Contenido.html" in pagina and "Aprobar la actividad web" in pagina
-    assert "Pedir revisor independiente" not in pagina   # llega en la fase 8b
+    assert "Pedir revisor independiente" in pagina
     respuesta = cliente.get("/cursos/scrum/sesiones/1/descargar/S1_Actividad_Contenido.html")
     assert respuesta.status_code == 200 and respuesta.headers["content-disposition"].startswith("inline")
     excel = cliente.get("/cursos/scrum/sesiones/1/descargar/S1_Actividad_Verificacion.xlsx")
     assert excel.headers["content-disposition"].startswith("attachment")
-    r = cliente.post("/cursos/scrum/sesiones/1/materiales/actividad/revisor", follow_redirects=False)
-    assert "revisor" in r.headers["location"] and actividad.estado(sesion, 1)["estado"] == "verificada"
+
+
+# ---------- Fase 8b: sumas y porcentajes del caso ----------
+
+def test_los_porcentajes_redondeados_no_son_falla():
+    from tests.sembrados.actividad import CON_PORCENTAJES_LIMPIA
+    assert actividad._validar(copy.deepcopy(CON_PORCENTAJES_LIMPIA), ",")[1] == []
+
+
+# ---------- Fase 8b: la revisión del contenido ----------
+
+def test_los_bloques_marcan_la_opcion_correcta_y_las_incorrectas():
+    bloques = actividad.bloques_de(Actividad.model_validate(LIMPIA))
+    assert [b.nombre for b in bloques] == ["Presentación y caso", "Paso 1. Reconozca los pilares",
+                                           "Paso 2. Revise el cierre de la semana", "Paso 3. Ordene la revisión",
+                                           "Paso 4. Relacione y clasifique"]
+    assert "Semana | Pedidos" in bloques[0].oraciones and "Total | 95" in bloques[0].oraciones
+    paso1 = bloques[1].oraciones
+    assert paso1[paso1.index("Tres") - 1] == actividad.CORRECTA
+    assert paso1[paso1.index("Dos") - 1] == actividad.INCORRECTA
+    assert paso1[paso1.index("Dos") + 1] == actividad.EXPLICACION   # la explicación se revisa aparte del texto
+    assert "[orden correcto]" in bloques[3].oraciones
+    assert "[categoría: Apertura]" in bloques[4].oraciones and "[par] Foco → Trabaja en un pedido a la vez." in bloques[4].oraciones
+
+
+def test_la_revision_compara_con_la_lectura_y_sabe_que_una_opcion_incorrecta_no_es_error(sesion):  # noqa: F811
+    lectura_aprobada(sesion)
+    _, consulta = generar(sesion, copy.deepcopy(LIMPIA))
+    pedido = consulta.llamadas[1]["prompt"]
+    assert "El texto de una opción incorrecta afirma algo falso a propósito: no es error." in pedido
+    assert "compara cada explicación con la lectura, también la de una opción incorrecta" in pedido
+    assert "[Paso 1. Reconozca los pilares]" in pedido and actividad.INCORRECTA in pedido
+    assert "(lectura aprobada ·" in pedido   # la lectura es una fuente más de la revisión
+
+
+def test_un_error_de_la_revision_se_corrige_y_se_confirma(sesion):  # noqa: F811
+    lectura_aprobada(sesion)
+    datos = copy.deepcopy(LIMPIA)
+    datos["pasos"][0]["preguntas"][0]["opciones"][0]["explicacion"] = "La lectura nombra cuatro pilares."
+    falla = error("La lectura nombra cuatro pilares.", "contradice la fuente", bloque="Paso 1. Reconozca los pilares",
+                  prueba="Los pilares de Scrum son tres.")
+    material, consulta = generar(sesion, datos, revision(falla),
+                                 cambios(("La lectura nombra cuatro pilares.", "La lectura nombra tres pilares.")))
+    assert material["estado"] == "verificada"
+    assert material["revision"]["errores"] == 1 and material["revision"]["corregidos"] == 1
+    assert material["correcciones"]["revisión"] == 1
+    assert len(consulta.llamadas) == 4   # redacción, revisión, corrección y confirmación del bloque que cambió
+    assert "[Paso 1. Reconozca los pilares]" in consulta.llamadas[3]["prompt"]
+    assert "[Presentación y caso]" not in consulta.llamadas[3]["prompt"]
+    filas = list(openpyxl.load_workbook(actividad.archivos(sesion, 1)["excel"])["Hallazgos"].iter_rows(values_only=True))
+    assert any(f[3] == "revisión: contradice la fuente" and f[5] == "Corregido y confirmado por la revisión." for f in filas)
+
+
+def test_lo_que_sigue_despues_de_la_correccion_queda_pendiente(sesion):  # noqa: F811
+    lectura_aprobada(sesion)
+    ambigua = error("Decide qué cambia la próxima semana.", "ambigüedad", bloque="Paso 2. Revise el cierre de la semana")
+    material, _ = generar(sesion, copy.deepcopy(LIMPIA), revision(ambigua),
+                          cambios(("Decide qué cambia la próxima semana.", "Decide un cambio para la próxima semana.")),
+                          revision({**ambigua, "oracion": "Decide un cambio para la próxima semana."}), revisar=False)
+    assert material["estado"] == "con pendientes"
+    assert material["revision"]["pendientes"] == 1
+    assert any("ambigüedad" in p for p in material["problemas"])
+    assert actividad.aprobar(sesion, 1)["estado"] == "aprobada"   # el profesor ya vio el pendiente
+
+
+def test_el_revisor_independiente_revisa_la_actividad_sin_corregir(sesion):  # noqa: F811
+    from app.validacion import pasada2
+    lectura_aprobada(sesion)
+    generar(sesion, copy.deepcopy(LIMPIA))
+    consulta = consulta_en_secuencia({"hallazgos": [], "bloques": [], "lista": []})
+    material = asyncio.run(actividad.revisar_con_revisor(sesion, "scrum", 1, consulta=consulta))
+    assert material["estado"] == "verificada" and material["revisor"]["hallazgos"] == 0
+    assert len(consulta.llamadas) == 1 and consulta.llamadas[0]["options"].model == "claude-opus-5-5"
+    assert "Revisor independiente (lo pediste tú): 0 hallazgos con prueba" in json.dumps(material["entrega"], ensure_ascii=False)
+    preguntas = pasada2.lista_de_verificacion("Actividad web")
+    assert preguntas and not any(p.startswith("¿Ejecutaste cada ejercicio") for p in preguntas)
+
+
+def test_el_revisor_no_revisa_una_actividad_con_fallas(sesion):  # noqa: F811
+    with pytest.raises(actividad.NoSePuedeRevisar):
+        asyncio.run(actividad.revisar_con_revisor(sesion, "scrum", 1, consulta=consulta_en_secuencia()))
