@@ -185,7 +185,11 @@ def pedido_de_redaccion(carpeta_curso: Path, sesion: int) -> str:
         _contexto(carpeta_curso, sesion),
         FORMATO,
         "TAREA: redacta el contenido de la actividad web de la sesión. Actúa como diseñador instruccional y editor senior.",
-        "La actividad refuerza lo que enseñó la lectura. Si necesitas un pasaje de una fuente, búscalo con Grep y léelo con Read.",
+        *(["La actividad refuerza lo que enseñó la lectura."] if usa_lectura(carpeta_curso, sesion) else [
+            "ESTA SESIÓN NO TIENE LECTURA: la actividad sale del material de referencia de la sesión (si lo hay), de las "
+            "fuentes del curso y de las fichas. Donde la skill dice «la lectura», entiende esas fuentes. Antes de "
+            "redactar, busca con Grep y lee con Read los pasajes que vas a usar, y anótalos en «pasajes»."]),
+        "Si necesitas un pasaje de una fuente, búscalo con Grep y léelo con Read.",
         "Antes de entregar, resuelve tú cada pregunta con los datos del caso: si admite dos respuestas, rediséñala.",
     ])
 
@@ -428,9 +432,18 @@ def vista_html(actividad: Actividad, identidad: estilo.Identidad, decimal: str =
 # Marcas del programa dentro de los bloques: dicen qué opción es correcta. No son texto del material.
 CORRECTA, INCORRECTA, EXPLICACION = "[opción correcta]", "[opción incorrecta]", "[explicación]"
 
+FUENTE_CON_LECTURA = (f"Su fuente es la lectura aprobada (en los pasajes, «{diapositivas.FUENTE_LECTURA}»), además "
+                      "de las fuentes del curso y las fichas.")
+FUENTE_SIN_LECTURA = ("Esta sesión no tiene lectura: su fuente es el material de referencia de la sesión, las fuentes "
+                      "del curso y las fichas. Donde abajo dice «la lectura», entiende esas fuentes.")
+
+
+def indicaciones_de_revision(con_lectura: bool) -> str:
+    return INDICACIONES_DE_REVISION.replace(FUENTE_CON_LECTURA, FUENTE_CON_LECTURA if con_lectura else FUENTE_SIN_LECTURA)
+
+
 INDICACIONES_DE_REVISION = (
-    f"Este material es una actividad de preguntas cerradas. Su fuente es la lectura aprobada (en los pasajes, "
-    f"«{diapositivas.FUENTE_LECTURA}»), además de las fuentes del curso y las fichas. El caso de la actividad es "
+    f"Este material es una actividad de preguntas cerradas. {FUENTE_CON_LECTURA} El caso de la actividad es "
     "ficticio: sus nombres y cifras no son «dato inventado» si no contradicen las fichas. Las líneas entre corchetes "
     f"son marcas del programa: {CORRECTA} e {INCORRECTA} van antes del texto de cada opción, y {EXPLICACION} antes de "
     "su explicación. El texto de una opción incorrecta afirma algo falso a propósito: no es error. Su explicación, en "
@@ -555,7 +568,7 @@ class _Trabajo:
         resultado = await revision.ejecutar(
             bloques, corpus=self.corpus(), anclas=[p.model_dump() for p in self.contenido.pasajes],
             curso=self.curso, sesion=self.sesion, material=CLAVE, nombre_material=MATERIAL, etapa=etapa,
-            indicaciones=INDICACIONES_DE_REVISION, consulta=self.consulta)
+            indicaciones=indicaciones_de_revision(self.lectura is not None), consulta=self.consulta)
         self.descartados += resultado.descartados
         return resultado
 
@@ -676,7 +689,8 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, disenar=True, 
     verificador.verificar.leer_configuracion(verificador.configuracion_del_material(trabajo.carpeta_sesion, MATERIAL))
     _limpiar(rutas)
 
-    trabajo.avance("Leyendo la lectura y las fichas, y redactando la actividad web.")
+    trabajo.avance("Leyendo " + ("la lectura" if trabajo.lectura is not None else "las fuentes") +
+                   " y las fichas, y redactando la actividad web.")
     trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion), tarea="redaccion",
                                            esquema=ESQUEMA_ACTIVIDAD, etapa="redacción", **trabajo.comun)
     # Primera pasada: el verificador. La IA solo revisa una actividad sin fallas mecánicas (SPEC §9).
@@ -710,6 +724,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, disenar=True, 
         problemas=trabajo.fallas + fallas_de_diseno + [e.describir() for e in pendientes] + sin_fuente,
         correcciones=trabajo.correcciones,
         diseno=trabajo.diseno,
+        con_lectura=trabajo.lectura is not None,
         revision={"bloques": revisados, "errores": len(errores), "corregidos": sum(e.estado == "corregido" for e in errores),
                   "pendientes": len(pendientes), "descartados": len(trabajo.descartados)},
         datos_agregados=trabajo.datos_agregados,
@@ -764,7 +779,8 @@ def _entrega(material: dict) -> dict:
                 if material.get("avisos_informativos") else []),
               f"Fallas corregidas: {material['correcciones']['verificador']}."]
     if r.get("bloques"):
-        texto = (f"Revisión del contenido contra la lectura, las fuentes y las fichas: {comun.cuantos(r['bloques'], 'bloque')}, "
+        contra = "la lectura, las fuentes y las fichas" if material.get("con_lectura", True) else "las fuentes y las fichas"
+        texto = (f"Revisión del contenido contra {contra}: {comun.cuantos(r['bloques'], 'bloque')}, "
                  f"{comun.cuantos(r['errores'], 'error')} con prueba")
         if r["errores"]:
             texto += f" ({comun.cuantos(r['corregidos'], 'corregido')} y {comun.cuantos(r['pendientes'], 'pendiente')})"

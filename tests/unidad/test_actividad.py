@@ -262,3 +262,46 @@ def test_el_revisor_independiente_revisa_la_actividad_sin_corregir(sesion):  # n
 def test_el_revisor_no_revisa_una_actividad_con_fallas(sesion):  # noqa: F811
     with pytest.raises(actividad.NoSePuedeRevisar):
         asyncio.run(actividad.revisar_con_revisor(sesion, "scrum", 1, consulta=consulta_en_secuencia()))
+
+
+# ---------- Sin lectura en la sesión ----------
+
+@pytest.fixture
+def sin_lectura(entorno):
+    """Curso con una fuente y una sesión que produce la actividad web, pero no la lectura."""
+    from app.fichas import flujo
+    from tests.fixtures import fichas as datos
+    from tests.unidad.test_fichas import con_fuente
+    entorno["env"].write_text("ANTHROPIC_API_KEY=sk-ant-de-prueba\n", encoding="utf-8")
+    carpeta = entorno["cursos"] / "scrum"
+    (carpeta / "fuentes").mkdir(parents=True)
+    (carpeta / "curso.json").write_text('{"nombre": "Scrum"}', encoding="utf-8")
+    con_fuente(carpeta)
+    almacen.guardar(carpeta, "curso", None, datos.ficha("curso", datos.CURSO))
+    flujo.confirmar_curso(carpeta)
+    almacen.guardar(carpeta, "sesion", 1, datos.ficha("sesion", {**datos.SESION, "materiales.cuales": "actividad web"}))
+    revisor_de_ejercicios = consulta_en_secuencia({"ejercicios": [
+        {"numero": n, "funciona_solo": True, "sin_llenar_a_mano": True, "motivo": "Cumple"} for n in (1, 2, 3)]})
+    asyncio.run(flujo.confirmar_sesion(carpeta, "scrum", 1, consulta=revisor_de_ejercicios))
+    return carpeta
+
+
+def test_sin_lectura_la_actividad_sale_de_las_fuentes_y_las_fichas(sin_lectura):
+    assert actividad.usa_lectura(sin_lectura, 1) is False
+    assert actividad.faltan(sin_lectura, 1) == {"ficha": [], "otros": []}
+    material, consulta = generar(sin_lectura, copy.deepcopy(LIMPIA))
+    assert material["estado"] == "verificada", material["problemas"]
+    redaccion, revision_ = consulta.llamadas[0]["prompt"], consulta.llamadas[1]["prompt"]
+    assert "ESTA SESIÓN NO TIENE LECTURA" in redaccion and "LECTURA APROBADA" not in redaccion
+    assert "La actividad refuerza lo que enseñó la lectura." not in redaccion
+    assert actividad.FUENTE_SIN_LECTURA in revision_ and actividad.FUENTE_CON_LECTURA not in revision_
+    assert "(lectura aprobada ·" not in revision_
+    entrega_ = json.dumps(material["entrega"], ensure_ascii=False)
+    assert "Revisión del contenido contra las fuentes y las fichas" in entrega_
+
+
+def test_con_lectura_la_revision_la_nombra_como_fuente(sesion):  # noqa: F811
+    lectura_aprobada(sesion)
+    _, consulta = generar(sesion, copy.deepcopy(LIMPIA))
+    assert actividad.FUENTE_CON_LECTURA in consulta.llamadas[1]["prompt"]
+    assert actividad.FUENTE_SIN_LECTURA not in consulta.llamadas[1]["prompt"]
