@@ -23,7 +23,7 @@
   </ol>
   {% endif %}
   {% if not puede_empezar %}
-  <p>Falta confirmar las fichas. Ningún material empieza sin ellas. Una ficha queda confirmada al guardarla completa.</p>
+  <p>Falta confirmar la ficha del curso. Ningún material empieza sin ella. Queda confirmada al guardarla completa.</p>
   {% endif %}
   {# El siguiente paso solo se dice si está en otra página: si es este material, ya lo dicen el recorrido y el botón. #}
   {% if siguiente.ancla != m.clave %}
@@ -139,12 +139,14 @@
     {% endif %}
     {% set bloqueado = not puede_empezar or m.faltan.ficha or m.faltan.otros or e.estado == "trabajando" %}
     <form method="post" action="{{ base }}" class="accion"
+          {% if ficha_por_preparar %}data-preparar="Preparando la ficha de la sesión… puede tardar unos minutos"{% endif %}
           {% if e.estado == "aprobada" %}data-confirmar="{{ m.el | capitalize }} ya {{ 'están' if m.plural else 'está' }} {{ forma(m, 'aprobad') }}. Si {{ m.lo }} generas de nuevo, AulaLista {{ m.lo }} reemplaza, gasta tokens y tendrás que aprobar{{ m.lo }} otra vez. ¿Generar de nuevo?"{% endif %}>
       <button type="submit" {% if bloqueado %}disabled aria-describedby="motivo-{{ m.clave }}"{% endif %}{% if generado or aprobable or m.reanudable %} class="secundario"{% endif %}>
         {{ 'Generar de nuevo' if e.estado else m.generar }}
       </button>
       <span class="nota" id="motivo-{{ m.clave }}">
-        {% if not puede_empezar %}Espera a que las dos fichas estén confirmadas.
+        {% if not puede_empezar %}Espera a que la ficha del curso esté confirmada.
+        {% elif ficha_por_preparar and e.estado != "trabajando" %}Antes de generar, AulaLista prepara el plan de la sesión, revisa sus ejercicios y confirma su ficha. {{ gasta(terminos) }} y tarda unos minutos más.
         {% elif m.faltan.ficha or m.faltan.otros %}Espera a que se complete lo de arriba.
         {% elif e.estado == "trabajando" %}Ya está en curso.
         {% elif m.gasto_corrida and m.costo_ref and m.costo_ref.sesion == sesion %}{{ gasta(terminos) }}, como la vez anterior (arriba). Tarda unos minutos.
@@ -169,6 +171,15 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+  // Generar con la ficha de la sesión sin confirmar tarda: el botón dice qué está haciendo (decisión 55).
+  document.querySelectorAll("form[data-preparar]").forEach((form) => form.addEventListener("submit", (evento) => {
+    if (evento.defaultPrevented) return;
+    const boton = form.querySelector("button[type=submit]");
+    boton.textContent = form.dataset.preparar;
+    setTimeout(() => { boton.disabled = true; }, 0);
+  }));
+</script>
 <script>
   // Mientras se trabaja en este material o en otro de la sesión, la página pide su versión nueva cada 5 segundos
   // y cambia solo lo que cambió: el avance se agrega al final y el foco y la lectura no se pierden.

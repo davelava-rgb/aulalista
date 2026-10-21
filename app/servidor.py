@@ -597,7 +597,9 @@ def _costo_de_referencia(carpeta, curso: str, sesion: int, clave: str, sesiones:
 def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False) -> dict:
     """Los materiales de una sesión con su indicador, y el siguiente paso. Con `detalle`, también lo que les
     falta y el costo de la última corrida (la página de la sesión)."""
-    puede_empezar = almacen.puede_empezar_material(carpeta, sesion)
+    # Basta la ficha del curso confirmada: la de la sesión se prepara y confirma sola al generar (decisión 55).
+    puede_empezar = almacen.cargar(carpeta, "curso")["confirmada"]
+    sesion_lista = puede_empezar and almacen.cargar(carpeta, "sesion", sesion)["confirmada"]
     incluidos = almacen.materiales_de_la_sesion(almacen.cargar(carpeta, "sesion", sesion))
     numeros = [s["numero"] for s in almacen.sesiones_del_curso(almacen.cargar(carpeta, "curso"))] if detalle else []
     materiales, siguiente = [], None
@@ -607,7 +609,7 @@ def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False
         incluido = clave in incluidos
         m = {**{k: v for k, v in datos.items() if k != "modulo"}, "clave": clave, "estado": estado,
              "incluido": incluido, "situacion": _situacion(datos, estado, incluido)}
-        faltan = modulo.faltan(carpeta, sesion) if puede_empezar and incluido else {"ficha": [], "otros": []}
+        faltan = modulo.faltan(carpeta, sesion) if sesion_lista and incluido else {"ficha": [], "otros": []}
         if detalle:
             reanudable = hasattr(modulo, "se_puede_reanudar") and modulo.se_puede_reanudar(carpeta, sesion)
             m |= {"faltan": faltan, "reanudable": reanudable,
@@ -618,7 +620,7 @@ def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False
             continue
         e, viejo = estado.get("estado"), estado.get("desactualizado")
         if not puede_empezar:
-            siguiente = {"texto": "Guarda completas las dos fichas: así quedan confirmadas.", "ancla": "", "corto": "Fichas"}
+            siguiente = {"texto": "Guarda completa la ficha del curso: así queda confirmada.", "ancla": "", "corto": "Ficha"}
         elif e == "trabajando":
             siguiente = {"texto": f"Espera: AulaLista trabaja en {datos['el']}.", "ancla": clave, "corto": datos["corto"]}
         elif e == "aprobada":
@@ -636,7 +638,8 @@ def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False
             siguiente = {"texto": f"Genera {datos['el']}.", "ancla": clave, "corto": datos["corto"]}
     if siguiente is None:
         siguiente = {"texto": "Los materiales de esta sesión están aprobados.", "ancla": "", "corto": "Listo"}
-    return {"puede_empezar": puede_empezar, "materiales": materiales, "siguiente": siguiente}
+    return {"puede_empezar": puede_empezar, "ficha_por_preparar": puede_empezar and not sesion_lista,
+            "materiales": materiales, "siguiente": siguiente}
 
 
 def _estado_de_ficha(confirmada: bool, existe: bool) -> dict:
@@ -840,9 +843,11 @@ def _recorrido(datos: dict, estado: dict) -> list[dict]:
     return [{"paso": p, "clase": c, "nota": n} for p, c, n in zip(PASOS, clases, notas)]
 
 
-def _listos(carpeta, sesion: int, material: dict, puede_empezar: bool) -> list[str]:
+def _listos(carpeta, sesion: int, material: dict, puede_empezar: bool, ficha_por_preparar: bool = False) -> list[str]:
     """Lo que ya se cumple para generar un material. Se muestra con ✓ junto a lo que falta, para que el profesor
     vea que el botón está listo por algo y no tenga que adivinarlo."""
+    if ficha_por_preparar:
+        return ["La ficha del curso está confirmada."]
     listos = ["Las dos fichas están confirmadas."] if puede_empezar else []
     if puede_empezar and not material["faltan"]["ficha"]:
         listos.append(f"La ficha de la sesión tiene lo que {'piden' if material['plural'] else 'pide'} {material['el']}.")
@@ -876,8 +881,9 @@ def ver_material(request: Request, curso: str, sesion: int, material: str, mensa
     return plantillas.TemplateResponse(request, "material.html", {
         "curso": curso, "nombre": _nombre(curso), "sesion": sesion, "mensaje": mensaje,
         "m": m, "recorrido": _recorrido(m, m["estado"]), "total": len(vista["materiales"]),
-        "listos": _listos(carpeta, sesion, m, vista["puede_empezar"]),
-        "puede_empezar": vista["puede_empezar"], "siguiente": vista["siguiente"],
+        "listos": _listos(carpeta, sesion, m, vista["puede_empezar"], vista["ficha_por_preparar"]),
+        "puede_empezar": vista["puede_empezar"], "ficha_por_preparar": vista["ficha_por_preparar"],
+        "siguiente": vista["siguiente"],
         "costo_revisor": tokens.ultima_corrida(curso, "revisor independiente"),
         "panel": _panel(carpeta, curso, f"{material}-{sesion}"),
     })
@@ -888,8 +894,20 @@ def generar_material(curso: str, sesion: int, material: str):
     modulo = _material(material)["modulo"]
     carpeta = _carpeta(curso)
     destino = _url_material(curso, sesion, material)
-    if not almacen.puede_empezar_material(carpeta, sesion):
-        return RedirectResponse(destino + "?mensaje=" + quote("Guarda completas las dos fichas antes de generar: así quedan confirmadas."), status_code=303)
+    if not almacen.cargar(carpeta, "curso")["confirmada"]:
+        return RedirectResponse(destino + "?mensaje=" + quote("Guarda completa la ficha del curso antes de generar: así queda confirmada."), status_code=303)
+    if not almacen.cargar(carpeta, "sesion", sesion)["confirmada"]:
+        # La ficha de la sesión no se confirma aparte: se prepara y confirma aquí, como al guardarla (decisión 55).
+        flujo.llenar_desde_el_curso(carpeta, sesion)
+        try:
+            resultado = asyncio.run(flujo.preparar_y_confirmar(carpeta, curso, sesion))
+        except (flujo.FichaDelCursoSinConfirmar, FaltaClave, agente.ErrorDeAgente) as error:
+            return RedirectResponse(destino + "?mensaje=" + quote(str(error)), status_code=303)
+        if resultado["errores"]:
+            _AVISOS_FICHA[_url_ficha(curso, sesion)] = (" ".join(
+                ["Para generar, la ficha de la sesión tiene que quedar confirmada.", *resultado["mensajes"]]),
+                resultado["errores"])
+            return RedirectResponse(_url_ficha(curso, sesion), status_code=303)
     faltan = modulo.faltan(carpeta, sesion)
     if faltan["ficha"]:
         mensaje = "Falta en la ficha de la sesión: " + " ".join(faltan["ficha"])

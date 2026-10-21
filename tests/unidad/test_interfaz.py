@@ -5,7 +5,7 @@ import json
 from fastapi.testclient import TestClient
 
 from app import servidor, tokens
-from app.fichas import almacen
+from app.fichas import almacen, flujo
 from app.materiales import comun
 from tests.unidad.test_lectura import sesion  # noqa: F401
 
@@ -47,10 +47,37 @@ def test_la_sesion_abre_el_material_del_siguiente_paso_sin_la_evaluacion(sesion)
     assert "Material 1 de 3 de la sesión 1" in pagina
 
 
-def test_sin_fichas_la_sesion_abre_la_ficha(sesion):  # noqa: F811
+def test_sin_la_ficha_de_la_sesion_confirmada_la_sesion_abre_su_material(sesion):  # noqa: F811
+    # La ficha de la sesión se prepara y confirma al generar (decisión 55): no hace falta pasar por ella.
     almacen.guardar(sesion, "sesion", 1, {**almacen.cargar(sesion, "sesion", 1), "confirmada": False})
     r = cliente.get("/cursos/scrum/sesiones/1", follow_redirects=False)
-    assert r.headers["location"] == "/cursos/scrum/sesiones/1/ficha"
+    assert r.headers["location"] == "/cursos/scrum/sesiones/1/materiales/lectura"
+
+
+def test_generar_prepara_y_confirma_la_ficha_de_la_sesion_antes(sesion, monkeypatch):  # noqa: F811
+    almacen.guardar(sesion, "sesion", 1, {**almacen.cargar(sesion, "sesion", 1), "confirmada": False})
+    preparadas, generadas = [], []
+
+    async def con_problemas(carpeta, curso, numero, consulta=None):
+        preparadas.append(numero)
+        return {"mensajes": ["Corregí el ejercicio 2."], "errores": ["Ejercicio 2: hay que llenar algo a mano."]}
+
+    monkeypatch.setattr(flujo, "preparar_y_confirmar", con_problemas)
+    monkeypatch.setattr(servidor, "_trabajo_en_segundo_plano", lambda *a, **k: generadas.append(a))
+    r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura", follow_redirects=False)
+    assert r.headers["location"] == "/cursos/scrum/sesiones/1/ficha" and generadas == []
+    pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
+    assert "Para generar, la ficha de la sesión tiene que quedar confirmada. Corregí el ejercicio 2." in pagina
+    assert "Ejercicio 2: hay que llenar algo a mano." in pagina
+
+    async def confirma(carpeta, curso, numero, consulta=None):
+        ficha = almacen.cargar(carpeta, "sesion", numero)
+        almacen.guardar(carpeta, "sesion", numero, {**ficha, "confirmada": True})
+        return {"mensajes": [], "errores": []}
+
+    monkeypatch.setattr(flujo, "preparar_y_confirmar", confirma)
+    r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura", follow_redirects=False)
+    assert r.headers["location"] == "/cursos/scrum/sesiones/1/materiales/lectura" and len(generadas) == 1
 
 
 def test_un_material_que_no_existe_da_404(sesion):  # noqa: F811
@@ -333,7 +360,8 @@ def test_el_inicio_muestra_el_avance_de_cada_curso_y_enlaza_lo_que_sigue(sesion)
     for clave in ("lectura", "diapositivas", "laboratorio"):
         _poner(sesion, clave, estado="aprobada", aprobada="2026-10-15T10:00:00")
     pagina = cliente.get("/").text
-    assert '<a href="/cursos/scrum/sesiones/2/ficha" data-atajo="s" aria-keyshortcuts="S">Sesión 2: confirma su ficha.</a>' in pagina   # la 1 ya está
+    # La 1 ya está. La 2 no necesita su ficha confirmada: se confirma al generar (decisión 55).
+    assert '<a href="/cursos/scrum/sesiones/2/materiales/lectura" data-atajo="s" aria-keyshortcuts="S">Sesión 2: genera la lectura.</a>' in pagina
     listo = {"fuentes": {"texto": "1 lista"}, "ficha_curso": {"clase": "bien"},
              "sesiones": [{"numero": 1, "puede_empezar": True, "siguiente": {"ancla": "", "texto": "Listo"}}]}
     assert servidor._que_sigue("scrum", listo) is None      # todo aprobado: la página dice que no queda nada

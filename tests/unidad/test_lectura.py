@@ -448,14 +448,22 @@ def test_la_pagina_de_la_sesion_genera_y_permite_descargar(sesion, monkeypatch):
     assert llamadas == [1]
 
 
-def test_sin_fichas_el_boton_esta_desactivado(entorno):
+def test_sin_la_ficha_de_la_sesion_el_boton_avisa_que_la_prepara(entorno):
     cliente.post("/cursos", data={"nombre": "Otro"})
     carpeta = entorno["cursos"] / "otro"
     almacen.guardar(carpeta, "curso", None, datos.ficha("curso", datos.CURSO))
     flujo.confirmar_curso(carpeta)
     pagina = cliente.get("/cursos/otro/sesiones/1/materiales/lectura").text
-    assert "Falta confirmar las fichas" in pagina
-    assert re.search(r"<button type=\"submit\"\s+disabled[\s>]", pagina)
+    assert "Antes de generar, AulaLista prepara el plan de la sesión" in pagina
+    assert 'data-preparar="Preparando la ficha de la sesión' in pagina
+    assert not re.search(r"<button type=\"submit\"\s+disabled[\s>]", pagina)
+
+
+def test_sin_la_ficha_del_curso_el_boton_esta_desactivado(entorno):
+    cliente.post("/cursos", data={"nombre": "Otro"})
+    carpeta = entorno["cursos"] / "otro"
+    almacen.guardar(carpeta, "curso", None, datos.ficha("curso", datos.CURSO))
+    assert cliente.get("/cursos/otro/sesiones/1/materiales/lectura").status_code == 409
 
 
 def test_una_configuracion_rota_se_detecta_antes_de_gastar_tokens(sesion):
