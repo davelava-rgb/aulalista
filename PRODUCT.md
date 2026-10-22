@@ -42,7 +42,7 @@ Toda afirmación sobre una fuente sale de un pasaje copiado de una fuente del cu
 ## Brand Commitments
 
 - La interfaz lleva la marca FuturaSoft (confirmado el 2026-10-15).
-- Logo y colores oficiales de FuturaSoft entregados por el profesor el 2026-10-15, en `web/estaticos/marca/`: magenta #C537A0 para acciones y títulos (`PLAN.md` §0, decisión 58); morado #1E0253 solo en la cabecera con el logo.
+- Logo y colores oficiales de FuturaSoft entregados por el profesor el 2026-10-15, en `web/estaticos/marca/`: magenta #C537A0 para acciones; títulos en tinta (`PLAN.md` §0, decisión 65); morado #1E0253 solo en la cabecera con el logo.
 - Lenguaje claro en toda la interfaz: una idea por oración, sin jerga, cada término técnico definido la primera vez. Sin emojis ni lenguaje publicitario.
 
 ## Evidence on Hand

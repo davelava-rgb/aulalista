@@ -111,7 +111,7 @@ La interfaz lleva la marca FuturaSoft (logo y paleta oficiales entregados el 202
 Paleta sobria de tinta sobre papel, con el magenta de FuturaSoft como acento y dos colores que solo hablan de estado.
 
 ### Primary
-- **Magenta FuturaSoft** (`magenta`, #C537A0; de noche `magenta-noche`, #CD53AD): enlaces, botón principal, títulos h1 y h2 de las páginas (`PLAN.md` §0, decisión 58), encabezado de las tablas de datos, el paso actual del recorrido y la marca del elemento actual en el panel. Fuera de los títulos, es el único color que indica "se puede tocar" o "estás aquí"; un título se distingue de un enlace por su tamaño, su peso y la falta de subrayado. Contraste: 4.7:1 sobre papel; el de noche, 4.6:1 sobre papel-noche.
+- **Magenta FuturaSoft** (`magenta`, #C537A0; de noche `magenta-noche`, #CD53AD): enlaces, botón principal, encabezado de las tablas de datos, el paso actual del recorrido y la marca del elemento actual en el panel. Es el único color que indica "se puede tocar" o "estás aquí". Contraste: 4.7:1 sobre papel; el de noche, 4.6:1 sobre papel-noche.
 - **Magenta suave** (`magenta-suave`; de noche `magenta-suave-noche`): solo el fondo de la caja «Lo que sigue» del tablero.
 - **Magenta para texto** (`magenta-texto`; de noche `magenta-texto-noche`): el texto magenta sobre un fondo de color (magenta suave o niebla), donde el magenta normal no llega a 4.5:1.
 
@@ -142,8 +142,8 @@ Paleta sobria de tinta sobre papel, con el magenta de FuturaSoft como acento y d
 **Character:** Una sola familia, neutra y legible, la misma del Excel modelo de verificación. La jerarquía sale del tamaño y del color, no de cambiar de fuente.
 
 ### Hierarchy
-- **Headline** (negrita, 1.75rem, 1.2): el h1 de cada página, en magenta (`PLAN.md` §0, decisión 58).
-- **Title** (negrita, 1.125rem a 1.25rem, 1.3): el h2 de cada sección, en magenta (decisión 58).
+- **Headline** (negrita, 1.75rem, 1.2): el h1 de cada página, en tinta (`PLAN.md` §0, decisión 65).
+- **Title** (negrita, 1.125rem a 1.25rem, 1.3): el h2 de cada sección, en tinta (decisión 65).
 - **Body** (normal, 1rem, 1.5): texto, campos y botones. Las tablas de datos bajan a 0.9375rem.
 - **Label** (normal, 0.875rem a 0.8125rem, 1.5): notas, ayudas, marcas de procedencia, la línea de ubicación sobre el título y avance. Las notas bajan su opacidad a 0.8.
 
@@ -209,7 +209,7 @@ Esquinas suavemente redondeadas de 6px en botones, campos, mensajes y recuadros.
 ## Do's and Don'ts
 
 ### Do:
-- **Do** usar el magenta solo para lo que se puede tocar, para "estás aquí" y para los títulos h1 y h2 (decisión 58): enlaces, botones, encabezados de tabla, el paso actual y el elemento actual del panel. Un título se distingue de un enlace por su tamaño, su peso y la falta de subrayado.
+- **Do** usar el magenta solo para lo que se puede tocar y para "estás aquí": enlaces, botones, encabezados de tabla, el paso actual y el elemento actual del panel.
 - **Do** poner junto a cada acción bloqueada una nota que diga qué falta.
 - **Do** acompañar cada color de estado con su palabra.
 - **Do** mantener 44px de alto en todo control que se pueda tocar.

@@ -614,9 +614,11 @@ def test_el_aviso_de_la_ficha_del_curso_no_nombra_una_seccion_de_la_sesion(sesio
     assert "Cambiar solo «Materiales de esta sesión» no lo desactualiza." in cliente.get("/cursos/scrum/sesiones/1/ficha").text
 
 
-def test_los_titulos_sobre_niebla_usan_el_magenta_para_texto():
+def test_los_titulos_van_en_tinta_y_no_en_magenta():
+    # Decisión 65: el profesor no quiere títulos en magenta.
     css = (servidor.RAIZ / "web" / "estaticos" / "estilo.css").read_text(encoding="utf-8")
-    assert ".mensaje h2 { color: var(--principal-texto); }" in css
+    assert "h1, h2 { color: var(--texto); font-weight: bold; }" in css
+    assert not re.search(r"(^|[\s,}])h[12]\s*\{[^}]*color:\s*var\(--principal", css, re.M)
 
 
 def test_lo_aceptado_al_aprobar_se_ve_en_el_tablero_y_en_el_recorrido(sesion):  # noqa: F811

@@ -63,9 +63,8 @@ main {
   padding: 2rem 1rem;
 }
 
-/* Títulos en magenta y negrita, como pide la marca FuturaSoft (decisión 58). Se distinguen de un enlace por el tamaño y
-   el peso, y porque no llevan subrayado. */
-h1, h2 { color: var(--principal); font-weight: bold; }
+/* Títulos en tinta y negrita (decisión 65, que deja sin efecto la 58). El magenta queda para lo que se puede pulsar. */
+h1, h2 { color: var(--texto); font-weight: bold; }
 h1 { font-size: 1.75rem; line-height: 1.2; margin: 0 0 1rem; }
 h2 { font-size: 1.25rem; line-height: 1.3; margin: 2rem 0 0.5rem; }
 
@@ -586,8 +585,6 @@ main.hoja .material .cabeza h1 { margin: 0; }
 .sec-editar { display: none; margin-left: auto; min-height: 40px; }
 .sec-campos { padding: 0.25rem 1.25rem 1rem; }
 .sec-resumen { display: none; padding: 0.5rem 1.25rem 1rem; }
-/* Títulos sobre niebla: el magenta normal no llega a 4.5:1 (claro 4.3, oscuro 4.0); el de texto sí. */
-.mensaje h2 { color: var(--principal-texto); }
 
 /* Con JavaScript (lo activa la página), una sección «leer» muestra su resumen y esconde sus campos. */
 .ficha-js .seccion.leer .sec-resumen { display: block; }
@@ -674,7 +671,7 @@ main:focus { outline: none; }
 .aviso-viejo p { margin: 0.75rem 0; }
 .aviso-viejo a { color: var(--principal-texto); font-weight: bold; }
 .version-anterior { color: var(--error); }
-/* El paso actual va relleno: así «estás aquí» no se confunde con los títulos magenta (decisión 58). */
+/* El paso actual va relleno: así «estás aquí» se ve de lejos. */
 .recorrido li.ahora::before { background: var(--principal); color: var(--fondo); }
 /* Los nombres de archivo largos se parten en vez de salirse de su caja en pantallas angostas. */
 .lista li, .decisiones li { overflow-wrap: anywhere; }
