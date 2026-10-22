@@ -11,11 +11,13 @@ from pydantic import ValidationError
 
 from app import servidor
 from app.fichas import almacen, flujo
-from app.materiales import comun, evaluacion, practica
+from claude_agent_sdk import AssistantMessage, TextBlock
+
+from app.materiales import comun, ejecucion, evaluacion, practica
 from app.materiales.contenido import ESQUEMA_EVALUACION, Evaluacion
-from tests.conftest import consulta_en_secuencia
+from tests.conftest import consulta_en_secuencia, resultado_simulado
 from tests.sembrados import evaluacion as sembrados
-from tests.unidad.test_lectura import sesion  # noqa: F401
+from tests.unidad.test_lectura import SIN_ERRORES, sesion  # noqa: F401
 
 cliente = TestClient(servidor.app)
 
@@ -245,3 +247,134 @@ def test_una_pregunta_no_usa_un_archivo_del_laboratorio():
 def test_las_preguntas_de_tamano_muy_distinto_dan_aviso():
     contenido = Evaluacion.model_validate(sembrados.con(sembrados._filas(8)))
     assert [(h.nivel, h.regla) for h in evaluacion.controles(contenido, 3)] == [("AVISO", "tamaño parecido")]
+
+
+# ---------- Redacción, validación y ejecución (fase 9c), con respuestas simuladas ----------
+
+def _lista_para_generar(carpeta):
+    for clave in ("lectura", "laboratorio"):
+        _aprobar(carpeta, clave)
+
+
+async def _todas_coinciden(contenido, **_):
+    """La ejecución tiene su propia prueba (abajo): aquí cada pregunta coincide sin llamar a Claude."""
+    return [ejecucion.Ejecucion(p.numero, p.titulo, respuesta_ficha="clave", a_mano=True,
+                                conversacion=[ejecucion.Turno("guía", "pedido"), ejecucion.Turno("resultado", "tabla")])
+            for p in contenido.preguntas]
+
+
+def _generar(carpeta, *salidas, ejecutar_=_todas_coinciden):
+    consulta = consulta_en_secuencia(*salidas)
+    material = asyncio.run(evaluacion.generar(carpeta, "scrum", 1, consulta=consulta, ejecutar_=ejecutar_))
+    return material, consulta
+
+
+def test_genera_la_evaluacion_completa_y_su_entrega(sesion):  # noqa: F811
+    _lista_para_generar(sesion)
+    material, consulta = _generar(sesion, sembrados.limpio(), SIN_ERRORES)
+    assert material["estado"] == "verificada", material.get("problemas")
+    rutas = evaluacion.archivos(sesion, 1)
+    for clave in ("word", "clave", "zip", "excel", "registro", "contenido"):
+        assert rutas[clave].exists(), clave
+    pedido = consulta.llamadas[0]["prompt"]
+    assert "TAREA: prepara la evaluación práctica de la sesión" in pedido and "Material 6 · Evaluación práctica" in pedido
+    assert "preguntas: 3, las de la ficha de la sesión" in pedido
+    assert material["preguntas"] == 3 and material["ejecucion"]["coinciden"] == [1, 2, 3]
+    entrega = json.dumps(material["entrega"], ensure_ascii=False)
+    assert "S1_Evaluacion_Clave.docx: la clave de corrección" in entrega
+    assert "Resolví 3 preguntas con Claude como un alumno, sin la clave." in entrega
+    assert "Problema sembrado en S1_P1_hechos-ventas.xlsx: El hecho 3 parece de adaptación." in entrega
+
+
+def test_sin_el_laboratorio_aprobado_no_empieza_ni_gasta(sesion):  # noqa: F811
+    _aprobar(sesion, "lectura")
+    consulta = consulta_en_secuencia()
+    with pytest.raises(evaluacion.NoSePuedeEmpezar, match="Aprueba primero el laboratorio"):
+        asyncio.run(evaluacion.generar(sesion, "scrum", 1, consulta=consulta))
+    assert consulta.llamadas == []
+
+
+def test_una_falla_de_una_oracion_se_corrige_por_oraciones(sesion):  # noqa: F811
+    _lista_para_generar(sesion)
+    con_puntaje = sembrados.con(sembrados._puntaje)
+    cambio = {"cambios": [{"oracion": "Esta pregunta vale 5 puntos.", "nueva": ""}], "explicaciones": [],
+              "datos_nuevos": []}
+    material, consulta = _generar(sesion, con_puntaje, cambio, SIN_ERRORES)
+    assert material["estado"] == "verificada", material.get("problemas")
+    assert material["correcciones"]["verificador"] == 1
+    assert "Llena solo «oraciones»" in consulta.llamadas[1]["prompt"]
+
+
+def test_una_pregunta_demasiado_grande_va_a_correccion_completa(sesion):  # noqa: F811
+    _lista_para_generar(sesion)
+    corregida = {"evaluacion": sembrados.limpio(), "explicaciones": [], "datos_nuevos": []}
+    material, consulta = _generar(sesion, sembrados.con(sembrados._texto_largo), corregida, SIN_ERRORES)
+    assert material["estado"] == "verificada", material.get("problemas")
+    assert "Devuelve la evaluación completa" in consulta.llamadas[1]["prompt"]
+    assert "260 palabras" in consulta.llamadas[1]["prompt"]
+
+
+def test_una_diferencia_con_la_clave_queda_pendiente_en_la_entrega(sesion):  # noqa: F811
+    async def con_diferencia(contenido, **_):
+        resultados = await _todas_coinciden(contenido)
+        resultados[1].diferencias = [ejecucion.Diferencia("Scrum diario", "Revisión del Sprint", "Otro orden.")]
+        return resultados
+
+    _lista_para_generar(sesion)
+    material, _ = _generar(sesion, sembrados.limpio(), SIN_ERRORES, ejecutar_=con_diferencia)
+    assert material["estado"] == "con pendientes"
+    assert ("Ejecución · pregunta 2: la clave dice «Scrum diario» y el alumno respondió «Revisión del Sprint». "
+            "Otro orden.") in material["problemas"]
+    assert material["ejecucion"]["coinciden"] == [1, 3]
+    assert "## Pregunta 2" in evaluacion.archivos(sesion, 1)["registro"].read_text(encoding="utf-8")
+
+
+def _alumno_y_comparacion(diferencias):
+    """El alumno simulado responde con una tabla; la comparación devuelve las diferencias que se le pasan."""
+    llamadas, pendientes = [], list(diferencias)
+
+    async def consulta(*, prompt, options):
+        llamadas.append({"prompt": prompt, "options": options})
+        if options.output_format is None:
+            yield AssistantMessage(content=[TextBlock(text="Hecho | Pilar\nHecho 1 | Transparencia\n"
+                                                      "Hecho 2 | Adaptación\nHecho 3 | Adaptación")],
+                                   model="claude-sonnet-5-5")
+            yield resultado_simulado()
+        else:
+            yield resultado_simulado(structured_output={"diferencias": pendientes.pop(0) if pendientes else []})
+
+    consulta.llamadas = llamadas
+    return consulta
+
+
+def test_cada_pregunta_se_resuelve_como_alumno_sin_la_clave_y_se_compara_con_prueba(sesion):  # noqa: F811
+    contenido = Evaluacion.model_validate(sembrados.limpio())
+    evaluacion.armar_y_verificar(sesion, 1, contenido)               # crea los archivos reales
+    con_prueba = {"esperado": "Inspección", "salio": "Hecho 3 | Adaptación", "explicacion": "Otro pilar."}
+    sin_prueba = {"esperado": "Hecho 7 | Valores", "salio": "", "explicacion": "Inventada."}
+    consulta = _alumno_y_comparacion([[con_prueba, sin_prueba]])
+    resultados = asyncio.run(evaluacion.ejecutar(
+        contenido, carpeta_archivos=evaluacion.archivos(sesion, 1)["archivos"],
+        respuestas_ficha={1: "Hecho 3: inspección"},
+        llamada={"curso": "scrum", "sesion": "S1", "material": "evaluacion", "consulta": consulta}))
+    alumno = [l["prompt"] for l in consulta.llamadas if l["options"].output_format is None]
+    assert len(alumno) == 3                                             # una conversación nueva por pregunta
+    assert "[Archivo: S1_P1_hechos-ventas.xlsx]" in alumno[0] and "Hecho 1 | ____" in alumno[0]
+    assert "Transparencia" not in alumno[0] and "Clave" not in alumno[0]    # sin la clave
+    comparacion = [l["prompt"] for l in consulta.llamadas if l["options"].output_format is not None][0]
+    assert "Respuesta correcta de la ficha: Hecho 3: inspección" in comparacion
+    assert [d.esperado for d in resultados[0].diferencias] == ["Inspección"] and resultados[0].descartadas == 1
+    assert evaluacion.pendientes_de(resultados[0]) == [
+        "Ejecución · pregunta 1: la clave dice «Inspección» y el alumno respondió «Hecho 3 | Adaptación». Otro pilar."]
+    assert resultados[1].diferencias == [] and resultados[2].diferencias == []
+
+
+def test_la_evaluacion_se_aprueba_solo_sin_fallas_y_al_dia(sesion):  # noqa: F811
+    _lista_para_generar(sesion)
+    with pytest.raises(evaluacion.NoSePuedeAprobar):
+        evaluacion.aprobar(sesion, 1)
+    _generar(sesion, sembrados.limpio(), SIN_ERRORES)
+    assert evaluacion.aprobar(sesion, 1)["estado"] == "aprobada"
+    comun.actualizar(sesion, 1, "evaluacion", estado="verificada", desactualizado=True)
+    with pytest.raises(evaluacion.NoSePuedeAprobar, match="Genérala de nuevo"):
+        evaluacion.aprobar(sesion, 1)
