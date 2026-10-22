@@ -616,6 +616,10 @@ def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False
         m = {**{k: v for k, v in datos.items() if k != "modulo"}, "clave": clave, "estado": estado,
              "incluido": incluido, "situacion": _situacion(datos, estado, incluido)}
         faltan = modulo.faltan(carpeta, sesion) if sesion_lista and incluido else {"ficha": [], "otros": []}
+        # Lo que falta «fuera de la ficha» es siempre la lectura aprobada y al día: el material espera por ella.
+        el = MATERIALES[lectura.CLAVE]["el"]
+        m["espera"] = ({"clave": lectura.CLAVE, "el": el, "ir": f"Ir {_a(el)}"}
+                       if faltan["otros"] and clave != lectura.CLAVE else None)
         if detalle:
             reanudable = hasattr(modulo, "se_puede_reanudar") and modulo.se_puede_reanudar(carpeta, sesion)
             m |= {"faltan": faltan, "reanudable": reanudable,
@@ -713,7 +717,7 @@ def _panel(carpeta, curso: str, actual: str) -> dict:
                 "materiales": [{"clave": m["clave"], "corto": m["corto"], "el": m["el"], "plural": m["plural"],
                                 "situacion": m["situacion"], "estado": m["estado"].get("estado") or "",
                                 "desactualizado": bool(m["estado"].get("desactualizado")),
-                                "aprobada": (m["estado"].get("aprobada") or "")[:10],
+                                "aprobada": (m["estado"].get("aprobada") or "")[:10], "espera": m["espera"],
                                 "sigue": m["clave"] == vista["siguiente"]["ancla"]} for m in incluidos],
                 "hechos": sum(1 for m in incluidos if m["situacion"]["clase"] == "bien"),
                 "van": len(incluidos),

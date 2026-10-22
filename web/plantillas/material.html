@@ -154,7 +154,7 @@
     <ul class="listo">
       {% for l in listos %}<li class="si">{{ l }}</li>{% endfor %}
       {% for f in m.faltan.ficha %}<li class="no">Falta en la <a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">ficha de la sesión</a>: {{ f }}</li>{% endfor %}
-      {% for f in m.faltan.otros %}<li class="no">{{ f }}</li>{% endfor %}
+      {% for f in m.faltan.otros %}<li class="no">{{ f }}{% if m.espera %} <a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/{{ m.espera.clave }}">{{ m.espera.ir }}</a>{% endif %}</li>{% endfor %}
     </ul>
     {% endif %}
 

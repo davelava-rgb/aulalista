@@ -104,13 +104,14 @@
       <div class="fichas-material">
         {% for m in ses.materiales %}
         {% set forma = "bien" if m.situacion.clase == "bien" else ("error" if m.situacion.clase == "error" else ("vacia" if not m.estado else "espera")) %}
-        <a class="ficha-material {{ forma }}" href="/cursos/{{ curso }}/sesiones/{{ ses.numero }}/materiales/{{ m.clave }}">
+        <a class="ficha-material {{ forma }}{% if m.espera and not m.estado %} bloqueada{% endif %}" href="/cursos/{{ curso }}/sesiones/{{ ses.numero }}/materiales/{{ m.clave }}">
           <span class="ficha-ico" aria-hidden="true"><svg width="20" height="20"><use href="#i-{{ m.clave }}"/></svg></span>
           <span class="ficha-texto">
             <b>{{ m.corto }}</b>
             {% if m.fecha %}<span>{{ "Aprobadas" if m.plural else ("Aprobado" if m.el.startswith("el ") else "Aprobada") }} el {{ m.fecha }}</span>
             {% elif not m.estado %}<span>Todavía no se generó</span>{% endif %}
-            <span class="ficha-estado">{{ "Generar" if not m.estado and m.situacion.clase == "neutro" else m.situacion.texto }}</span>
+            {# Sin generar se ofrece «Generar»; si otro material lo bloquea, se dice cuál espera (no es una acción). #}
+            <span class="ficha-estado">{{ ("Espera " ~ m.espera.el if m.espera else "Generar") if not m.estado and m.situacion.clase == "neutro" else m.situacion.texto }}</span>
           </span>
         </a>
         {% endfor %}

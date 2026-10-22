@@ -258,7 +258,8 @@ def test_antes_de_generar_dice_lo_que_ya_se_cumple_y_lo_que_falta(sesion):  # no
     assert '<li class="si">Las dos fichas están confirmadas.</li>' in pagina
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
     assert "Antes de generar las diapositivas:" in pagina
-    assert '<li class="no">Aprueba primero la lectura: las diapositivas salen de ella.</li>' in pagina
+    assert ('<li class="no">Aprueba primero la lectura: las diapositivas salen de ella. '
+            '<a href="/cursos/scrum/sesiones/1/materiales/lectura">Ir a la lectura</a></li>') in pagina
 
 
 def test_ninguna_pagina_usa_puntos_medios_como_separador(sesion):  # noqa: F811
@@ -480,6 +481,15 @@ def test_si_una_lectura_desactualizada_bloquea_las_diapositivas_lo_que_sigue_es_
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
     assert ('<a href="/cursos/scrum/sesiones/1/materiales/lectura" data-atajo="s" aria-keyshortcuts="S">'
             "Genera de nuevo la lectura y apruébala.</a>") in pagina
+    # El motivo del bloqueo enlaza a la lectura.
+    assert ('<li class="no">La lectura está desactualizada: genérala y apruébala de nuevo. '
+            '<a href="/cursos/scrum/sesiones/1/materiales/lectura">Ir a la lectura</a></li>') in pagina
+    # En el tablero, la ficha de las diapositivas no ofrece «Generar»: dice qué espera.
+    tablero = cliente.get("/cursos/scrum").text
+    assert 'class="ficha-material vacia bloqueada" href="/cursos/scrum/sesiones/1/materiales/diapositivas"' in tablero
+    assert '<span class="ficha-estado">Espera la lectura</span>' in tablero
+    # El laboratorio no sale de la lectura: sigue ofreciendo «Generar».
+    assert 'class="ficha-material vacia" href="/cursos/scrum/sesiones/1/materiales/laboratorio"' in tablero
 
 
 def test_lo_que_sigue_no_repite_de_nuevo_y_contrae_al_y_del(sesion):  # noqa: F811
@@ -812,7 +822,8 @@ def test_el_tablero_muestra_la_actividad_web_con_su_estado(sesion):  # noqa: F81
     for clave in ("lectura", "diapositivas", "laboratorio"):
         _poner(sesion, clave, estado="aprobada", aprobada="2026-10-15T10:00:00")
     hoja = cliente.get("/cursos/scrum").text.split('<main class="hoja" id="principal" tabindex="-1">')[1]
-    assert '<a class="ficha-material vacia" href="/cursos/scrum/sesiones/1/materiales/actividad">' in hoja
+    # La espera la lectura, que figura aprobada sin su contenido: la ficha no ofrece «Generar».
+    assert '<a class="ficha-material vacia bloqueada" href="/cursos/scrum/sesiones/1/materiales/actividad">' in hoja
     assert '<use href="#i-actividad"/>' in hoja
     # La lectura figura aprobada sin su contenido: el tablero pide completar lo que falta, en la actividad.
     assert "Sesión 1: completa lo que falta para generar la actividad web." in hoja

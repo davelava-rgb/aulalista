@@ -509,6 +509,7 @@ main.hoja .material .cabeza h1 { margin: 0; }
 .ficha-material.error .ficha-estado { color: var(--error); }
 .ficha-material.vacia { border-style: dashed; background: var(--suave); }
 .ficha-material.vacia .ficha-estado { color: var(--principal-texto); }
+.ficha-material.vacia.bloqueada .ficha-estado { color: var(--texto); font-weight: normal; }
 
 /* Preparación: una línea plegada cuando está lista; abierta y arriba si no. */
 .prep { margin: 2rem 0 0; border: 1px solid var(--borde); border-radius: 8px; }
