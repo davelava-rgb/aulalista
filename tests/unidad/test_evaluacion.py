@@ -3,6 +3,7 @@ para generarla, la revisión de sus preguntas en la ficha y el plan de la sesió
 
 import asyncio
 import json
+import re
 from datetime import datetime
 
 import pytest
@@ -75,6 +76,8 @@ def test_una_tabla_sin_celdas_para_el_alumno_no_es_una_pregunta():
 # ---------- Lo que hace falta para generarla (decisión 64 a) ----------
 
 def _aprobar(carpeta, clave):
+    """Generado y aprobado como lo hace AulaLista: al generar guarda lo que usa (decisión 62)."""
+    comun.actualizar(carpeta, 1, clave, estado="trabajando", previo="")
     ahora = datetime.now().isoformat(timespec="seconds")
     comun.actualizar(carpeta, 1, clave, estado="aprobada", fecha=ahora, aprobada=ahora, desactualizado=False)
 
@@ -162,8 +165,8 @@ def test_la_ficha_ya_no_dice_que_la_evaluacion_no_se_usa(sesion):  # noqa: F811
     assert "estado-no_se_usa" not in pagina and "AulaLista no genera la evaluación" not in pagina
     assert "decisión 37" not in pagina and "apagada" not in pagina
     assert "Las preguntas se revisan al guardar, junto con los ejercicios." in pagina
-    # El material todavía no se genera desde la interfaz (decisión 46): llega en la fase 9d.
-    assert "/materiales/evaluacion" not in cliente.get("/cursos/scrum").text
+    # Desde la fase 9d, la evaluación es el quinto material de la sesión, con su ficha en el tablero.
+    assert 'href="/cursos/scrum/sesiones/1/materiales/evaluacion"' in cliente.get("/cursos/scrum").text
 
 
 # ---------- Archivos y verificador (fase 9b) ----------
@@ -378,3 +381,55 @@ def test_la_evaluacion_se_aprueba_solo_sin_fallas_y_al_dia(sesion):  # noqa: F81
     comun.actualizar(sesion, 1, "evaluacion", estado="verificada", desactualizado=True)
     with pytest.raises(evaluacion.NoSePuedeAprobar, match="Genérala de nuevo"):
         evaluacion.aprobar(sesion, 1)
+
+
+# ---------- Entrega e interfaz (fase 9d) ----------
+
+URL = "/cursos/scrum/sesiones/1/materiales/evaluacion"
+
+
+def test_la_evaluacion_es_el_quinto_material_y_dice_que_espera(sesion):  # noqa: F811
+    pagina = cliente.get(URL).text
+    assert "Material 5 de 5 de la sesión 1" in pagina and "Evaluación práctica y clave" in pagina
+    assert ('<li class="no">Aprueba primero la lectura: la evaluación no evalúa nada que no se haya enseñado. '
+            '<a href="/cursos/scrum/sesiones/1/materiales/lectura"') in pagina
+    # Cada motivo enlaza al material que nombra: el del laboratorio, al laboratorio.
+    assert ('<li class="no">Aprueba primero el laboratorio: la evaluación no evalúa nada que no se haya enseñado. '
+            '<a href="/cursos/scrum/sesiones/1/materiales/laboratorio">Ir al laboratorio</a></li>') in pagina
+    tablero = cliente.get("/cursos/scrum").text
+    assert '<use href="#i-evaluacion"/>' in tablero
+    _aprobar(sesion, "lectura")                                        # ahora espera el laboratorio
+    tablero = cliente.get("/cursos/scrum").text
+    ficha = re.search(r'<a class="ficha-material[^"]*" href="/cursos/scrum/sesiones/1/materiales/evaluacion">(.*?)</a>',
+                      tablero, re.S).group(1)
+    assert "Espera el laboratorio" in ficha
+    _aprobar(sesion, "laboratorio")
+    pagina = cliente.get(URL).text
+    assert '<li class="si">La lectura y el laboratorio están aprobados y al día.</li>' in pagina
+    assert "Generar evaluación" in pagina
+
+
+def test_un_laboratorio_desactualizado_es_lo_que_sigue_si_la_evaluacion_lo_espera(sesion):  # noqa: F811
+    for clave in ("lectura", "diapositivas", "actividad"):
+        _aprobar(sesion, clave)
+    _aprobar(sesion, "laboratorio")
+    comun.actualizar(sesion, 1, "laboratorio", desactualizado=True)
+    siguiente = servidor._vista_de_materiales(sesion, "scrum", 1)["siguiente"]
+    assert siguiente["ancla"] == "laboratorio" and siguiente["texto"] == "Genera de nuevo el laboratorio y apruébalo."
+    assert siguiente["motivo"] == "La evaluación sale del laboratorio. La ficha cambió después de aprobarlo."
+    assert ("Aprueba primero" not in cliente.get(URL).text
+            and "El laboratorio está desactualizado: genéralo y apruébalo de nuevo." in cliente.get(URL).text)
+
+
+def test_la_pagina_muestra_la_entrega_y_aprueba_la_evaluacion(sesion):  # noqa: F811
+    _lista_para_generar(sesion)
+    _generar(sesion, sembrados.limpio(), SIN_ERRORES)
+    pagina = cliente.get(URL).text
+    for archivo in ("S1_Evaluacion.docx", "S1_Evaluacion_Clave.docx", "S1_Evaluacion_Archivos.zip",
+                    "S1_Evaluacion_Verificacion.xlsx", "S1_Evaluacion_Ejecucion.md"):
+        assert f"/cursos/scrum/sesiones/1/descargar/{archivo}" in pagina, archivo
+    assert "Aprobar la evaluación" in pagina
+    r = cliente.post(URL + "/aprobar", follow_redirects=False)
+    assert r.status_code == 303 and "Evaluaci%C3%B3n%20aprobada." in r.headers["location"]
+    assert evaluacion.estado(sesion, 1)["estado"] == "aprobada"
+    assert cliente.get(f"/cursos/scrum/sesiones/1/descargar/S1_Evaluacion_Clave.docx").status_code == 200

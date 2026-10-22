@@ -18,7 +18,7 @@ from app.config import RAIZ, FaltaClave
 from app.fichas import almacen, controles, dependencias, flujo
 from app.fichas import plantillas as plantillas_fichas
 from app.fuentes import convertir
-from app.materiales import actividad, diapositivas, laboratorio, lectura
+from app.materiales import actividad, diapositivas, evaluacion, laboratorio, lectura
 
 app = FastAPI(title="AulaLista")
 app.mount("/estaticos", StaticFiles(directory=RAIZ / "web" / "estaticos"), name="estaticos")
@@ -586,14 +586,27 @@ MATERIALES = {
     actividad.CLAVE: {"modulo": actividad, "numero": 4, "titulo": "Actividad web", "corto": "Actividad",
                       "el": "la actividad web", "plural": False, "o": "a", "lo": "la",
                       "aprobado": "Actividad web aprobada.", "generar": "Generar actividad web"},
+    # Decisión 64 (etapa 9): la evaluación práctica (PBQ) con su clave. Sale de la lectura y del laboratorio aprobados.
+    evaluacion.CLAVE: {"modulo": evaluacion, "numero": 5, "titulo": "Evaluación práctica y clave", "corto": "Evaluación",
+                       "el": "la evaluación", "plural": False, "o": "a", "lo": "la",
+                       "aprobado": "Evaluación aprobada.", "generar": "Generar evaluación"},
 }
 
-# La práctica interactiva, la guía del profesor y la evaluación no se generan (PLAN.md §0, decisiones 34, 35 y 37).
+# La práctica interactiva y la guía del profesor no se generan (PLAN.md §0, decisiones 34 y 35).
 
 
 def _y(partes: list[str]) -> str:
     """«la lectura», «las diapositivas» → «la lectura y las diapositivas»."""
     return ", ".join(partes[:-1]) + " y " + partes[-1] if len(partes) > 1 else "".join(partes)
+
+
+def _material_nombrado(otros: list[str], propio: str) -> str | None:
+    """El material que nombra el primer motivo de bloqueo («Aprueba primero el laboratorio…»), sin contar el propio."""
+    for texto in otros[:1]:
+        for clave, datos in MATERIALES.items():
+            if clave != propio and datos["el"] in texto.lower():
+                return clave
+    return None
 
 
 def _a(el: str) -> str:
@@ -672,10 +685,14 @@ def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False
         m = {**{k: v for k, v in datos.items() if k != "modulo"}, "clave": clave, "estado": estado,
              "incluido": incluido, "situacion": _situacion(datos, estado, incluido), "aceptadas": _aceptadas(estado)}
         faltan = modulo.faltan(carpeta, sesion) if sesion_lista and incluido else {"ficha": [], "otros": []}
-        # Lo que falta «fuera de la ficha» es siempre la lectura aprobada y al día: el material espera por ella.
-        el = MATERIALES[lectura.CLAVE]["el"]
-        m["espera"] = ({"clave": lectura.CLAVE, "el": el, "ir": f"Ir {_a(el)}"}
-                       if faltan["otros"] and clave != lectura.CLAVE else None)
+        # Lo que falta «fuera de la ficha» es otro material aprobado y al día: la lectura, o el laboratorio en la
+        # evaluación (decisión 64 a). El material espera por el primero que nombra lo que falta.
+        espera = _material_nombrado(faltan["otros"], clave)
+        m["espera"] = ({"clave": espera, "el": MATERIALES[espera]["el"], "ir": f"Ir {_a(MATERIALES[espera]['el'])}"}
+                       if espera else None)
+        # Cada motivo de bloqueo enlaza al material que nombra (la evaluación puede esperar dos).
+        m["enlaces"] = [{"clave": c, "ir": f"Ir {_a(MATERIALES[c]['el'])}"} if c else None
+                        for c in (_material_nombrado([t], clave) for t in faltan["otros"])]
         if detalle:
             reanudable = hasattr(modulo, "se_puede_reanudar") and modulo.se_puede_reanudar(carpeta, sesion)
             m |= {"faltan": faltan, "reanudable": reanudable,
@@ -701,9 +718,9 @@ def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False
             siguiente = {"texto": f"Resuelve las fallas {_de(datos['el'])} en las fichas y genéra{datos['lo']} de nuevo.",
                          "ancla": clave, "corto": datos["corto"]}
         elif not faltan["ficha"] and faltan["otros"] and (base := next(
-                (v for v in viejos if v["clave"] == lectura.CLAVE), None)):
-            # Lo bloquea una lectura aprobada que quedó desactualizada: el paso es esa lectura, no este material,
-            # cuyo botón Generar está bloqueado.
+                (v for v in viejos if v["clave"] == _material_nombrado(faltan["otros"], clave)), None)):
+            # Lo bloquea un material aprobado que quedó desactualizado (la lectura, o el laboratorio en la
+            # evaluación): el paso es ese material, no este, cuyo botón Generar está bloqueado.
             sale = "salen" if datos["plural"] else "sale"
             siguiente = {"texto": f"Genera de nuevo {base['el']} y apruéba{base['lo']}.", "ancla": base["clave"],
                          "corto": base["corto"], "boton": f"Ir {_a(base['el'])}",
@@ -968,6 +985,9 @@ def _que_cambio(carpeta, sesion: int, material: dict) -> list[str]:
     usada = estado.get("lectura_fecha") if material["clave"] == diapositivas.CLAVE else estado.get("lectura_usada")
     if usada and lectura.estado(carpeta, sesion).get("fecha", "") != usada:
         frases.append("La lectura se generó de nuevo.")
+    usado_lab = estado.get("laboratorio_usada")    # la evaluación también sale del laboratorio (decisión 64 g)
+    if usado_lab and laboratorio.estado(carpeta, sesion).get("fecha", "") != usado_lab:
+        frases.append("El laboratorio se generó de nuevo.")
     return frases
 
 
@@ -982,6 +1002,16 @@ def _listos(carpeta, sesion: int, material: dict, puede_empezar: bool, ficha_por
     if (puede_empezar and material["clave"] == diapositivas.CLAVE and not material["faltan"]["otros"]
             and diapositivas.usa_lectura(carpeta, sesion)):
         listos.append("La lectura está aprobada.")
+    faltan = material["faltan"]
+    if puede_empezar and material["clave"] == evaluacion.CLAVE and not faltan["ficha"] and not faltan["otros"]:
+        # La evaluación sale de la lectura y del laboratorio aprobados, si la sesión los produce (decisión 64 a).
+        incluidos = almacen.materiales_de_la_sesion(almacen.cargar(carpeta, "sesion", sesion))
+        fuentes = [MATERIALES[c]["el"] for c in (lectura.CLAVE, laboratorio.CLAVE) if c in incluidos]
+        if fuentes:
+            verbo = "están aprobados" if len(fuentes) > 1 else _forma(MATERIALES[
+                lectura.CLAVE if fuentes[0] == "la lectura" else laboratorio.CLAVE], "está aprobad")
+            texto = _y(fuentes)
+            listos.append(f"{texto[:1].upper()}{texto[1:]} {verbo} y al día.")
     return listos
 
 

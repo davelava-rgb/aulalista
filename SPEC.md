@@ -48,7 +48,7 @@ Por cada sesión, hasta seis materiales:
 | 4 | Guía del profesor | Word | Una sección por ejercicio |
 | 5 | Práctica interactiva | Un solo archivo HTML | De 5 a 7 estaciones |
 | 5b | Actividad web (PLAN.md §0, decisión 57) | Un solo archivo HTML, diseñado a medida | De 4 a 6 pasos, solo preguntas cerradas, con puntos |
-| 6 | Evaluación práctica (PBQ) y su clave | Dos Word, más un .zip aparte | 3 preguntas por defecto |
+| 6 | Evaluación práctica (PBQ) y su clave (PLAN.md §0, decisión 64) | Dos Word, más un .zip aparte | 3 preguntas por defecto. Sale de la lectura y del laboratorio aprobados |
 
 Cada material lleva además su archivo de verificación: `S[sesión]_[material]_Verificacion.xlsx`.
 
@@ -137,7 +137,7 @@ Los errores se corrigen una sola vez. Después se repite el verificador y la rev
 | Guía del profesor | Que cada respuesta sea la que sale al ejecutar el ejercicio |
 | Práctica interactiva | Que cada caso tenga una sola respuesta y que la página funcione |
 | Actividad web | Cada pregunta contra la lectura validada, las fuentes y las fichas; una sola respuesta correcta; que la página sea fiel al contenido aprobado y funcione en un navegador |
-| Evaluación y clave | Datos nuevos, cálculos, ejecución de cada pregunta y que ningún otro material dé la respuesta |
+| Evaluación y clave | Datos nuevos, cálculos, ejecución de cada pregunta como un alumno, sin la clave, y que ningún otro material dé la respuesta (PLAN.md §0, decisión 64) |
 
 Las revisiones del programa se aplican a todos los materiales. Sin archivo de verificación completo, el software no entrega el material.
 

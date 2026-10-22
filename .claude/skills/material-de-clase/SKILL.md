@@ -263,7 +263,7 @@ Estructura de cada pregunta en la hoja del alumno:
 Tamaño de la evaluación:
 
 - La situación y los archivos de texto de una pregunta suman 250 palabras como máximo. Las tablas tienen 15 filas como máximo.
-- Resuelve tú cada pregunta de principio a fin con sus archivos. Cuenta las decisiones que toma el alumno. Si una pregunta pide más de 10 decisiones, recórtala.
+- Resuelve tú cada pregunta de principio a fin con sus archivos. Cuenta las decisiones que toma el alumno: cada celda que llena en su tabla de respuesta es una decisión (PLAN.md §0, decisión 64). Si una pregunta pide más de 10 decisiones, recórtala.
 - Las tres preguntas tienen un tamaño parecido.
 
 Formato:

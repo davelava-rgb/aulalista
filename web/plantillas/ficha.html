@@ -236,7 +236,7 @@
       {% if s.vacios and s.filas %}<p><button type="button" class="secundario" data-editar="{{ s.ancla }}" data-bloque="vacio">Agregar {{ s.filas[0].nombre | lower }}</button></p>{% endif %}
     </div>
     <div class="sec-campos">
-    {% if s.titulo.split(". ", 1)[-1].startswith("Evaluación") %}<p class="mensaje">Las preguntas se revisan al guardar, junto con los ejercicios. La evaluación se genera desde su página al terminar la etapa 9 (decisión 64). PBQ quiere decir «Performance Based Question»: una pregunta que se responde haciendo una tarea, no eligiendo una opción.</p>{% endif %}
+    {% if s.titulo.split(". ", 1)[-1].startswith("Evaluación") %}<p class="mensaje">Las preguntas se revisan al guardar, junto con los ejercicios. PBQ quiere decir «Performance Based Question»: una pregunta que se responde haciendo una tarea, no eligiendo una opción.</p>{% endif %}
     {% for e in s.elementos %}
       {% if e.repetible %}
         {% if e.encabezado %}<p class="nota">{{ e.encabezado }}</p>{% endif %}

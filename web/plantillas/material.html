@@ -164,7 +164,7 @@
     <ul class="listo">
       {% for l in listos %}<li class="si">{{ l }}</li>{% endfor %}
       {% for f in m.faltan.ficha %}<li class="no">Falta en la <a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">ficha de la sesión</a>: {{ f }}</li>{% endfor %}
-      {% for f in m.faltan.otros %}<li class="no">{{ f }}{% if m.espera %} <a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/{{ m.espera.clave }}"{% if espera_aqui and loop.first %} data-atajo="s" aria-keyshortcuts="S"{% endif %}>{{ m.espera.ir }}</a>{% endif %}</li>{% endfor %}
+      {% for f in m.faltan.otros %}{% set enlace = m.enlaces[loop.index0] %}<li class="no">{{ f }}{% if enlace %} <a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/{{ enlace.clave }}"{% if espera_aqui and loop.first %} data-atajo="s" aria-keyshortcuts="S"{% endif %}>{{ enlace.ir }}</a>{% endif %}</li>{% endfor %}
     </ul>
     {% endif %}
 
