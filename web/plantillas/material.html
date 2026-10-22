@@ -74,7 +74,9 @@
   {# Las decisiones pendientes se ven siempre: antes de aprobar, para decidir; después, para recordar qué se aceptó. #}
   {% set ver_pendientes = n_pendientes and (por_decidir or e.estado == "aprobada") %}
   <h2>Entrega</h2>
-  <p class="resumen">{{ n_archivos }} {{ "archivo" if n_archivos == 1 else "archivos" }}{{ " y " if not n_avisos else ", " }}{{ n_pendientes }} {{ "decisión pendiente" if n_pendientes == 1 else "decisiones pendientes" }}{% if n_avisos %} y {{ n_avisos }} {{ "aviso" if n_avisos == 1 else "avisos" }} de diseño{% endif %}.</p>
+  {# Los avisos de diseño son informativos (por ejemplo «La ficha no trae logo»): no se cuentan junto a lo que hay que
+     decidir; se leen en «Detalles de la entrega». #}
+  <p class="resumen">{{ n_archivos }} {{ "archivo" if n_archivos == 1 else "archivos" }} y {{ n_pendientes }} {{ "decisión pendiente" if n_pendientes == 1 else "decisiones pendientes" }}.</p>
   {% if archivos %}
   <ul class="entrega-archivos" aria-label="{{ archivos[0].titulo }}">
     {% for l in archivos[0].lineas %}{% set archivo, resto = l.split(": ", 1) %}
@@ -98,7 +100,7 @@
   {% set otras = secciones | rejectattr("clave", "in", ["archivos", "pendientes"] if ver_pendientes else ["archivos"]) | list %}
   {% if otras or n_avisos %}
   <details class="detalle">
-    <summary>Detalles de la entrega{% if n_avisos %}, con {{ n_avisos }} {{ "aviso" if n_avisos == 1 else "avisos" }} de diseño{% endif %}</summary>
+    <summary>Detalles de la entrega</summary>
     {% for s in otras %}
     <h3>{{ s.titulo }}</h3>
     <ul class="lista">{% for l in s.lineas %}<li>{{ l }}</li>{% endfor %}</ul>

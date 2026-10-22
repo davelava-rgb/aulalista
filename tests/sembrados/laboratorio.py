@@ -254,8 +254,6 @@ SEMBRADOS_LISTAS = {
                    "los conceptos van en el orden de la fuente"),
     "variante prohibida": (lambda d: _lista(d, 1).update(opciones=["Agile", *CONCEPTOS[1:]]),
                            "la opción «Agile» es una variante prohibida"),
-    "opción inventada": (lambda d: _lista(d, 0).update(opciones=["Sí", "No", "Tal vez"]),
-                         "la opción «Tal vez» no sale del vocabulario"),
     "respuesta abierta": (lambda d: _lista(d, 0).update(respuestas=[
                               "Sí, porque el cliente vive cerca de la tienda", "Sí", "No", "Sí"]),
                           "es abierta"),
@@ -266,3 +264,23 @@ LISTA_EN_SESION_DE_VALIDACION = "la sesión enseña listas o validación de dato
 
 # El paso no dice que el alumno elige de la lista: AVISO del verificador (decisión 60 e).
 SIN_PASO_DE_LA_LISTA = (lambda d: d["ejercicios"][0]["pasos"].pop(2), "ningún paso dice que el alumno elige")
+
+# Decisión 61: una opción que no aparece escrita en las fichas, en «Antes de empezar» ni en los datos de su archivo es
+# un AVISO, no una FALLA. Los pasos de la guía no cuentan. (cambio, opción que debe salir en el aviso)
+OPCIONES_CON_AVISO = {
+    "opción que no aparece en ningún lado": (lambda d: _lista(d, 0).update(opciones=["Sí", "No", "Tal vez"]), "Tal vez"),
+    "opción que solo aparece en un paso": (lambda d: (
+        _lista(d, 0).update(opciones=["Sí", "No", "Pendiente"]),
+        d["ejercicios"][0]["pasos"].append(_paso("Elige **Pendiente** de la lista si no estás seguro."))), "Pendiente"),
+}
+
+# Opciones que valen sin aviso: salen de la ficha, de una tabla de «Antes de empezar» o de los datos del archivo.
+OPCIONES_SIN_AVISO = {
+    "de la ficha": lambda d: _lista(d, 0).update(opciones=["Sí", "No", "Sucursal Centro"]),
+    "de una tabla de Antes de empezar": lambda d: (
+        d["antes_de_empezar"]["tablas"].append({"titulo": "Criterios de riesgo", "encabezados": ["Nivel", "Cuándo"],
+                                                 "filas": [["Alto", "Pedido urgente"], ["Bajo", "Pedido normal"]]}),
+        _lista(d, 0).update(opciones=["Alto", "Bajo"], respuestas=["Alto", "Alto", "Bajo", "Alto"])),
+    "de los datos del archivo": lambda d: _lista(d, 0).update(opciones=["Recoge en tienda", "Envío"],
+                                                             respuestas=["Envío", "Envío", "Recoge en tienda", "Envío"]),
+}

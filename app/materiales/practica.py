@@ -349,10 +349,11 @@ MENCIONA_LA_LISTA = re.compile(r"(?i)\blista\b")
 
 @dataclass(frozen=True)
 class OrigenDeOpciones:
-    """De dónde puede salir una opción: el vocabulario de la sesión en su orden (con sus variantes prohibidas), los
-    datos fijos y las áreas del caso, o «Sí» y «No». `ensena_listas`: la sesión enseña listas o validación de datos."""
+    """Lo que las listas necesitan de las fichas: el vocabulario de la sesión en su orden (con sus variantes
+    prohibidas), el texto de las dos fichas, donde una opción puede aparecer escrita (decisión 61), y si la sesión
+    enseña listas o validación de datos."""
     vocabulario: tuple[tuple[str, tuple[str, ...]], ...] = ()
-    del_caso: tuple[str, ...] = ()
+    texto_de_las_fichas: str = ""
     ensena_listas: bool = False
 
 
@@ -371,7 +372,6 @@ def _revisar_listas(archivo: ArchivoPractica, origen: OrigenDeOpciones) -> list[
                          f"«{HOJA_DE_OPCIONES}» y AulaLista pone ahí las opciones. Cambia el nombre de esa hoja.")
     conceptos = [c for c, _ in origen.vocabulario]
     variantes = {v.lower(): c for c, vs in origen.vocabulario for v in vs}
-    validas = set(conceptos) | set(origen.del_caso) | set(SI_Y_NO)
     for hoja, lista in listas:
         donde = f"{ejercicio}«{archivo.nombre}» · hoja «{hoja.nombre}» · columna «{lista.columna}»"
         if not hoja.filas:
@@ -391,10 +391,6 @@ def _revisar_listas(archivo: ArchivoPractica, origen: OrigenDeOpciones) -> list[
             if opcion.lower() in variantes:
                 problemas.append(f"FALLA · lista de opciones · {donde}: la opción «{opcion}» es una variante "
                                  f"prohibida; el nombre único es «{variantes[opcion.lower()]}».")
-            elif opcion not in validas:
-                problemas.append(f"FALLA · lista de opciones · {donde}: la opción «{opcion}» no sale del vocabulario "
-                                 "de la sesión ni de los datos fijos o las áreas del caso, ni es «Sí» o «No». "
-                                 "Escríbela igual que en la ficha.")
         del_vocabulario = [o for o in lista.opciones if o in conceptos]
         if del_vocabulario != sorted(del_vocabulario, key=conceptos.index):
             problemas.append(f"FALLA · lista de opciones · {donde}: los conceptos van en el orden de la fuente: "
@@ -402,11 +398,36 @@ def _revisar_listas(archivo: ArchivoPractica, origen: OrigenDeOpciones) -> list[
     return problemas
 
 
-def avisos_de_listas(contenido: Laboratorio) -> list[tuple[str, str]]:
-    """(sección, detalle) de cada ejercicio con una lista en su archivo cuyos pasos no dicen que el alumno elige de
-    la lista (decisión 60 e). Es un AVISO del verificador: se corrige o se explica."""
-    con_listas = {a.nombre for a in contenido.archivos if any(h.listas for h in a.hojas)}
+def _aparece(opcion: str, texto: str) -> bool:
+    return re.search(r"(?<!\w)" + re.escape(opcion.lower()) + r"(?!\w)", texto) is not None
+
+
+def avisos_de_listas(contenido: Laboratorio, origen: OrigenDeOpciones | None = None) -> list[tuple[str, str]]:
+    """(sección, detalle) de lo que en una lista se corrige o se explica: un AVISO del verificador.
+    - Decisión 61: una opción que no aparece escrita en las fichas, en «Antes de empezar» ni en los datos de su
+      archivo. «Sí» y «No» valen siempre. Los pasos de la guía no cuentan: ahí escribe el mismo redactor.
+    - Decisión 60 e): un ejercicio cuyos pasos no dicen que el alumno elige de la lista."""
+    origen = origen or OrigenDeOpciones()
+    antes = contenido.antes_de_empezar
+    de_todos = " ".join([origen.texto_de_las_fichas, *antes.reglas,
+                         *[" | ".join(f) for tabla in antes.tablas for f in [tabla.encabezados, *tabla.filas]]]).lower()
     avisos = []
+    for archivo in contenido.archivos:
+        datos = " | ".join(" | ".join([*h.encabezados, *[str(v) for f in h.filas for v in f if v is not None]])
+                           for h in archivo.hojas).lower()
+        numero = numero_de_ejercicio(archivo.nombre)
+        seccion = next((f"Ejercicio {e.numero} · {e.titulo}" for e in contenido.ejercicios if e.numero == numero),
+                       archivo.nombre)
+        for hoja in archivo.hojas:
+            for lista in hoja.listas:
+                for opcion in lista.opciones:
+                    if opcion in SI_Y_NO or _aparece(opcion, de_todos) or _aparece(opcion, datos):
+                        continue
+                    avisos.append((seccion, f"«{archivo.nombre}» · hoja «{hoja.nombre}» · columna «{lista.columna}»: "
+                                            f"la opción «{opcion}» no aparece escrita en las fichas, en «Antes de "
+                                            "empezar» ni en los datos del archivo. Escríbela donde la vea el alumno "
+                                            "(por ejemplo, en una tabla de criterios) o explica de dónde sale."))
+    con_listas = {a.nombre for a in contenido.archivos if any(h.listas for h in a.hojas)}
     for e in contenido.ejercicios:
         archivos = [n for n in e.archivos if n in con_listas]
         pasos = [p.texto for p in e.pasos] + list(e.mejora.pasos)

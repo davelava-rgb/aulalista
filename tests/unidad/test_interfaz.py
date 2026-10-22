@@ -818,3 +818,12 @@ def test_los_campos_se_nombran_corto():
     assert plantillas.etiqueta_corta("sesion", "sesion.referencia") == "Material de referencia"
     assert plantillas.etiqueta_corta("sesion", "ejercicio.3.respuesta") == "Ejercicio 3 · respuesta correcta"
     assert plantillas.etiqueta_corta("curso", "datos.fijos") == "Datos fijos del caso"
+
+
+def test_los_avisos_de_diseno_no_se_cuentan_en_el_resumen_de_la_entrega(sesion):  # noqa: F811
+    entrega = {"pregunta": "¿Apruebas la lectura?", "secciones": [
+        {"clave": "archivos", "titulo": "Archivos", "lineas": ["S1_Lectura.docx: la lectura."]}]}
+    _poner(sesion, "lectura", estado="verificada", entrega=entrega, avisos_de_diseno=["La ficha no trae logo."])
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    assert "1 archivo y 0 decisiones pendientes.</p>" in pagina and "aviso de diseño" not in pagina
+    assert "<summary>Detalles de la entrega</summary>" in pagina and "<li>La ficha no trae logo.</li>" in pagina

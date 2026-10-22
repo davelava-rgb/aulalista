@@ -182,7 +182,7 @@ Formato:
 - Al inicio, una tabla con los archivos de práctica: nombre, ejercicio y contenido.
 - Archivos de práctica en Excel para datos y en Word para textos. PDF solo si el caso lo exige. Sin portada y con diseño sobrio.
 - Nombres con el formato S[sesión]_E[ejercicio]_[descripcion-corta].
-- En un Excel de práctica, una columna donde el alumno elige su respuesta de un conjunto cerrado (una categoría, un concepto del vocabulario, un área del caso, "Sí" o "No") lleva una lista de opciones. La lista trae todas las opciones del conjunto, escritas igual que en la ficha y en el orden de la fuente, y no dice cuál es la correcta. Las opciones van en una hoja visible "Opciones". Sin lista si la respuesta es abierta o si la sesión enseña listas o validación de datos. El paso dice que el alumno elige de la lista de la celda.
+- En un Excel de práctica, una columna donde el alumno elige su respuesta de un conjunto cerrado (una categoría, un concepto del vocabulario, un área del caso, "Sí" o "No") lleva una lista de opciones. La lista trae todas las opciones del conjunto y no dice cuál es la correcta. Cada opción aparece escrita en las fichas, en "Antes de empezar" o en los datos del mismo archivo; si no, es un AVISO. Los conceptos del vocabulario van con su nombre único y en el orden de la fuente. Las opciones van en una hoja visible "Opciones". Sin lista si la respuesta es abierta o si la sesión enseña listas o validación de datos. El paso dice que el alumno elige de la lista de la celda.
 - Un archivo .zip con todos los archivos de práctica.
 - Revisa que los nombres de archivo coincidan en las guías y en los archivos.
 

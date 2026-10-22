@@ -564,7 +564,7 @@ def test_el_origen_de_las_opciones_sale_de_las_fichas(sesion):  # noqa: F811
     origen = laboratorio.origen_de_opciones(sesion, 1)
     assert [c for c, _ in origen.vocabulario] == sembrados.CONCEPTOS
     assert dict(origen.vocabulario)["Manifiesto Ágil"] == ("Agile", "manifiesto agile")
-    assert {"Ventas", "Almacén", "Recursos Humanos", "Finanzas", "Sucursal Centro"} <= set(origen.del_caso)
+    assert "Sucursal Centro" in origen.texto_de_las_fichas and "Recursos Humanos" in origen.texto_de_las_fichas
     assert origen.ensena_listas is False
 
 
@@ -594,9 +594,10 @@ def test_una_lista_en_una_sesion_que_ensena_validacion_de_datos_es_falla(sesion)
     assert any(sembrados.LISTA_EN_SESION_DE_VALIDACION in p and p.startswith("FALLA") for p in problemas), problemas
 
 
-def test_un_paso_que_no_dice_que_se_elige_de_la_lista_es_un_aviso():
+def test_un_paso_que_no_dice_que_se_elige_de_la_lista_es_un_aviso(sesion):  # noqa: F811
     cambio, esperado = sembrados.SIN_PASO_DE_LA_LISTA
-    hallazgos = laboratorio.avisos_de_listas(Laboratorio.model_validate(sembrados.con_listas_y(cambio)))
+    hallazgos = laboratorio.avisos_de_listas(Laboratorio.model_validate(sembrados.con_listas_y(cambio)),
+                                             laboratorio.origen_de_opciones(sesion, 1))
     assert len(hallazgos) == 1
     assert hallazgos[0].nivel == "AVISO" and hallazgos[0].regla == "lista de opciones"
     assert esperado in hallazgos[0].detalle and hallazgos[0].seccion.startswith("Ejercicio 1")
@@ -605,7 +606,7 @@ def test_un_paso_que_no_dice_que_se_elige_de_la_lista_es_un_aviso():
 def test_el_laboratorio_con_listas_bien_puestas_no_tiene_problemas(sesion):  # noqa: F811
     contenido, problemas = laboratorio._validar(sembrados.con_listas(), sesion, 1)
     assert problemas == [] and contenido is not None
-    assert laboratorio.avisos_de_listas(contenido) == []
+    assert laboratorio.avisos_de_listas(contenido, laboratorio.origen_de_opciones(sesion, 1)) == []
 
 
 def test_el_laboratorio_con_listas_se_genera_y_el_verificador_no_marca_fallas(sesion):  # noqa: F811
@@ -621,3 +622,28 @@ def test_la_revision_del_contenido_ve_la_lista_y_sabe_que_no_da_la_respuesta():
     assert "lista de opciones de la columna Concepto" in texto
     assert "Valores de Scrum" in texto and "respuestas" not in texto
     assert "no da la respuesta" in laboratorio.INDICACIONES_DE_REVISION
+
+
+# ---------- Opciones con menos restricciones (PLAN.md §0, decisión 61) ----------
+
+@pytest.mark.parametrize("nombre", list(sembrados.OPCIONES_CON_AVISO))
+def test_una_opcion_que_no_aparece_escrita_es_un_aviso_y_no_una_falla(sesion, nombre):  # noqa: F811
+    cambio, opcion = sembrados.OPCIONES_CON_AVISO[nombre]
+    contenido, problemas = laboratorio._validar(sembrados.con_listas_y(cambio), sesion, 1)
+    assert problemas == [] and contenido is not None
+    avisos = laboratorio.avisos_de_listas(contenido, laboratorio.origen_de_opciones(sesion, 1))
+    assert [h.nivel for h in avisos] == ["AVISO"]
+    assert f"la opción «{opcion}» no aparece escrita" in avisos[0].detalle
+    assert avisos[0].seccion.startswith("Ejercicio 1")
+
+
+@pytest.mark.parametrize("nombre", list(sembrados.OPCIONES_SIN_AVISO))
+def test_una_opcion_escrita_en_la_ficha_antes_de_empezar_o_el_archivo_vale(sesion, nombre):  # noqa: F811
+    contenido, problemas = laboratorio._validar(sembrados.con_listas_y(sembrados.OPCIONES_SIN_AVISO[nombre]), sesion, 1)
+    assert problemas == [] and contenido is not None
+    assert laboratorio.avisos_de_listas(contenido, laboratorio.origen_de_opciones(sesion, 1)) == []
+
+
+def test_una_opcion_se_busca_como_palabra_entera_y_sin_mayusculas():
+    assert practica._aparece("Alto", "nivel alto de riesgo")
+    assert not practica._aparece("Alto", "el altoparlante")
