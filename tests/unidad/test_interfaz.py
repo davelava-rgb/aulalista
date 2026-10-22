@@ -44,7 +44,9 @@ def test_la_sesion_abre_el_material_del_siguiente_paso_sin_la_evaluacion(sesion)
     assert "Evaluación y clave" not in pagina and "Etapa posterior" not in pagina  # sin etapa 9 (decisión 37)
     assert "Siguiente paso:" not in pagina   # el siguiente paso es este material: lo dicen el recorrido y el botón
     otra = cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
-    assert 'Siguiente paso:</strong>' in otra and 'materiales/lectura" data-atajo="s" aria-keyshortcuts="S">Genera la lectura.</a>' in otra
+    # Las diapositivas esperan la lectura: el motivo de bloqueo enlaza a ella y no se repite como «Siguiente paso».
+    assert 'Siguiente paso:</strong>' not in otra
+    assert 'materiales/lectura" data-atajo="s" aria-keyshortcuts="S">Ir a la lectura</a>' in otra
     assert "Material 1 de 4 de la sesión 1" in pagina
 
 
@@ -269,7 +271,7 @@ def test_antes_de_generar_dice_lo_que_ya_se_cumple_y_lo_que_falta(sesion):  # no
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
     assert "Antes de generar las diapositivas:" in pagina
     assert ('<li class="no">Aprueba primero la lectura: las diapositivas salen de ella. '
-            '<a href="/cursos/scrum/sesiones/1/materiales/lectura">Ir a la lectura</a></li>') in pagina
+            '<a href="/cursos/scrum/sesiones/1/materiales/lectura" data-atajo="s" aria-keyshortcuts="S">Ir a la lectura</a></li>') in pagina
 
 
 def test_ninguna_pagina_usa_puntos_medios_como_separador(sesion):  # noqa: F811
@@ -509,13 +511,15 @@ def test_si_una_lectura_desactualizada_bloquea_las_diapositivas_lo_que_sigue_es_
     assert sigue["texto"] == "Sesión 1: genera de nuevo la lectura y apruébala."
     assert sigue["url"] == "/cursos/scrum/sesiones/1/materiales/lectura" and sigue["boton"] == "Ir a la lectura"
     assert sigue["motivo"] == "Las diapositivas salen de la lectura. La ficha cambió después de aprobarla."
-    # La página de las diapositivas enlaza a la lectura en vez de dejar solo el botón bloqueado.
+    # La página de las diapositivas enlaza a la lectura en vez de dejar solo el botón bloqueado: una vez, en el
+    # motivo del bloqueo, con la tecla S. No se repite como «Siguiente paso».
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
-    assert ('<a href="/cursos/scrum/sesiones/1/materiales/lectura" data-atajo="s" aria-keyshortcuts="S">'
-            "Genera de nuevo la lectura y apruébala.</a>") in pagina
-    # El motivo del bloqueo enlaza a la lectura.
     assert ('<li class="no">La lectura está desactualizada: genérala y apruébala de nuevo. '
-            '<a href="/cursos/scrum/sesiones/1/materiales/lectura">Ir a la lectura</a></li>') in pagina
+            '<a href="/cursos/scrum/sesiones/1/materiales/lectura" data-atajo="s" aria-keyshortcuts="S">Ir a la lectura</a></li>') in pagina
+    assert "Siguiente paso:</strong>" not in pagina and pagina.count('data-atajo="s"') == 1
+    # En el recorrido, Generar no es el paso actual: no se puede pulsar.
+    recorrido = pagina.split('id="recorrido"')[1].split("</ol>")[0]
+    assert 'class="pendiente"><strong>Generar</strong> <span class="paso-nota">Espera la lectura</span>' in recorrido
     # En el tablero, la ficha de las diapositivas no ofrece «Generar»: dice qué espera.
     tablero = cliente.get("/cursos/scrum").text
     assert 'class="ficha-material vacia bloqueada" href="/cursos/scrum/sesiones/1/materiales/diapositivas"' in tablero
@@ -546,10 +550,35 @@ def test_con_la_sesion_aprobada_el_siguiente_paso_es_lo_pendiente_del_curso(sesi
     for clave in ("lectura", "diapositivas", "laboratorio", "actividad"):
         _poner(sesion, clave, estado="aprobada", aprobada="2026-10-15T10:00:00")
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
-    # El paso solo, sin anidar frases; el botón dice que es de otra sesión.
-    assert ('<strong>Siguiente paso:</strong> <a href="/cursos/scrum/sesiones/2/materiales/lectura"'
-            ' data-atajo="s" aria-keyshortcuts="S">Sesión 2: genera la lectura.</a> </p>') in " ".join(pagina.split())
-    assert '<a class="boton" href="/cursos/scrum/sesiones/2/materiales/lectura">Ir a la lectura de la sesión 2</a>' in pagina
+    # Un solo camino: el botón de cierre dice que es de otra sesión y lleva la tecla S; no se repite arriba.
+    assert ('<a class="boton" href="/cursos/scrum/sesiones/2/materiales/lectura" data-atajo="s" aria-keyshortcuts="S">'
+            'Ir a la lectura de la sesión 2</a>') in pagina
+    assert "Siguiente paso:</strong>" not in pagina and pagina.count('data-atajo="s"') == 1
+
+
+def test_un_material_desactualizado_pliega_sus_archivos_viejos(sesion):  # noqa: F811
+    entrega = {"secciones": [{"clave": "archivos", "titulo": "Archivos", "lineas": ["S1_Lectura.docx: la lectura."]}]}
+    _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00", entrega=entrega)
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    assert "archivos-anteriores" not in pagina                                  # al día: descarga normal
+    _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00", entrega=entrega, desactualizado=True)
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    assert '<details class="archivos-anteriores"><summary>Archivos de la versión anterior (1)</summary>' in pagina
+
+
+def test_el_tablero_separa_el_titulo_de_la_sesion_de_su_alcance(sesion):  # noqa: F811
+    # Crítica de la interfaz: en agilidad, el título de cada sesión era un párrafo de tres líneas en magenta.
+    curso = almacen.cargar(sesion, "curso")
+    lineas = almacen.valor(curso, "curso.sesiones").split("\n")
+    lineas[0] = "1. Fundamentos de Scrum: explica los roles, los eventos y los artefactos."
+    curso["campos"]["curso.sesiones"] = {**curso["campos"]["curso.sesiones"], "valor": "\n".join(lineas)}
+    almacen.guardar(sesion, "curso", None, curso, "editada por el profesor")
+    s = servidor._panel(sesion, "scrum", "curso")["sesiones"][0]
+    assert s["titulo"] == "Fundamentos de Scrum" and s["alcance"] == "Explica los roles, los eventos y los artefactos."
+    hoja = cliente.get("/cursos/scrum").text
+    assert '</span>Fundamentos de Scrum</h2>' in hoja
+    assert '<p class="sesion-alcance">Explica los roles, los eventos y los artefactos.</p>' in hoja
+    assert '<span class="panel-sesion-nombre">Fundamentos de Scrum</span>' in hoja       # el panel, solo el título
 
 
 def test_las_fichas_sin_generar_dicen_su_estado_y_solo_la_que_sigue_se_destaca(sesion):  # noqa: F811
@@ -710,6 +739,10 @@ def test_cada_seccion_trae_su_estado_y_su_resumen():
     lista = {**_campo("s", "Sesiones", "Sesión 1 · Datos" + chr(10) + "Sesión 2 · Calidad"), "multilinea": True}
     sesiones = servidor._indice_de_secciones([_seccion("1. Curso", lista)])
     assert sesiones[0]["resumen"][0]["valor"] == "Sesión 1 · Datos; Sesión 2 · Calidad"
+    # «No adelantar» es una lista de títulos aunque su campo sea de una línea (crítica de la interfaz).
+    temas = _campo("sesion.no_adelantar", "Temas de sesiones posteriores", "Calidad (sesión 2)" + chr(10) + "Hoja de ruta (sesión 3)")
+    assert servidor._indice_de_secciones([_seccion("1. Sesión", temas)])[0]["resumen"][0]["valor"] == (
+        "Calidad (sesión 2); Hoja de ruta (sesión 3)")
     assert servidor._etiqueta_corta("Material de referencia: una línea por archivo") == "Material de referencia"
     assert servidor._etiqueta_corta('Riesgos de "Cuidado con" (de 1 a 3)') == 'Riesgos de "Cuidado con"'
 
@@ -1009,5 +1042,5 @@ def test_los_avisos_de_diseno_no_se_cuentan_en_el_resumen_de_la_entrega(sesion):
         {"clave": "archivos", "titulo": "Archivos", "lineas": ["S1_Lectura.docx: la lectura."]}]}
     _poner(sesion, "lectura", estado="verificada", entrega=entrega, avisos_de_diseno=["La ficha no trae logo."])
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
-    assert "1 archivo y 0 decisiones pendientes.</p>" in pagina and "aviso de diseño" not in pagina
+    assert "1 archivo. Sin decisiones pendientes.</p>" in pagina and "aviso de diseño" not in pagina
     assert "<summary>Detalles de la entrega</summary>" in pagina and "<li>La ficha no trae logo.</li>" in pagina

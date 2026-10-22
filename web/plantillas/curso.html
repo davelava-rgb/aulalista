@@ -98,7 +98,8 @@
   <li class="sesion-fila">
     <span class="sesion-num" aria-hidden="true">{{ ses.numero }}</span>
     <div>
-      <h2><span class="sr">Sesión {{ ses.numero }}: </span>{{ ses.texto }}</h2>
+      <h2><span class="sr">Sesión {{ ses.numero }}: </span>{{ ses.titulo }}</h2>
+      {% if ses.alcance %}<p class="sesion-alcance">{{ ses.alcance }}</p>{% endif %}
       <p class="sesion-frase">{{ ses.frase }} <a href="/cursos/{{ curso }}/sesiones/{{ ses.numero }}/ficha">Ficha de la sesión</a></p>
       {% if ses.materiales %}
       <div class="fichas-material">
@@ -112,8 +113,7 @@
             <b>{{ m.corto }}</b>
             {# Desactualizado: la fecha es de la versión anterior; dicho así no contradice el estado de abajo. #}
             {% if m.fecha %}<span>{{ "Aprobadas" if m.plural else ("Aprobado" if m.el.startswith("el ") else "Aprobada") }} el {{ m.fecha }}{% if m.desactualizado %}, antes del cambio{% endif %}</span>
-            {% if m.aceptadas %}<span>Con {{ m.aceptadas }} {{ "decisión pendiente" if m.aceptadas == 1 else "decisiones pendientes" }}</span>{% endif %}
-            {% elif not m.estado %}<span>Todavía no se generó</span>{% endif %}
+            {% if m.aceptadas %}<span>Con {{ m.aceptadas }} {{ "decisión pendiente" if m.aceptadas == 1 else "decisiones pendientes" }}</span>{% endif %}{% endif %}
             {# Sin generar: su estado («Sin generar», o qué material espera); «Lo que sigue» solo en la que sigue. #}
             <span class="ficha-estado">{{ ("Espera " ~ m.espera.el if m.espera else ("Lo que sigue" if es_sigue else "Sin generar")) if not m.estado and m.situacion.clase == "neutro" else m.situacion.texto }}</span>
           </span>

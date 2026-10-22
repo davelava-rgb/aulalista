@@ -25,8 +25,12 @@
   {% if not puede_empezar %}
   <p class="estado-material">Falta confirmar la ficha del curso. Ningún material empieza sin ella. Queda confirmada al guardarla completa.</p>
   {% endif %}
-  {# El siguiente paso solo se dice si está en otra página: si es este material, ya lo dicen el recorrido y el botón. #}
-  {% if siguiente.ancla != m.clave %}
+  {# El siguiente paso solo se dice si está en otra página: si es este material, ya lo dicen el recorrido y el botón.
+     Tampoco se repite si ya lleva a él otro enlace de la página: el botón de cierre de un material aprobado o el
+     motivo de bloqueo «Ir a la lectura». Ese enlace toma entonces la tecla S. #}
+  {% set cierre_con_boton = e.estado == "aprobada" and not e.desactualizado and (siguiente.ancla or sigue_curso) %}
+  {% set espera_aqui = m.espera and siguiente.ancla == m.espera.clave and not e.estado %}
+  {% if siguiente.ancla != m.clave and not cierre_con_boton and not espera_aqui %}
   <p class="siguiente" id="siguiente"><strong>Siguiente paso:</strong>
     {% if siguiente.ancla %}<a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/{{ siguiente.ancla }}" data-atajo="s" aria-keyshortcuts="S">{{ siguiente.texto }}</a>
     {% elif not puede_empezar %}<a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">{{ siguiente.texto }}</a>
@@ -78,13 +82,16 @@
   <h2>Entrega</h2>
   {# Los avisos de diseño son informativos (por ejemplo «La ficha no trae logo»): no se cuentan junto a lo que hay que
      decidir; se leen en «Detalles de la entrega». #}
-  <p class="resumen">{{ n_archivos }} {{ "archivo" if n_archivos == 1 else "archivos" }} y {{ n_pendientes }} {{ "decisión pendiente" if n_pendientes == 1 else "decisiones pendientes" }}.</p>
+  <p class="resumen">{{ n_archivos }} {{ "archivo" if n_archivos == 1 else "archivos" }}{% if n_pendientes %} y {{ n_pendientes }} {{ "decisión pendiente" if n_pendientes == 1 else "decisiones pendientes" }}{% else %}. Sin decisiones pendientes{% endif %}.</p>
   {% if archivos %}
+  {# Desactualizado: los archivos viejos no se entregan, así que van plegados y no como la descarga principal. #}
+  {% if viejo %}<details class="archivos-anteriores"><summary>Archivos de la versión anterior ({{ n_archivos }})</summary>{% endif %}
   <ul class="entrega-archivos" aria-label="{{ archivos[0].titulo }}">
     {% for l in archivos[0].lineas %}{% set archivo, resto = l.split(": ", 1) %}
     <li><a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/descargar/{{ archivo }}">{{ archivo }}</a><span>{% if viejo %}<strong class="version-anterior">Versión anterior.</strong> {% endif %}{{ resto[:1] | upper }}{{ resto[1:] }}</span></li>
     {% endfor %}
   </ul>
+  {% if viejo %}</details>{% endif %}
   {% endif %}
   {% if ver_pendientes %}
   {# Una FALLA no es una decisión: impide aprobar. Se separa de lo que el profesor sí puede aceptar. #}
@@ -143,8 +150,8 @@
     {% elif listo %}
     {# El material aprobado cierra con lo que sigue, no con botones que gastan: esos quedan plegados abajo. #}
     <p class="cierre"><strong>{{ m.el | capitalize }} {{ "están" if m.plural else "está" }} {{ forma(m, "aprobad") }}.</strong></p>
-    {% if siguiente.ancla %}<p><a class="boton" href="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/{{ siguiente.ancla }}">{{ siguiente.boton or siguiente.texto.rstrip(".") }}</a></p>
-    {% elif sigue_curso %}<p><a class="boton" href="{{ sigue_curso.url }}">{{ sigue_curso.boton }}{% if sigue_curso.sesion and sigue_curso.sesion != sesion %} de la sesión {{ sigue_curso.sesion }}{% endif %}</a></p>{% endif %}
+    {% if siguiente.ancla %}<p><a class="boton" href="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/{{ siguiente.ancla }}" data-atajo="s" aria-keyshortcuts="S">{{ siguiente.boton or siguiente.texto.rstrip(".") }}</a></p>
+    {% elif sigue_curso %}<p><a class="boton" href="{{ sigue_curso.url }}" data-atajo="s" aria-keyshortcuts="S">{{ sigue_curso.boton }}{% if sigue_curso.sesion and sigue_curso.sesion != sesion %} de la sesión {{ sigue_curso.sesion }}{% endif %}</a></p>{% endif %}
     {% elif e.estado == "con fallas" %}
     <p><strong>No se {{ "pueden" if m.plural else "puede" }} aprobar: {{ "tienen" if m.plural else "tiene" }} fallas del verificador</strong>, el programa que revisa cada material sin IA. Para aprobar{{ m.lo }}, genéra{{ m.lo }} de nuevo. Si una falla viene de un dato de las fichas, corrígelo antes.</p>
     {% endif %}
@@ -157,7 +164,7 @@
     <ul class="listo">
       {% for l in listos %}<li class="si">{{ l }}</li>{% endfor %}
       {% for f in m.faltan.ficha %}<li class="no">Falta en la <a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">ficha de la sesión</a>: {{ f }}</li>{% endfor %}
-      {% for f in m.faltan.otros %}<li class="no">{{ f }}{% if m.espera %} <a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/{{ m.espera.clave }}">{{ m.espera.ir }}</a>{% endif %}</li>{% endfor %}
+      {% for f in m.faltan.otros %}<li class="no">{{ f }}{% if m.espera %} <a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/{{ m.espera.clave }}"{% if espera_aqui and loop.first %} data-atajo="s" aria-keyshortcuts="S"{% endif %}>{{ m.espera.ir }}</a>{% endif %}</li>{% endfor %}
     </ul>
     {% endif %}
 

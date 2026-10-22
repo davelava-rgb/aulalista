@@ -44,7 +44,7 @@
         {% set base_s = "/cursos/" ~ curso ~ "/sesiones/" ~ s.numero %}
         <div class="panel-sesion{{ ' abierta' if s.abierta }}">
           <a class="panel-sesion-titulo" href="{{ base_s }}" title="{{ s.texto }}">
-            <span class="panel-num">{{ s.numero }}</span><span class="panel-sesion-nombre">{{ s.texto }}</span></a>
+            <span class="panel-num">{{ s.numero }}</span><span class="panel-sesion-nombre">{{ s.titulo }}</span></a>
           <ul class="panel-mats">
             {% if s.abierta or s.ficha.clase != "bien" %}
             <li><a class="panel-mat panel-ficha {{ s.ficha.clase }}" href="{{ base_s }}/ficha"{% if panel.actual == "ficha-" ~ s.numero %} aria-current="page"{% endif %}>

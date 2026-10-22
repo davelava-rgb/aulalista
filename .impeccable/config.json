@@ -17,6 +17,15 @@
         ],
         "createdAt": "2026-10-21T16:54:35.279Z",
         "reason": "Claude: test fixture for a student page, not AulaLista UI; DESIGN.md does not cover generated activity pages"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "web/estaticos/estilo.css"
+        ],
+        "createdAt": "2026-10-22T14:32:00.190Z",
+        "reason": "DESIGN.md (Tablero del curso) pide para la caja «Lo que sigue» un borde izquierdo magenta de 6px; .sigue-caja es intencional"
       }
     ]
   }

@@ -407,8 +407,10 @@ def _resumen_de_seccion(s: dict, campos: list[dict]) -> None:
                 # En un campo de varias líneas, cada línea es un elemento (una sesión, un concepto): se separan con
                 # «;» para no leerlos pegados. En los demás, el salto de línea es solo de la escritura.
                 lineas = [" ".join(linea.split()) for linea in c["valor"].splitlines() if linea.strip()]
+                # «Ya vieron» y «No adelantar» son listas de títulos aunque se escriban en un campo de una línea.
+                lista = c.get("multilinea") or c.get("id") in ("sesion.ya_vieron", "sesion.no_adelantar")
                 s["resumen"].append({"etiqueta": _etiqueta_corta(c["etiqueta"]), "completa": c["etiqueta"],
-                                     "valor": ("; " if c.get("multilinea") else " ").join(lineas)})
+                                     "valor": ("; " if lista else " ").join(lineas)})
 
 
 def _exigir_ficha_del_curso(carpeta, curso):
@@ -765,8 +767,13 @@ def _panel(carpeta, curso: str, actual: str) -> dict:
             n = s["numero"]
             vista = _vista_de_materiales(carpeta, curso, n)
             incluidos = [m for m in vista["materiales"] if m["incluido"]]
+            # La línea de la sesión es «título: alcance» (como la corta flujo al llenar la ficha): el título va en el
+            # encabezado y el alcance aparte, para que un alcance largo no se vuelva un título de tres líneas.
+            titulo, separador, alcance = s["texto"].partition(":")
+            alcance = alcance.strip() if separador else ""
             sesiones.append({
-                "numero": n, "texto": s["texto"],
+                "numero": n, "texto": s["texto"], "titulo": titulo.strip(" .") if separador else s["texto"],
+                "alcance": alcance[:1].upper() + alcance[1:],
                 "abierta": actual in [f"ficha-{n}"] + [f"{c}-{n}" for c in MATERIALES],
                 "ficha": _estado_de_ficha(almacen.cargar(carpeta, "sesion", n)["confirmada"],
                                           almacen.ruta_ficha(carpeta, "sesion", n).exists()),
@@ -924,6 +931,9 @@ def _recorrido(datos: dict, estado: dict) -> list[dict]:
     if estado.get("desactualizado") and e in ("verificada", "con pendientes"):
         # Las diapositivas salen de la lectura: también quedan desactualizadas si la lectura cambia.
         notas[0] = "La lectura o las fichas cambiaron" if datos.get("clave", "") == diapositivas.CLAVE else "Las fichas cambiaron"
+    elif not e and datos.get("espera"):
+        # Bloqueado por otro material: Generar no es el paso actual, porque no se puede pulsar.
+        clases[0], notas[0] = "pendiente", f"Espera {datos['espera']['el']}"
     elif e == "trabajando":
         notas[0] = "En curso"
     elif e == "detenida":

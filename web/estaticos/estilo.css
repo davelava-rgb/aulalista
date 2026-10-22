@@ -454,8 +454,11 @@ main.hoja .material .cabeza h1 { margin: 0; }
 /* Entrega de un material: archivos en filas, decisiones numeradas y todas las acciones en un recuadro. */
 .resumen { font-weight: normal; }
 .entrega-archivos { margin: 0.5rem 0 1rem; padding: 0; list-style: none; border-top: 1px solid var(--borde); }
-.entrega-archivos li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.25rem 1rem; max-width: none;
+/* El nombre arriba y su nota siempre debajo: con nombres de largo distinto, la lista no se desalinea. */
+.entrega-archivos li { display: flex; flex-direction: column; gap: 0.25rem; max-width: none;
   padding: 0.6rem 0; border-bottom: 1px solid var(--borde); }
+.archivos-anteriores { margin: 0.5rem 0 1rem; }
+.archivos-anteriores > summary { display: list-item; min-height: 44px; padding: 0.6rem 0; box-sizing: border-box; cursor: pointer; }
 .entrega-archivos a { overflow-wrap: anywhere; }
 .entrega-archivos span { font-size: 0.875rem; opacity: 0.8; }
 .decisiones { padding-left: 1.5rem; }
@@ -510,6 +513,7 @@ main.hoja .material .cabeza h1 { margin: 0; }
 .sesion-fila { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr); gap: 0 1rem; max-width: none; padding: 1.25rem 0; border-top: 1px solid var(--borde); }
 .sesion-num { display: grid; place-items: center; width: 2.5rem; height: 2.5rem; border-radius: 50%; background: var(--suave); font-weight: bold; font-size: 1.125rem; }
 .sesion-fila h2 { margin: 0.35rem 0 0.15rem; font-size: 1.125rem; }
+.sesion-alcance { margin: 0 0 0.35rem; font-size: 0.875rem; opacity: 0.85; }
 .sesion-frase { margin: 0 0 0.75rem; font-size: 0.875rem; }
 .sesion-frase a { margin-left: 0.25rem; }
 .fichas-material { display: grid; grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr)); gap: 0.75rem; }
