@@ -250,8 +250,6 @@ SEMBRADOS_LISTAS = {
     "falta una respuesta": (lambda d: _lista(d, 1).update(opciones=CONCEPTOS[:2]),
                             "a la lista le falta la respuesta «Valores de Scrum»"),
     "una sola opción": (lambda d: _lista(d, 0).update(opciones=["Sí"]), "at least 2"),
-    "otro orden": (lambda d: _lista(d, 1).update(opciones=[CONCEPTOS[1], CONCEPTOS[0], CONCEPTOS[2]]),
-                   "los conceptos van en el orden de la fuente"),
     "variante prohibida": (lambda d: _lista(d, 1).update(opciones=["Agile", *CONCEPTOS[1:]]),
                            "la opción «Agile» es una variante prohibida"),
     "respuesta abierta": (lambda d: _lista(d, 0).update(respuestas=[
@@ -284,3 +282,9 @@ OPCIONES_SIN_AVISO = {
     "de los datos del archivo": lambda d: _lista(d, 0).update(opciones=["Recoge en tienda", "Envío"],
                                                              respuestas=["Envío", "Envío", "Recoge en tienda", "Envío"]),
 }
+
+# Decisión 62: el orden solo se exige en los pasos de un proceso.
+OTRO_ORDEN = lambda d: _lista(d, 1).update(opciones=[CONCEPTOS[1], CONCEPTOS[0], CONCEPTOS[2]])  # noqa: E731
+VOCABULARIO_CON_PROCESO = ("1. Manifiesto Ágil (proceso) (no usar: Agile, manifiesto agile)\n"
+                           "2. Pilares de Scrum (proceso)\n3. Valores de Scrum")
+FUERA_DEL_PROCESO = "son pasos de un proceso y van en su orden: Manifiesto Ágil, Pilares de Scrum"

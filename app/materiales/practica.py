@@ -349,12 +349,13 @@ MENCIONA_LA_LISTA = re.compile(r"(?i)\blista\b")
 
 @dataclass(frozen=True)
 class OrigenDeOpciones:
-    """Lo que las listas necesitan de las fichas: el vocabulario de la sesión en su orden (con sus variantes
-    prohibidas), el texto de las dos fichas, donde una opción puede aparecer escrita (decisión 61), y si la sesión
-    enseña listas o validación de datos."""
+    """Lo que las listas necesitan de las fichas y del material aprobado: el vocabulario de la sesión con sus
+    variantes prohibidas, el texto de las dos fichas, donde una opción puede aparecer escrita (decisión 61), los
+    procesos, cada uno con sus pasos en orden (decisión 62), y si la sesión enseña listas o validación de datos."""
     vocabulario: tuple[tuple[str, tuple[str, ...]], ...] = ()
     texto_de_las_fichas: str = ""
     ensena_listas: bool = False
+    procesos: tuple[tuple[str, ...], ...] = ()
 
 
 def _revisar_listas(archivo: ArchivoPractica, origen: OrigenDeOpciones) -> list[str]:
@@ -370,7 +371,6 @@ def _revisar_listas(archivo: ArchivoPractica, origen: OrigenDeOpciones) -> list[
     if any(h.nombre.strip().lower() == HOJA_DE_OPCIONES.lower() for h in archivo.hojas):
         problemas.append(f"FALLA · lista de opciones · {ejercicio}«{archivo.nombre}»: ya tiene una hoja "
                          f"«{HOJA_DE_OPCIONES}» y AulaLista pone ahí las opciones. Cambia el nombre de esa hoja.")
-    conceptos = [c for c, _ in origen.vocabulario]
     variantes = {v.lower(): c for c, vs in origen.vocabulario for v in vs}
     for hoja, lista in listas:
         donde = f"{ejercicio}«{archivo.nombre}» · hoja «{hoja.nombre}» · columna «{lista.columna}»"
@@ -391,11 +391,46 @@ def _revisar_listas(archivo: ArchivoPractica, origen: OrigenDeOpciones) -> list[
             if opcion.lower() in variantes:
                 problemas.append(f"FALLA · lista de opciones · {donde}: la opción «{opcion}» es una variante "
                                  f"prohibida; el nombre único es «{variantes[opcion.lower()]}».")
-        del_vocabulario = [o for o in lista.opciones if o in conceptos]
-        if del_vocabulario != sorted(del_vocabulario, key=conceptos.index):
-            problemas.append(f"FALLA · lista de opciones · {donde}: los conceptos van en el orden de la fuente: "
-                             f"{', '.join(sorted(del_vocabulario, key=conceptos.index))}.")
+        for proceso in origen.procesos:
+            pasos = [p.lower() for p in proceso]
+            del_proceso = [o for o in lista.opciones if o.lower() in pasos]
+            en_orden = sorted(del_proceso, key=lambda o: pasos.index(o.lower()))
+            if len(del_proceso) > 1 and del_proceso != en_orden:
+                problemas.append(f"FALLA · lista de opciones · {donde}: son pasos de un proceso y van en su orden: "
+                                 f"{', '.join(en_orden)}.")
     return problemas
+
+
+NUMERADA = re.compile(r"^\s*(\d+)\s*[.)]\s+(.+?)\s*$")
+
+
+def procesos_del_vocabulario(conceptos: list[dict]) -> list[tuple[str, ...]]:
+    """Decisión 62 a): los conceptos marcados «(proceso)» seguidos forman un proceso, en el orden del vocabulario."""
+    procesos, actual = [], []
+    for c in conceptos:
+        if c.get("proceso"):
+            actual.append(c["concepto"])
+        elif actual:
+            procesos.append(tuple(actual))
+            actual = []
+    if actual:
+        procesos.append(tuple(actual))
+    return [p for p in procesos if len(p) > 1]
+
+
+def procesos_del_material(lectura: dict | None, diapositivas: dict | None) -> list[tuple[str, ...]]:
+    """Decisión 62 b): los pasos de una diapositiva de tipo «proceso» o «pasos», y las líneas numeradas de
+    «Aplícalo así», del material ya aprobado de la sesión. Recibe el contenido guardado de cada uno."""
+    procesos = []
+    for d in (diapositivas or {}).get("diapositivas", []):
+        if d.get("tipo") == "proceso" and d.get("grafico"):
+            procesos.append(tuple(e["texto"] for e in d["grafico"].get("elementos", [])))
+        elif d.get("tipo") == "pasos":
+            procesos.append(tuple(d.get("frases", [])))
+    lineas = [NUMERADA.match(l) for l in ((lectura or {}).get("aplicalo") or {}).get("plantilla", [])]
+    numeradas = [m.group(2).rstrip(".") for m in lineas if m]
+    procesos.append(tuple(numeradas))
+    return [p for p in procesos if len(p) > 1]
 
 
 def _aparece(opcion: str, texto: str) -> bool:

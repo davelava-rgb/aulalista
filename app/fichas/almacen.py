@@ -436,17 +436,19 @@ def sesiones_del_curso(ficha_curso: dict) -> list[dict]:
 
 def vocabulario(ficha_sesion: dict) -> list[dict]:
     """Conceptos clave en su orden. Las variantes prohibidas se escriben así:
-    «Manifiesto Ágil (no usar: Agile, manifiesto agile)»."""
+    «Manifiesto Ágil (no usar: Agile, manifiesto agile)». Un concepto que es paso de un proceso lleva «(proceso)»
+    (PLAN.md §0, decisión 62); la marca no es parte del nombre."""
     conceptos = []
     for orden, linea in enumerate(_renglones(valor(ficha_sesion, "vocabulario.conceptos")), start=1):
         linea = re.sub(r"^\d+\s*[.)\-–]\s*", "", linea)
+        linea, marcas = re.subn(r"\s*\(\s*proceso\s*\)", "", linea, flags=re.I)
         variantes = []
         coincidencia = re.search(r"\(\s*no usar\s*:\s*([^)]*)\)", linea, re.I)
         if coincidencia:
             variantes = [v.strip() for v in coincidencia.group(1).split(",") if v.strip()]
             linea = (linea[:coincidencia.start()] + linea[coincidencia.end():]).strip()
         if linea:
-            conceptos.append({"concepto": linea, "orden": orden, "variantes": variantes})
+            conceptos.append({"concepto": linea, "orden": orden, "variantes": variantes, "proceso": marcas > 0})
     return conceptos
 
 

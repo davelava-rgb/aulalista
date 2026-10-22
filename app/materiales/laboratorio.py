@@ -27,7 +27,7 @@ from pydantic import ValidationError
 
 from app import agente, entrega, office, skill, tokens
 from app.fichas import almacen, dependencias, plantillas, referencia, verificacion
-from app.materiales import comun, docx, ejecucion, estilo, figuras, lectura, practica
+from app.materiales import comun, diapositivas, docx, ejecucion, estilo, figuras, lectura, practica
 from app.materiales.contenido import ESQUEMA_LABORATORIO, Laboratorio
 from app.validacion import excel, pasada2, revision, revisor, verificador
 from app.validacion.pasajes import Corpus
@@ -165,15 +165,27 @@ def respuestas_para_ejecutar(carpeta_curso: Path, sesion: int) -> tuple[dict[int
 
 
 def origen_de_opciones(carpeta_curso: Path, sesion: int) -> practica.OrigenDeOpciones:
-    """Lo que las listas de opciones necesitan de las fichas (PLAN.md §0, decisiones 60 y 61): el vocabulario de la
-    sesión, el texto de las dos fichas y si la sesión enseña listas o validación de datos."""
+    """Lo que las listas de opciones necesitan de las fichas y del material aprobado (PLAN.md §0, decisiones 60 a
+    62): el vocabulario de la sesión, el texto de las dos fichas, los procesos y si la sesión enseña listas o
+    validación de datos."""
     ficha_sesion = _ficha_sesion(carpeta_curso, sesion)
-    vocabulario = tuple((c["concepto"], tuple(c["variantes"])) for c in almacen.vocabulario(ficha_sesion))
+    conceptos = almacen.vocabulario(ficha_sesion)
+    vocabulario = tuple((c["concepto"], tuple(c["variantes"])) for c in conceptos)
     rutas = [almacen.ruta_ficha(carpeta_curso, "curso", extension=".md"),
              almacen.ruta_ficha(carpeta_curso, "sesion", sesion, ".md")]
     fichas = "\n".join(r.read_text(encoding="utf-8") for r in rutas if r.exists())
     tema = " ".join(almacen.valor(ficha_sesion, c) for c in ("sesion.numero_titulo", "sesion.alcance"))
-    return practica.OrigenDeOpciones(vocabulario, fichas, bool(practica.ENSENA_LISTAS.search(tema)))
+    procesos = practica.procesos_del_vocabulario(conceptos) + practica.procesos_del_material(
+        _aprobado(lectura.estado(carpeta_curso, sesion), lectura.archivos(carpeta_curso, sesion)),
+        _aprobado(diapositivas.estado(carpeta_curso, sesion), diapositivas.archivos(carpeta_curso, sesion)))
+    return practica.OrigenDeOpciones(vocabulario, fichas, bool(practica.ENSENA_LISTAS.search(tema)), tuple(procesos))
+
+
+def _aprobado(estado_: dict, rutas: dict) -> dict | None:
+    """El contenido guardado de un material aprobado de la sesión, o None."""
+    if estado_.get("estado") != "aprobada" or not rutas["contenido"].exists():
+        return None
+    return comun.leer_json(rutas["contenido"])
 
 
 def fecha_de_referencia(carpeta_curso: Path) -> str:
@@ -311,8 +323,10 @@ CÓMO ENTREGAR EL LABORATORIO (PLAN.md §0, decisión 33)
     cálculo, un texto) o si la sesión enseña listas o validación de datos; en ese caso «listas» va vacía.
     - opciones: dos como mínimo, sin repetidas. Cada una aparece escrita en las fichas, en «Antes de empezar» (por
       ejemplo, en una tabla de criterios) o en los datos del mismo archivo; «Sí» y «No» valen siempre (decisión 61).
-      Un concepto del vocabulario va con su nombre único, y los conceptos van en el orden de la fuente. Pon todas las
-      opciones del conjunto, no solo las correctas: la lista no delata la respuesta.
+      Un concepto del vocabulario va con su nombre único. Si las opciones son pasos de un proceso (los conceptos
+      marcados «(proceso)» en la ficha, o los pasos ordenados de la lectura o de las diapositivas), van en el orden de
+      ese proceso; si no, en cualquier orden (decisión 62). Pon todas las opciones del conjunto, no solo las
+      correctas: la lista no delata la respuesta.
     - respuestas: la respuesta correcta de cada fila de datos, en orden y escrita igual que su opción, o "" si la
       fila no se responde. Va solo a la guía del profesor. La columna de la lista va vacía en «filas».
     - El paso de ese ejercicio dice que el alumno elige su respuesta de la lista de la celda, sin nombrar menús ni

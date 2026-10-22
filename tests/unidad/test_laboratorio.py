@@ -647,3 +647,62 @@ def test_una_opcion_escrita_en_la_ficha_antes_de_empezar_o_el_archivo_vale(sesio
 def test_una_opcion_se_busca_como_palabra_entera_y_sin_mayusculas():
     assert practica._aparece("Alto", "nivel alto de riesgo")
     assert not practica._aparece("Alto", "el altoparlante")
+
+
+# ---------- El orden de las opciones solo en los procesos (PLAN.md §0, decisión 62) ----------
+
+def _con_proceso_en_la_ficha(carpeta):
+    from app.fichas import almacen
+    from tests.fixtures import fichas as datos
+    sesion_ = {**datos.SESION, "vocabulario.conceptos": sembrados.VOCABULARIO_CON_PROCESO}
+    almacen.guardar(carpeta, "sesion", 1, datos.ficha("sesion", sesion_))
+
+
+def test_la_ficha_lee_la_marca_proceso_y_la_quita_del_nombre():
+    from app.fichas import almacen
+    from tests.fixtures import fichas as datos
+    conceptos = almacen.vocabulario(datos.ficha("sesion", {"vocabulario.conceptos": sembrados.VOCABULARIO_CON_PROCESO}))
+    assert [(c["concepto"], c["proceso"]) for c in conceptos] == [
+        ("Manifiesto Ágil", True), ("Pilares de Scrum", True), ("Valores de Scrum", False)]
+    assert conceptos[0]["variantes"] == ["Agile", "manifiesto agile"]
+    assert practica.procesos_del_vocabulario(conceptos) == [("Manifiesto Ágil", "Pilares de Scrum")]
+
+
+def test_conceptos_sin_proceso_en_otro_orden_pasan(sesion):  # noqa: F811
+    contenido, problemas = laboratorio._validar(sembrados.con_listas_y(sembrados.OTRO_ORDEN), sesion, 1)
+    assert problemas == [] and contenido is not None
+
+
+def test_pasos_de_un_proceso_de_la_ficha_en_otro_orden_son_falla(sesion):  # noqa: F811
+    _con_proceso_en_la_ficha(sesion)
+    contenido, problemas = laboratorio._validar(sembrados.con_listas_y(sembrados.OTRO_ORDEN), sesion, 1)
+    assert contenido is None
+    assert any(sembrados.FUERA_DEL_PROCESO in p and p.startswith("FALLA") for p in problemas), problemas
+    contenido, problemas = laboratorio._validar(sembrados.con_listas(), sesion, 1)
+    assert problemas == [], problemas
+
+
+def test_los_procesos_salen_de_las_diapositivas_y_de_aplicalo_asi():
+    diapositivas_ = {"diapositivas": [
+        {"tipo": "proceso", "grafico": {"elementos": [{"texto": "Planificar"}, {"texto": "Revisar"}]}},
+        {"tipo": "pasos", "frases": ["Abrir", "Cerrar"]},
+        {"tipo": "mapa", "grafico": {"elementos": [{"texto": "A"}, {"texto": "B"}]}},
+    ]}
+    lectura_ = {"aplicalo": {"plantilla": ["1. Define la meta.", "2) Elige las tareas", "Nota sin número"]}}
+    assert practica.procesos_del_material(lectura_, diapositivas_) == [
+        ("Planificar", "Revisar"), ("Abrir", "Cerrar"), ("Define la meta", "Elige las tareas")]
+    assert practica.procesos_del_material(None, None) == []
+
+
+def test_pasos_de_una_diapositiva_de_proceso_aprobada_en_otro_orden_son_falla(sesion, monkeypatch):  # noqa: F811
+    from app.materiales import comun, diapositivas
+    rutas = diapositivas.archivos(sesion, 1)
+    rutas["contenido"].parent.mkdir(parents=True, exist_ok=True)
+    comun.guardar_json(rutas["contenido"], {"diapositivas": [
+        {"tipo": "proceso", "grafico": {"elementos": [{"texto": c} for c in sembrados.CONCEPTOS]}}]})
+    monkeypatch.setattr(diapositivas, "estado", lambda *_: {"estado": "aprobada"})
+    contenido, problemas = laboratorio._validar(sembrados.con_listas_y(sembrados.OTRO_ORDEN), sesion, 1)
+    assert contenido is None
+    assert any("son pasos de un proceso" in p for p in problemas), problemas
+    monkeypatch.setattr(diapositivas, "estado", lambda *_: {"estado": "verificada"})
+    assert laboratorio._validar(sembrados.con_listas_y(sembrados.OTRO_ORDEN), sesion, 1)[1] == []
