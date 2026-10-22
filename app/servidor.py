@@ -552,6 +552,16 @@ def _y(partes: list[str]) -> str:
     return ", ".join(partes[:-1]) + " y " + partes[-1] if len(partes) > 1 else "".join(partes)
 
 
+def _a(el: str) -> str:
+    """«el laboratorio» → «al laboratorio»; «la lectura» → «a la lectura»."""
+    return "al " + el[3:] if el.startswith("el ") else "a " + el
+
+
+def _de(el: str) -> str:
+    """«el laboratorio» → «del laboratorio»; «la lectura» → «de la lectura»."""
+    return "del " + el[3:] if el.startswith("el ") else "de " + el
+
+
 def _forma(datos: dict, raiz: str) -> str:
     """«Aprobad» → «Aprobada», «Aprobadas» o «Aprobado», según el material."""
     return raiz + datos.get("o", "a") + ("s" if datos.get("plural") else "")
@@ -628,12 +638,25 @@ def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False
         elif e in ("verificada", "con pendientes") and not viejo:
             siguiente = {"texto": f"Revisa la entrega y aprueba {datos['el']}.", "ancla": clave, "corto": datos["corto"]}
         elif e == "con fallas":
-            siguiente = {"texto": f"Resuelve las fallas de {datos['el']} en las fichas y genéra{datos['lo']} de nuevo.",
+            siguiente = {"texto": f"Resuelve las fallas {_de(datos['el'])} en las fichas y genéra{datos['lo']} de nuevo.",
                          "ancla": clave, "corto": datos["corto"]}
-        elif faltan["ficha"] or faltan["otros"]:
-            siguiente = {"texto": f"Completa lo que falta para generar {datos['el']}.", "ancla": clave, "corto": datos["corto"]}
+        elif not faltan["ficha"] and faltan["otros"] and (base := next(
+                (v for v in viejos if v["clave"] == lectura.CLAVE), None)):
+            # Lo bloquea una lectura aprobada que quedó desactualizada: el paso es esa lectura, no este material,
+            # cuyo botón Generar está bloqueado.
+            sale = "salen" if datos["plural"] else "sale"
+            siguiente = {"texto": f"Genera de nuevo {base['el']} y apruéba{base['lo']}.", "ancla": base["clave"],
+                         "corto": base["corto"], "boton": f"Ir {_a(base['el'])}",
+                         "motivo": f"{datos['el'][:1].upper()}{datos['el'][1:]} {sale} {_de(base['el'])}. "
+                                   f"La ficha cambió después de aprobar{base['lo']}."}
         else:
-            siguiente = {"texto": f"Genera {datos['el']}.", "ancla": clave, "corto": datos["corto"]}
+            # Uno que no se aprobó y quedó desactualizado se genera otra vez para que siga a la ficha.
+            otra_vez = " de nuevo" if viejo and e in ("verificada", "con pendientes") else ""
+            if faltan["ficha"] or faltan["otros"]:
+                siguiente = {"texto": f"Completa lo que falta para generar {datos['el']}{otra_vez}.", "ancla": clave,
+                             "corto": datos["corto"]}
+            else:
+                siguiente = {"texto": f"Genera {datos['el']}{otra_vez}.", "ancla": clave, "corto": datos["corto"]}
     if siguiente is None and viejos:
         # Aprobados, pero no todos al día: decirlo, para que «aprobados» no se lea como «listos para entregar».
         # Se nombran y el enlace lleva al primero, para no tener que buscarlos en el panel.
@@ -645,7 +668,7 @@ def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False
             cuales, lo = f"{nombres} quedaron desactualizad{'as' if femenino else 'os'}", "las" if femenino else "los"
         siguiente = {"texto": f"Los materiales de esta sesión están aprobados, pero {cuales}: la ficha cambió después. "
                               f"Decide si {lo} generas de nuevo.",
-                     "ancla": viejos[0]["clave"], "corto": viejos[0]["corto"], "boton": f"Ir a {viejos[0]['el']}"}
+                     "ancla": viejos[0]["clave"], "corto": viejos[0]["corto"], "boton": f"Ir {_a(viejos[0]['el'])}"}
     elif siguiente is None:
         siguiente = {"texto": "Los materiales de esta sesión están aprobados.", "ancla": "", "corto": "Listo"}
     return {"puede_empezar": puede_empezar, "ficha_por_preparar": puede_empezar and not sesion_lista,
@@ -760,14 +783,14 @@ def _que_sigue(curso: str, panel: dict) -> dict | None:
                     "boton": "Ir a la ficha de la sesión", "motivo": "Ningún material de la sesión empieza sin ella."}
         if s["siguiente"]["ancla"]:
             m = next(x for x in s["materiales"] if x["clave"] == s["siguiente"]["ancla"])
-            texto = s["siguiente"]["texto"]
-            if m["desactualizado"] and m["estado"] in ("aprobada", "verificada", "con pendientes"):
-                texto = texto.rstrip(".") + " de nuevo."
+            texto = s["siguiente"]["texto"]   # ya dice «de nuevo» cuando hace falta
+            motivo = s["siguiente"].get("motivo") or (
+                (f"Falta información para generar{'las' if m['plural'] else ('lo' if m['el'].startswith('el ') else 'la')}. "
+                 "La página del material dice qué.") if texto.startswith("Completa") else _motivo(m))
             return {"texto": f"Sesión {s['numero']}: {texto[:1].lower()}{texto[1:]}",
                     "url": f"{base}/sesiones/{s['numero']}/materiales/{m['clave']}",
-                    "boton": f"Ir a {m['el']}", "material": m["clave"], "sesion": s["numero"],
-                    "motivo": (f"Falta información para generar{'las' if m['plural'] else ('lo' if m['el'].startswith('el ') else 'la')}. "
-                               "La página del material dice qué.") if texto.startswith("Completa") else _motivo(m)}
+                    "boton": s["siguiente"].get("boton") or f"Ir {_a(m['el'])}", "material": m["clave"],
+                    "sesion": s["numero"], "motivo": motivo}
     return None
 
 

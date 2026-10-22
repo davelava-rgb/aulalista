@@ -465,6 +465,39 @@ def test_el_tablero_trae_lo_que_sigue_con_motivo_boton_y_costo(sesion):  # noqa:
     assert sigue["motivo"] == "La ficha cambió después de generarla: ya no la sigue."
 
 
+def test_si_una_lectura_desactualizada_bloquea_las_diapositivas_lo_que_sigue_es_la_lectura(sesion):  # noqa: F811
+    # Las diapositivas salen de la lectura aprobada: con la lectura desactualizada, su botón Generar está bloqueado.
+    # Lo que sigue no puede llevar a ese botón: lleva a la lectura y dice por qué (crítica de la interfaz, P1).
+    _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00", desactualizado=True)
+    assert servidor.diapositivas.faltan(sesion, 1)["otros"]          # de verdad bloqueadas
+    siguiente = servidor._vista_de_materiales(sesion, "scrum", 1)["siguiente"]
+    assert siguiente["ancla"] == "lectura" and siguiente["texto"] == "Genera de nuevo la lectura y apruébala."
+    sigue = servidor._tablero(sesion, "scrum", servidor._panel(sesion, "scrum", "curso"))["sigue"]
+    assert sigue["texto"] == "Sesión 1: genera de nuevo la lectura y apruébala."
+    assert sigue["url"] == "/cursos/scrum/sesiones/1/materiales/lectura" and sigue["boton"] == "Ir a la lectura"
+    assert sigue["motivo"] == "Las diapositivas salen de la lectura. La ficha cambió después de aprobarla."
+    # La página de las diapositivas enlaza a la lectura en vez de dejar solo el botón bloqueado.
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
+    assert ('<a href="/cursos/scrum/sesiones/1/materiales/lectura" data-atajo="s" aria-keyshortcuts="S">'
+            "Genera de nuevo la lectura y apruébala.</a>") in pagina
+
+
+def test_lo_que_sigue_no_repite_de_nuevo_y_contrae_al_y_del(sesion):  # noqa: F811
+    assert servidor._a("el laboratorio") == "al laboratorio" and servidor._a("la lectura") == "a la lectura"
+    assert servidor._de("el laboratorio") == "del laboratorio" and servidor._de("las diapositivas") == "de las diapositivas"
+    for clave in ("lectura", "diapositivas", "actividad"):
+        _poner(sesion, clave, estado="aprobada", aprobada="2026-10-15T10:00:00")
+    _poner(sesion, "laboratorio", estado="aprobada", aprobada="2026-10-15T10:00:00", desactualizado=True)
+    sigue = servidor._tablero(sesion, "scrum", servidor._panel(sesion, "scrum", "curso"))["sigue"]
+    assert sigue["texto"].endswith("Decide si lo generas de nuevo.") and "de nuevo de nuevo" not in sigue["texto"]
+    assert sigue["boton"] == "Ir al laboratorio"
+    pagina = cliente.get("/cursos/scrum").text
+    assert "de nuevo de nuevo" not in pagina and "Ir a el " not in pagina
+    _poner(sesion, "laboratorio", estado="con fallas", aprobada="", desactualizado=False)
+    texto = servidor._vista_de_materiales(sesion, "scrum", 1)["siguiente"]["texto"]
+    assert texto == "Resuelve las fallas del laboratorio en las fichas y genéralo de nuevo."
+
+
 def test_material_ficha_y_fuente_tienen_un_enlace_para_volver_al_curso(sesion):  # noqa: F811
     for url in ("/cursos/scrum/sesiones/1/materiales/lectura", "/cursos/scrum/sesiones/1/ficha"):
         assert '<p class="volver"><a href="/cursos/scrum">Volver a las sesiones del curso</a></p>' in cliente.get(url).text
