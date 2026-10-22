@@ -300,18 +300,21 @@
     <button type="submit" name="accion" value="proponer" class="secundario">Proponer desde las fuentes</button>
     {% endif %}
     {# El costo, pegado al botón que gasta: la barra queda fija y la nota de abajo puede no verse. #}
-    {% if sesion %}<p class="nota costo-guardar">{{ gasta(terminos) }}. {{ costo(costos.proponer, "La última propuesta") }}</p>{% endif %}
+    {% if sesion %}<p class="nota costo-guardar">{{ gasta(terminos) }}. {{ costo(costos.proponer, "La última propuesta") }}</p>
+    {% else %}<p class="nota costo-guardar">«Proponer desde las fuentes» {{ gasta(terminos, "gasta") }}. {{ costo(costos.proponer, "La última propuesta") }}</p>{% endif %}
     <p class="sin-guardar" id="sin-guardar" role="status" hidden>Hay cambios sin guardar.</p>
     {% if ficha.confirmada and generados %}
-    <p class="aviso-guardar">Ficha confirmada: guardar un cambio desactualiza {{ generados_texto }}. Cambiar solo «Materiales de esta sesión» no lo desactualiza.</p>
+    {# Cada ficha dice lo suyo: «Materiales de esta sesión» solo existe en la de la sesión (crítica de la interfaz). #}
+    {% if sesion %}<p class="aviso-guardar">Ficha confirmada: guardar un cambio desactualiza {{ generados_texto }}. Cambiar solo «Materiales de esta sesión» no lo desactualiza.</p>
+    {% else %}<p class="aviso-guardar">Ficha confirmada: guardar un cambio puede desactualizar {{ generados_texto }}. Cada material se desactualiza solo por lo que usa.</p>{% endif %}
     {% endif %}
   </div>
   {% if sesion %}
   <p class="nota">Al guardar, la IA prepara lo que falte del plan de la sesión. Después revisa los ejercicios y los
     corrige una vez si hace falta. Si todo cumple, la ficha queda confirmada.</p>
   {% else %}
-  <p class="nota">«Guardar» guarda la ficha y, si está completa, la confirma. «Proponer desde las fuentes» y
-    «Completar» solo llenan campos vacíos y {{ gasta(terminos, "gastan") }}. {{ costo(costos.proponer, "La última propuesta") }}</p>
+  <p class="nota">«Guardar» guarda la ficha y, si está completa, la confirma. No usa IA. «Proponer desde las fuentes» y
+    «Completar» solo llenan campos vacíos.</p>
   {% endif %}
 </form>
 

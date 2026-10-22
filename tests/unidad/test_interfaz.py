@@ -569,7 +569,20 @@ def test_guardar_la_ficha_de_la_sesion_dice_que_usa_ia_y_lleva_su_costo_al_lado(
     assert '<p class="nota costo-guardar">Gasta tokens' in pagina
     assert "guardar.textContent = guardar.dataset.texto;" in pagina          # al cerrar una sección no vuelve a «Guardar»
     curso = cliente.get("/cursos/scrum/ficha").text                         # en el curso, Guardar no llama a la IA
-    assert re.search(r'id="guardar-ficha"[^>]*>Guardar</button>', curso) and "costo-guardar" not in curso
+    assert re.search(r'id="guardar-ficha"[^>]*>Guardar</button>', curso)
+    # En el curso gasta «Proponer desde las fuentes»: su costo va en la barra, junto al botón (crítica de la interfaz).
+    acciones = curso.split('<div class="acciones">')[1].split("</div>")[0]
+    assert "Proponer desde las fuentes</button>" in acciones
+    assert '<p class="nota costo-guardar">«Proponer desde las fuentes» gasta tokens' in acciones
+
+
+def test_el_aviso_de_la_ficha_del_curso_no_nombra_una_seccion_de_la_sesion(sesion):  # noqa: F811
+    _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00")
+    curso = cliente.get("/cursos/scrum/ficha").text
+    assert "Materiales de esta sesión» no lo desactualiza" not in curso
+    assert "Ficha confirmada: guardar un cambio puede desactualizar" in curso
+    assert "Cada material se desactualiza solo por lo que usa." in curso
+    assert "Cambiar solo «Materiales de esta sesión» no lo desactualiza." in cliente.get("/cursos/scrum/sesiones/1/ficha").text
 
 
 def test_los_titulos_sobre_niebla_usan_el_magenta_para_texto():
