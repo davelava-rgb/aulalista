@@ -592,6 +592,10 @@ def test_cada_seccion_trae_su_estado_y_su_resumen():
     assert [s["estado"] for s in secciones] == ["completa", "vacia", "alerta", "no_se_usa"]
     assert secciones[0]["resumen"] == [{"etiqueta": "Alcance", "completa": "Alcance (obligatorio)",
                                         "valor": "Calidad de datos y su ciclo."}]
+    # En un campo de varias líneas, cada línea es un elemento: no se leen pegados.
+    lista = {**_campo("s", "Sesiones", "Sesión 1 · Datos" + chr(10) + "Sesión 2 · Calidad"), "multilinea": True}
+    sesiones = servidor._indice_de_secciones([_seccion("1. Curso", lista)])
+    assert sesiones[0]["resumen"][0]["valor"] == "Sesión 1 · Datos; Sesión 2 · Calidad"
     assert servidor._etiqueta_corta("Material de referencia: una línea por archivo") == "Material de referencia"
     assert servidor._etiqueta_corta('Riesgos de "Cuidado con" (de 1 a 3)') == 'Riesgos de "Cuidado con"'
 

@@ -208,7 +208,7 @@
   <section class="seccion tarjeta estado-{{ s.estado }}{{ ' leer' if leer }}{{ ' apagada' if s.estado == 'no_se_usa' }}" id="{{ s.ancla }}" aria-labelledby="t-{{ s.ancla }}">
     <div class="sec-cabeza">
       <button type="button" class="sec-plegar" aria-expanded="true" aria-controls="cuerpo-{{ s.ancla }}">
-        <span class="sec-flecha" aria-hidden="true"></span><span class="sr">Plegar o desplegar </span></button>
+        <span class="sec-flecha" aria-hidden="true"></span><span class="sr">Plegar o desplegar {{ s.nombre.split(" (")[0] }}</span></button>
       <h2 id="t-{{ s.ancla }}">{{ s.nombre }}</h2>
       {% if s.origen_comun %}<span class="sec-fuente">De {{ s.origen_comun }}</span>{% endif %}
       <span class="sec-estado estado-{{ s.estado }}">{{ {"completa": "Completa", "vacia": "Vacía", "alerta": "Por definir", "no_se_usa": "No se usa"}[s.estado] }}</span>
@@ -398,9 +398,9 @@
   formulario.addEventListener("change", marcarCambio);
   window.addEventListener("beforeunload", (evento) => { if (sinGuardar) { evento.preventDefault(); evento.returnValue = ""; } });
 
-  // Secciones plegables: la ficha se recorre sin desplazarse por todos sus campos. Al abrir la página se pliegan las
-  // secciones que no piden nada: en una ficha confirmada, todas; en una sin confirmar, las completas. Sin JavaScript,
-  // todo queda desplegado.
+  // Secciones plegables: la ficha se recorre sin desplazarse por todos sus campos. Una ficha confirmada se abre
+  // desplegada, para leerla (decisión 63); solo queda plegada la sección que no se usa. En una sin confirmar se
+  // pliegan las completas. Sin JavaScript, todo queda desplegado.
   const tarjetas = [...formulario.querySelectorAll("section.seccion.tarjeta")];
   const plegar = (seccion, plegada) => {
     seccion.classList.toggle("plegada", plegada);
@@ -409,7 +409,7 @@
   document.documentElement.classList.add("plegable-js");
   tarjetas.forEach((seccion) => {
     const confirmada = formulario.classList.contains("ficha-lectura");
-    plegar(seccion, confirmada ? !seccion.classList.contains("estado-alerta") : seccion.classList.contains("estado-completa"));
+    plegar(seccion, seccion.classList.contains(confirmada ? "estado-no_se_usa" : "estado-completa"));
     seccion.querySelector(".sec-plegar").addEventListener("click", () => plegar(seccion, !seccion.classList.contains("plegada")));
     seccion.querySelector("h2").addEventListener("click", () => plegar(seccion, !seccion.classList.contains("plegada")));
   });
@@ -418,6 +418,14 @@
     todas.hidden = false;
     todas.querySelectorAll("[data-plegar-todas]").forEach((boton) => boton.addEventListener("click", () =>
       tarjetas.forEach((seccion) => { if (!seccion.classList.contains("editando")) plegar(seccion, boton.dataset.plegarTodas === "1"); })));
+  }
+  // El índice fijo cambia de alto según cuántas filas de píldoras caben: se mide para que no tape el inicio de la
+  // sección a la que lleva un enlace.
+  const indice = document.querySelector(".indice");
+  if (indice) {
+    const medir = () => document.documentElement.style.setProperty("--alto-indice", indice.offsetHeight + "px");
+    medir();
+    if (window.ResizeObserver) new ResizeObserver(medir).observe(indice);
   }
   // Un enlace del índice despliega la sección a la que lleva.
   document.querySelectorAll(".indice a.pildora").forEach((a) => a.addEventListener("click", () => {

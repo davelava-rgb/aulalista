@@ -298,7 +298,8 @@ h3.alerta { color: var(--error); }
 .indice li { flex: none; display: flex; align-items: center; gap: 0.35rem; max-width: none; }
 .indice a { display: inline-flex; align-items: center; min-height: 36px; max-width: 18rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .indice .marca { font-size: 0.8125rem; white-space: nowrap; }
-.seccion, .bloque { scroll-margin-top: 7.5rem; }   /* el índice fijo ocupa hasta dos filas de píldoras */
+/* El índice fijo tapa lo que queda debajo: la página mide su alto real en --alto-indice (sin JavaScript, 7rem más el respiro). */
+.seccion, .bloque { scroll-margin-top: calc(var(--alto-indice, 7rem) + 0.5rem); }
 .estado-bloque { margin-left: 0.5rem; font-weight: normal; font-size: 0.875rem; opacity: 0.85; }
 .estado-bloque.alerta { color: var(--error); opacity: 1; }
 .sin-guardar { margin: 0; align-self: center; font-weight: bold; }
@@ -615,6 +616,7 @@ kbd { display: inline-block; min-width: 1.4em; padding: 0 0.35em; border: 1px so
 .plegable-js .sec-plegar { display: inline-grid; place-items: center; }
 .plegable-js .sec-cabeza h2 { cursor: pointer; }
 .plegable-js .seccion.plegada .sec-cuerpo { display: none; }
+.plegable-js .seccion.plegada .sec-editar { display: none; }   /* «Editar» solo en la sección desplegada (decisión 63) */
 .plegable-js .seccion.plegada .sec-cabeza { border-bottom: 0; }
 .plegable-js .seccion.plegada .sec-flecha { transform: rotate(-45deg); }
 .sec-estado { font-size: 0.8125rem; font-weight: bold; }

@@ -365,8 +365,11 @@ def _resumen_de_seccion(s: dict, campos: list[dict]) -> None:
             for c in (e["campos"] if e.get("grupo") else [e]):
                 if not controles.se_muestra(c.get("id", ""), valores):
                     continue        # una pregunta que no aplica no se resume (por ejemplo, los adjuntos sin IA)
+                # En un campo de varias líneas, cada línea es un elemento (una sesión, un concepto): se separan con
+                # «;» para no leerlos pegados. En los demás, el salto de línea es solo de la escritura.
+                lineas = [" ".join(linea.split()) for linea in c["valor"].splitlines() if linea.strip()]
                 s["resumen"].append({"etiqueta": _etiqueta_corta(c["etiqueta"]), "completa": c["etiqueta"],
-                                     "valor": " ".join(c["valor"].split())})
+                                     "valor": ("; " if c.get("multilinea") else " ").join(lineas)})
 
 
 def _exigir_ficha_del_curso(carpeta, curso):
