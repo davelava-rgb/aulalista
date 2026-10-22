@@ -552,6 +552,31 @@ def test_con_la_sesion_aprobada_el_siguiente_paso_es_lo_pendiente_del_curso(sesi
     assert '<a class="boton" href="/cursos/scrum/sesiones/2/materiales/lectura">Ir a la lectura de la sesión 2</a>' in pagina
 
 
+def test_las_fichas_sin_generar_dicen_su_estado_y_solo_la_que_sigue_se_destaca(sesion):  # noqa: F811
+    # Crítica de la interfaz: cada ficha decía «Generar», como si gastara; eran siete puertas con el mismo peso.
+    hoja = cliente.get("/cursos/scrum").text
+    assert 'class="ficha-material vacia sigue" href="/cursos/scrum/sesiones/1/materiales/lectura"' in hoja
+    assert '<span class="ficha-estado">Lo que sigue</span>' in hoja
+    assert 'class="ficha-material vacia" href="/cursos/scrum/sesiones/1/materiales/laboratorio"' in hoja
+    assert '<span class="ficha-estado">Sin generar</span>' in hoja and ">Generar</span>" not in hoja
+    assert len(re.findall(r'class="ficha-material [^"]*\bsigue"', hoja)) == 1
+
+
+def test_guardar_la_ficha_de_la_sesion_dice_que_usa_ia_y_lleva_su_costo_al_lado(sesion):  # noqa: F811
+    pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
+    assert re.search(r'id="guardar-ficha"[^>]*>Guardar y (preparar el plan|revisar) con IA</button>', pagina)
+    assert 'data-texto-seccion="Guardar esta sección y revisar con IA"' in pagina
+    assert '<p class="nota costo-guardar">Gasta tokens' in pagina
+    assert "guardar.textContent = guardar.dataset.texto;" in pagina          # al cerrar una sección no vuelve a «Guardar»
+    curso = cliente.get("/cursos/scrum/ficha").text                         # en el curso, Guardar no llama a la IA
+    assert re.search(r'id="guardar-ficha"[^>]*>Guardar</button>', curso) and "costo-guardar" not in curso
+
+
+def test_los_titulos_sobre_niebla_usan_el_magenta_para_texto():
+    css = (servidor.RAIZ / "web" / "estaticos" / "estilo.css").read_text(encoding="utf-8")
+    assert ".seccion.tarjeta.apagada h2, .mensaje h2 { color: var(--principal-texto); }" in css
+
+
 def test_lo_aceptado_al_aprobar_se_ve_en_el_tablero_y_en_el_recorrido(sesion):  # noqa: F811
     # Crítica de la interfaz: «Lista» y todo en verde escondían 6 decisiones pendientes aceptadas al aprobar.
     entrega = {"secciones": [{"clave": "pendientes", "titulo": "Decisiones pendientes",
@@ -954,7 +979,7 @@ def test_el_tablero_muestra_la_actividad_web_con_su_estado(sesion):  # noqa: F81
         _poner(sesion, clave, estado="aprobada", aprobada="2026-10-15T10:00:00")
     hoja = cliente.get("/cursos/scrum").text.split('<main class="hoja" id="principal" tabindex="-1">')[1]
     # La espera la lectura, que figura aprobada sin su contenido: la ficha no ofrece «Generar».
-    assert '<a class="ficha-material vacia bloqueada" href="/cursos/scrum/sesiones/1/materiales/actividad">' in hoja
+    assert '<a class="ficha-material vacia bloqueada sigue" href="/cursos/scrum/sesiones/1/materiales/actividad">' in hoja
     assert '<use href="#i-actividad"/>' in hoja
     # La lectura figura aprobada sin su contenido: el tablero pide completar lo que falta, en la actividad.
     assert "Sesión 1: completa lo que falta para generar la actividad web." in hoja

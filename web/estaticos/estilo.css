@@ -527,8 +527,10 @@ main.hoja .material .cabeza h1 { margin: 0; }
 .ficha-material.error .ficha-ico { background: var(--fondo); color: var(--error); }
 .ficha-material.error .ficha-estado { color: var(--error); }
 .ficha-material.vacia { border-style: dashed; background: var(--suave); }
-.ficha-material.vacia .ficha-estado { color: var(--principal-texto); }
-.ficha-material.vacia.bloqueada .ficha-estado { color: var(--texto); font-weight: normal; }
+/* Sin generar es un estado, no una acción: pizarra y sin negrita. Solo la ficha de «Lo que sigue» va en magenta. */
+.ficha-material.vacia .ficha-estado { color: var(--texto); font-weight: normal; }
+.ficha-material.vacia.sigue { border-color: var(--principal); }
+.ficha-material.vacia.sigue .ficha-estado { color: var(--principal-texto); font-weight: bold; }
 
 /* Preparación: una línea plegada cuando está lista; abierta y arriba si no. */
 .prep { margin: 2rem 0 0; border: 1px solid var(--borde); border-radius: 8px; }
@@ -583,6 +585,8 @@ main.hoja .material .cabeza h1 { margin: 0; }
 .sec-resumen { display: none; padding: 0.5rem 1.25rem 1rem; }
 .seccion.tarjeta.apagada { border-style: dashed; background: var(--suave); }
 .seccion.tarjeta.apagada .sec-cabeza { border-bottom-style: dashed; }
+/* Títulos sobre niebla: el magenta normal no llega a 4.5:1 (claro 4.3, oscuro 4.0); el de texto sí. */
+.seccion.tarjeta.apagada h2, .mensaje h2 { color: var(--principal-texto); }
 
 /* Con JavaScript (lo activa la página), una sección «leer» muestra su resumen y esconde sus campos. */
 .ficha-js .seccion.leer .sec-resumen { display: block; }

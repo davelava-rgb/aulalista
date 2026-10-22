@@ -293,20 +293,22 @@
     {% endif %}
     <button type="submit" name="accion" value="guardar" id="guardar-ficha" {% if aceptar_aparte %}class="secundario"{% endif %}
             {% if sesion %}data-ocupado="Preparando el plan… puede tardar unos minutos"{% endif %}
-            {% if ficha.confirmada and generados %}data-confirmar="Esta ficha está confirmada. Si guardas el cambio, hay que generar de nuevo {{ generados_texto }}, con gasto de tokens. ¿Guardar?"{% endif %}>Guardar</button>
+            data-texto="{{ guardar_texto }}" data-texto-seccion="{{ 'Guardar esta sección y revisar con IA' if sesion else 'Guardar esta sección' }}"
+            {% if ficha.confirmada and generados %}data-confirmar="Esta ficha está confirmada. Si guardas el cambio, hay que generar de nuevo {{ generados_texto }}, con gasto de tokens. ¿Guardar?"{% endif %}>{{ guardar_texto }}</button>
     {% if modo_lectura %}<button type="button" class="secundario" id="cancelar-seccion">Cancelar</button>{% endif %}
     {% if not sesion %}
     <button type="submit" name="accion" value="proponer" class="secundario">Proponer desde las fuentes</button>
     {% endif %}
+    {# El costo, pegado al botón que gasta: la barra queda fija y la nota de abajo puede no verse. #}
+    {% if sesion %}<p class="nota costo-guardar">{{ gasta(terminos) }}. {{ costo(costos.proponer, "La última propuesta") }}</p>{% endif %}
     <p class="sin-guardar" id="sin-guardar" role="status" hidden>Hay cambios sin guardar.</p>
     {% if ficha.confirmada and generados %}
     <p class="aviso-guardar">Ficha confirmada: guardar un cambio desactualiza {{ generados_texto }}. Cambiar solo «Materiales de esta sesión» no lo desactualiza.</p>
     {% endif %}
   </div>
   {% if sesion %}
-  <p class="nota">«Guardar» guarda la ficha y prepara con IA lo que falte del plan de la sesión. Después acepta lo
-    propuesto, revisa los ejercicios, los corrige una vez si hace falta y confirma la ficha. Si el plan ya está
-    completo, solo revisa los ejercicios. {{ gasta(terminos) }}. {{ costo(costos.proponer, "La última propuesta") }}</p>
+  <p class="nota">Al guardar, la IA prepara lo que falte del plan de la sesión. Después revisa los ejercicios y los
+    corrige una vez si hace falta. Si todo cumple, la ficha queda confirmada.</p>
   {% else %}
   <p class="nota">«Guardar» guarda la ficha y, si está completa, la confirma. «Proponer desde las fuentes» y
     «Completar» solo llenan campos vacíos y {{ gasta(terminos, "gastan") }}. {{ costo(costos.proponer, "La última propuesta") }}</p>
@@ -457,7 +459,7 @@
       editar.firstChild.textContent = editar.dataset.texto || "Editar";
       abierta = null;
       formulario.classList.remove("editando-algo");
-      guardar.textContent = "Guardar";
+      guardar.textContent = guardar.dataset.texto;
       marcarIndice();
     }
 
@@ -478,7 +480,7 @@
       editar.firstChild.textContent = "Cancelar";
       abierta = seccion;
       formulario.classList.add("editando-algo");
-      guardar.textContent = "Guardar esta sección";
+      guardar.textContent = guardar.dataset.textoSeccion;
       marcarIndice();
       let destino = seccion;
       if (bloque) {

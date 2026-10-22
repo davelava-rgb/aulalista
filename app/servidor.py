@@ -316,6 +316,9 @@ def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, m
         "curso": curso, "nombre": _nombre(curso), "titulo": titulo, "sesion": sesion, "ficha": ficha,
         "hay_propuestos": any((d or {}).get("estado") == almacen.PROPUESTO for d in ficha["campos"].values()),
         "secciones": secciones, "modo_lectura": ficha["confirmada"], "generados": generados, "generados_texto": _y(generados), "costos": costos,
+        # En la sesión, Guardar llama a la IA (decisión 54): el botón lo dice, no solo la nota de abajo.
+        "guardar_texto": ("Guardar" if not sesion else "Guardar y preparar el plan con IA"
+                          if flujo.plan_por_preparar(ficha) else "Guardar y revisar con IA"),
         "campos_sin_efecto": list(almacen.CAMPOS_SIN_EFECTO),
         # En la sesión solo se pregunta por la ficha corta: el plan lo prepara AulaLista (decisión 54).
         "preguntas": [p for p in almacen.preguntas_pendientes(ficha, maximo=10_000)
