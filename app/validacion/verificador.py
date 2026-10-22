@@ -39,6 +39,8 @@ LIMITES = {
                     "titulos_con": [{"patron": "^Mejora el resultado", "debe_contener": "(opcional)"}]},
     # La cantidad de pasos y las preguntas las revisa app/materiales/actividad.py: no son conteos de texto.
     "Actividad web": {},
+    # La cantidad y el tamaño de las preguntas los revisa app/materiales/evaluacion.py (decisión 64 c).
+    "Evaluacion": {},
 }
 # Solo la actividad web muestra puntos (PLAN.md §0, decisión 57 c). Los tiempos siguen siendo FALLA en todos.
 CON_PUNTAJES = ("Actividad web",)

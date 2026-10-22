@@ -491,3 +491,102 @@ def generar_laboratorio(contenido, identidad: Identidad, portada: Portada, desti
     destino.parent.mkdir(parents=True, exist_ok=True)
     documento.save(destino)
     return destino
+
+
+# ---------- Evaluación práctica (SKILL.md, «Material 6»; PLAN.md §0, decisión 64) ----------
+
+CADA_PREGUNTA_SOLA = "Cada pregunta funciona sola. Puedes resolverlas en cualquier orden."
+ALTO_DE_FILA_DE_RESPUESTA = Cm(1)
+
+
+def _tabla_sin_minimo(encabezados: list[str], filas: list[list[str]]) -> Tabla:
+    """La tabla de respuesta puede tener una sola columna; Tabla pide dos, así que se arma sin validar."""
+    return Tabla.model_construct(titulo="", encabezados=encabezados, filas=filas)
+
+
+def _encabezado_de_pregunta(documento: Document, p) -> None:
+    titulo = documento.add_heading(f"Pregunta {p.numero} · {p.titulo}", level=1)
+    titulo.paragraph_format.page_break_before = True          # cada pregunta empieza en una página nueva
+
+
+def generar_evaluacion(contenido, identidad: Identidad, portada: Portada, destino: Path, nombre_zip: str = "",
+                       sesion: int | None = None) -> Path:
+    """Hoja del alumno (SKILL.md, «Material 6»): después de la portada, las dos líneas de indicaciones; por pregunta,
+    título, situación, archivos, tarea en pasos y la tabla donde escribe la respuesta. Sin respuestas, sin el
+    concepto que evalúa, sin puntos ni tiempos."""
+    documento = documento_base(identidad, portada)
+    if sesion is not None:
+        _pie(documento, f"Sesión {sesion} · Evaluación práctica", identidad)
+    documento.add_heading("Indicaciones", level=1)
+    documento.add_paragraph(contenido.indicaciones.consulta)
+    documento.add_paragraph(contenido.indicaciones.entrega)
+    documento.add_paragraph(CADA_PREGUNTA_SOLA)
+    if contenido.archivos:
+        documento.add_heading("Archivos de la evaluación", level=2)
+        if nombre_zip:
+            cuantos = len(contenido.archivos)
+            documento.add_paragraph(f"Los {cuantos} archivos están en el archivo comprimido {nombre_zip}."
+                                    if cuantos > 1 else f"El archivo está en el archivo comprimido {nombre_zip}.")
+        pregunta_de = {n: p.numero for p in contenido.preguntas for n in p.archivos}
+        tabla_de_datos(documento, identidad, Tabla(
+            titulo="", encabezados=["Archivo", "Pregunta", "Contenido"],
+            filas=[[a.nombre, str(pregunta_de.get(a.nombre, "")), a.descripcion] for a in contenido.archivos]))
+    for p in contenido.preguntas:
+        _encabezado_de_pregunta(documento, p)
+        _subtitulo(documento, "Situación", identidad)
+        documento.add_paragraph(p.situacion)
+        if p.archivos:
+            _subtitulo(documento, "Archivos", identidad)
+            for nombre in p.archivos:
+                documento.add_paragraph(style="List Bullet").add_run(nombre).bold = True
+        _subtitulo(documento, "Tarea", identidad)
+        _lista_numerada(documento, p.pasos, identidad)
+        _subtitulo(documento, "Tu respuesta", identidad)
+        tabla = p.tabla_de_respuesta
+        if tabla.titulo:
+            documento.add_paragraph(tabla.titulo)
+        tabla_de_datos(documento, identidad, _tabla_sin_minimo(tabla.encabezados, tabla.filas))
+        for fila in documento.tables[-1].rows[1:]:          # espacio para escribir a mano en cada fila
+            fila.height, fila.height_rule = ALTO_DE_FILA_DE_RESPUESTA, WD_ROW_HEIGHT_RULE.AT_LEAST
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    documento.save(destino)
+    return destino
+
+
+def generar_clave(contenido, identidad: Identidad, portada: Portada, destino: Path, sesion: int | None = None) -> Path:
+    """Clave de corrección, en un Word aparte con el título «Clave de la evaluación» (SKILL.md, «Material 6»): por
+    pregunta, la respuesta completa como se vería en la tabla, las partes una por línea, las otras respuestas
+    aceptadas, los problemas sembrados y los errores más comunes."""
+    documento = documento_base(identidad, portada)
+    if sesion is not None:
+        _pie(documento, f"Sesión {sesion} · Clave de la evaluación", identidad)
+    problemas_de = {}
+    for archivo in contenido.archivos:
+        if archivo.problema:
+            problemas_de.setdefault(archivo.nombre, []).append(archivo.problema)
+    for p in contenido.preguntas:
+        _encabezado_de_pregunta(documento, p)
+        concepto = documento.add_paragraph()
+        concepto.add_run("Concepto que evalúa: ").bold = True
+        concepto.add_run(p.concepto)
+        _subtitulo(documento, "Respuesta correcta", identidad)
+        tabla_de_datos(documento, identidad, _tabla_sin_minimo(p.tabla_de_respuesta.encabezados, p.clave.respuesta))
+        if p.clave.aceptadas:
+            _subtitulo(documento, "Otras respuestas aceptadas", identidad)
+            for texto in p.clave.aceptadas:
+                documento.add_paragraph(texto, style="List Bullet")
+        _subtitulo(documento, "Partes de la respuesta", identidad)
+        for texto in p.clave.partes:
+            documento.add_paragraph(texto, style="List Bullet")
+        sembrados = [*p.clave.problemas,
+                     *[f"{nombre}: {t}" for nombre in p.archivos for t in problemas_de.get(nombre, [])]]
+        if sembrados:
+            _subtitulo(documento, "Problemas sembrados en los archivos", identidad)
+            for texto in sembrados:
+                documento.add_paragraph(texto, style="List Bullet")
+        _subtitulo(documento, "Errores comunes", identidad)
+        for texto in p.clave.errores_comunes:
+            documento.add_paragraph(texto, style="List Bullet")
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    documento.save(destino)
+    return destino

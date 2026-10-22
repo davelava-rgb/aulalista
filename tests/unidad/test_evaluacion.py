@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from app import servidor
 from app.fichas import almacen, flujo
-from app.materiales import comun, evaluacion
+from app.materiales import comun, evaluacion, practica
 from app.materiales.contenido import ESQUEMA_EVALUACION, Evaluacion
 from tests.conftest import consulta_en_secuencia
 from tests.sembrados import evaluacion as sembrados
@@ -24,7 +24,7 @@ cliente = TestClient(servidor.app)
 
 def test_la_evaluacion_limpia_cumple_el_modelo():
     contenido = Evaluacion.model_validate(sembrados.limpio())
-    assert len(contenido.preguntas) == 2
+    assert len(contenido.preguntas) == 3
     assert contenido.preguntas[0].tabla_de_respuesta.por_llenar == 3   # cada celda vacía es una decisión (64 c)
     assert set(ESQUEMA_EVALUACION["properties"]) == {"indicaciones", "preguntas", "archivos", "pasajes", "decisiones"}
 
@@ -162,3 +162,86 @@ def test_la_ficha_ya_no_dice_que_la_evaluacion_no_se_usa(sesion):  # noqa: F811
     assert "Las preguntas se revisan al guardar, junto con los ejercicios." in pagina
     # El material todavía no se genera desde la interfaz (decisión 46): llega en la fase 9d.
     assert "/materiales/evaluacion" not in cliente.get("/cursos/scrum").text
+
+
+# ---------- Archivos y verificador (fase 9b) ----------
+
+def _hallazgos(resultado):
+    return [(h.nivel, h.regla, h.detalle) for h in resultado.hallazgos]
+
+
+def _fallas(resultado):
+    return [h for h in resultado.hallazgos if h.nivel == "FALLA"]
+
+
+def _texto_docx(ruta):
+    from docx import Document
+    documento = Document(ruta)
+    celdas = [c.text for t in documento.tables for f in t.rows for c in f.cells]
+    return "\n".join([p.text for p in documento.paragraphs] + celdas)
+
+
+def test_la_evaluacion_limpia_da_sus_dos_word_su_zip_y_su_excel_sin_fallas(sesion):  # noqa: F811
+    contenido = Evaluacion.model_validate(sembrados.limpio())
+    problemas, resultado = evaluacion.armar_y_verificar(sesion, 1, contenido)
+    assert problemas == [] and _fallas(resultado) == [], _hallazgos(resultado)
+    rutas = evaluacion.archivos(sesion, 1)
+    for clave in ("word", "clave", "zip", "excel"):
+        assert rutas[clave].exists(), clave
+    assert practica.nombres_del_zip(rutas["zip"]) == sorted(a.nombre for a in contenido.archivos)
+    hoja, clave = _texto_docx(rutas["word"]), _texto_docx(rutas["clave"])
+    assert "Evaluación práctica" in hoja and "Pregunta 1 · Clasifica los hechos" in hoja and "Tu respuesta" in hoja
+    assert "Transparencia" not in hoja and "Concepto que evalúa" not in hoja      # sin respuestas ni concepto
+    assert "Clave de la evaluación" in clave and "Transparencia" in clave and "Errores comunes" in clave
+    assert "S1_P1_hechos-ventas.xlsx: El hecho 3 parece de adaptación." in clave  # el problema sembrado del archivo
+    from docx import Document
+    from docx.shared import Cm
+    respuesta = Document(rutas["word"]).tables[-1]                     # la tabla de respuesta de la última pregunta
+    assert all(f.height >= Cm(1) for f in respuesta.rows[1:])          # espacio para escribir a mano
+
+
+@pytest.mark.parametrize("nombre", list(sembrados.SEMBRADOS))
+def test_cada_error_sembrado_de_la_evaluacion_se_detecta(sesion, nombre):  # noqa: F811
+    cambio, regla, detalle = sembrados.SEMBRADOS[nombre]
+    contenido = Evaluacion.model_validate(sembrados.con(cambio))
+    _, resultado = evaluacion.armar_y_verificar(sesion, 1, contenido)
+    assert any(h.nivel == "FALLA" and h.regla == regla and detalle in h.detalle for h in resultado.hallazgos), \
+        _hallazgos(resultado)
+
+
+def test_la_cantidad_de_preguntas_es_la_de_la_ficha(sesion):  # noqa: F811
+    datos = sembrados.limpio()
+    datos["preguntas"].pop()
+    datos["archivos"].pop()
+    hallazgos = evaluacion.controles(Evaluacion.model_validate(datos), evaluacion.preguntas_de_la_ficha(sesion, 1))
+    assert ("FALLA", "cantidad de preguntas", "la ficha pide 3 preguntas y la evaluación tiene 2") in [
+        (h.nivel, h.regla, h.detalle) for h in hallazgos]
+
+
+def test_ninguna_respuesta_aparece_en_el_laboratorio_ni_en_la_actividad():
+    contenido = Evaluacion.model_validate(sembrados.limpio())
+    assert evaluacion.controles(contenido, 3, {"la guía del laboratorio": "otros datos sin relación"}) == []
+    # Se busca la fila completa de la respuesta («Hecho 1: Transparencia»), sin tildes, mayúsculas ni signos.
+    otros = {"la guía del laboratorio": evaluacion._plano("En el ejemplo, HECHO 1: transparencia.")}
+    hallazgos = evaluacion.controles(contenido, 3, otros)
+    assert [(h.regla, h.detalle) for h in hallazgos] == [
+        ("respuesta fuera de la clave", "la respuesta aparece en la guía del laboratorio")]
+
+
+def test_una_pregunta_no_usa_un_archivo_del_laboratorio():
+    from app.materiales.contenido import ArchivoPractica
+    contenido = Evaluacion.model_validate(sembrados.limpio())
+    igual = ArchivoPractica.model_validate({**sembrados.LIMPIO["archivos"][0], "nombre": "S1_E2_hechos.xlsx"})
+    hallazgos = evaluacion.controles(contenido, 3, del_laboratorio=[igual])
+    assert ("FALLA", "archivo del laboratorio") in [(h.nivel, h.regla) for h in hallazgos]
+    parecido = ArchivoPractica.model_validate({**sembrados.LIMPIO["archivos"][0], "nombre": "S1_E2_hechos.xlsx",
+                                               "hojas": [{"nombre": "Hechos", "encabezados": ["Hecho", "Descripción"],
+                                                          "filas": sembrados.LIMPIO["archivos"][0]["hojas"][0]["filas"][:2]
+                                                          + [["Hecho 9", "Otro dato."]]}]})
+    hallazgos = evaluacion.controles(contenido, 3, del_laboratorio=[parecido])
+    assert [(h.nivel, h.regla) for h in hallazgos] == [("AVISO", "datos del laboratorio")]
+
+
+def test_las_preguntas_de_tamano_muy_distinto_dan_aviso():
+    contenido = Evaluacion.model_validate(sembrados.con(sembrados._filas(8)))
+    assert [(h.nivel, h.regla) for h in evaluacion.controles(contenido, 3)] == [("AVISO", "tamaño parecido")]

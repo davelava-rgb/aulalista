@@ -616,7 +616,8 @@ TAREAS_DE_EVALUACION = {
     "calcular": "calcular un valor",
 }
 # S[sesión]_P[pregunta]_[descripcion-corta] (SPEC §4). La sesión la comprueba el verificador; aquí, la pregunta.
-NOMBRE_DE_ARCHIVO_DE_EVALUACION = r"^S\d+_P(\d+)_[A-Za-z0-9][A-Za-z0-9-]*\.(xlsx|docx)$"
+# Igual que el verificador: la descripción en minúsculas, con guiones.
+NOMBRE_DE_ARCHIVO_DE_EVALUACION = r"^S\d+_P(\d+)_[a-z0-9]+(?:-[a-z0-9]+)*\.(xlsx|docx)$"
 
 
 class _SinExtras(BaseModel):
