@@ -828,7 +828,8 @@ def _que_sigue(curso: str, panel: dict) -> dict | None:
                     "boton": "Ir a la ficha de la sesión", "motivo": "Ningún material de la sesión empieza sin ella."}
         if s["siguiente"]["ancla"]:
             m = next(x for x in s["materiales"] if x["clave"] == s["siguiente"]["ancla"])
-            texto = s["siguiente"]["texto"]   # ya dice «de nuevo» cuando hace falta
+            # Ya dice «de nuevo» cuando hace falta. Con «Sesión N:» delante, «esta sesión» se volvería ambiguo.
+            texto = s["siguiente"]["texto"].replace("Los materiales de esta sesión", "Sus materiales", 1)
             motivo = s["siguiente"].get("motivo") or (
                 (f"Falta información para generar{'las' if m['plural'] else ('lo' if m['el'].startswith('el ') else 'la')}. "
                  "La página del material dice qué.") if texto.startswith("Completa") else _motivo(m))
@@ -971,6 +972,9 @@ def ver_material(request: Request, curso: str, sesion: int, material: str, mensa
     cursos.guardar_ultimo(curso)
     vista = _vista_de_materiales(carpeta, curso, sesion, detalle=True)
     m = next(x for x in vista["materiales"] if x["clave"] == material)
+    panel = _panel(carpeta, curso, f"{material}-{sesion}")
+    # Con la sesión aprobada, el siguiente paso es lo pendiente del curso (otra sesión, un material desactualizado).
+    sigue_curso = _que_sigue(curso, panel) if vista["puede_empezar"] and not vista["siguiente"]["ancla"] else None
     return plantillas.TemplateResponse(request, "material.html", {
         "curso": curso, "nombre": _nombre(curso), "sesion": sesion, "mensaje": mensaje,
         # «Material 2 de 3» cuenta solo los materiales que van en la sesión.
@@ -978,9 +982,9 @@ def ver_material(request: Request, curso: str, sesion: int, material: str, mensa
         "listos": _listos(carpeta, sesion, m, vista["puede_empezar"], vista["ficha_por_preparar"]),
         "que_cambio": _que_cambio(carpeta, sesion, m),
         "puede_empezar": vista["puede_empezar"], "ficha_por_preparar": vista["ficha_por_preparar"],
-        "siguiente": vista["siguiente"],
+        "siguiente": vista["siguiente"], "sigue_curso": sigue_curso,
         "costo_revisor": tokens.ultima_corrida(curso, "revisor independiente"),
-        "panel": _panel(carpeta, curso, f"{material}-{sesion}"),
+        "panel": panel,
     })
 
 

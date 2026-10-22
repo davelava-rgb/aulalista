@@ -527,12 +527,31 @@ def test_lo_que_sigue_no_repite_de_nuevo_y_contrae_al_y_del(sesion):  # noqa: F8
     _poner(sesion, "laboratorio", estado="aprobada", aprobada="2026-10-15T10:00:00", desactualizado=True)
     sigue = servidor._tablero(sesion, "scrum", servidor._panel(sesion, "scrum", "curso"))["sigue"]
     assert sigue["texto"].endswith("Decide si lo generas de nuevo.") and "de nuevo de nuevo" not in sigue["texto"]
+    assert sigue["texto"].startswith("Sesión 1: sus materiales están aprobados, pero el laboratorio")   # no «esta sesión»
     assert sigue["boton"] == "Ir al laboratorio"
     pagina = cliente.get("/cursos/scrum").text
     assert "de nuevo de nuevo" not in pagina and "Ir a el " not in pagina
     _poner(sesion, "laboratorio", estado="con fallas", aprobada="", desactualizado=False)
     texto = servidor._vista_de_materiales(sesion, "scrum", 1)["siguiente"]["texto"]
     assert texto == "Resuelve las fallas del laboratorio en las fichas y genéralo de nuevo."
+
+
+def test_con_la_sesion_aprobada_el_siguiente_paso_es_lo_pendiente_del_curso(sesion):  # noqa: F811
+    # Crítica de la interfaz: decía «Siguiente paso: Los materiales de esta sesión están aprobados.» sin ningún paso.
+    for clave in ("lectura", "diapositivas", "laboratorio", "actividad"):
+        _poner(sesion, clave, estado="aprobada", aprobada="2026-10-15T10:00:00")
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    assert ('Los materiales de esta sesión están aprobados. En el curso sigue: <a href="/cursos/scrum/sesiones/2/materiales/lectura"'
+            ' data-atajo="s" aria-keyshortcuts="S">Sesión 2: genera la lectura.</a>') in pagina
+    assert '<a class="boton" href="/cursos/scrum/sesiones/2/materiales/lectura">Ir a la lectura</a>' in pagina
+
+
+def test_la_ficha_aprobada_y_desactualizada_dice_que_la_fecha_es_de_antes_del_cambio(sesion):  # noqa: F811
+    _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00", desactualizado=True)
+    hoja = cliente.get("/cursos/scrum").text
+    assert "<span>Aprobada el 15 de octubre, antes del cambio</span>" in hoja
+    _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00", desactualizado=False)
+    assert "<span>Aprobada el 15 de octubre</span>" in cliente.get("/cursos/scrum").text
 
 
 def test_la_busqueda_en_una_fuente_no_distingue_tildes_y_resalta_lo_que_coincide():

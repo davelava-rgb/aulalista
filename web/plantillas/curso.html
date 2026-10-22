@@ -108,7 +108,8 @@
           <span class="ficha-ico" aria-hidden="true"><svg width="20" height="20"><use href="#i-{{ m.clave }}"/></svg></span>
           <span class="ficha-texto">
             <b>{{ m.corto }}</b>
-            {% if m.fecha %}<span>{{ "Aprobadas" if m.plural else ("Aprobado" if m.el.startswith("el ") else "Aprobada") }} el {{ m.fecha }}</span>
+            {# Desactualizado: la fecha es de la versión anterior; dicho así no contradice el estado de abajo. #}
+            {% if m.fecha %}<span>{{ "Aprobadas" if m.plural else ("Aprobado" if m.el.startswith("el ") else "Aprobada") }} el {{ m.fecha }}{% if m.desactualizado %}, antes del cambio{% endif %}</span>
             {% elif not m.estado %}<span>Todavía no se generó</span>{% endif %}
             {# Sin generar se ofrece «Generar»; si otro material lo bloquea, se dice cuál espera (no es una acción). #}
             <span class="ficha-estado">{{ ("Espera " ~ m.espera.el if m.espera else "Generar") if not m.estado and m.situacion.clase == "neutro" else m.situacion.texto }}</span>
