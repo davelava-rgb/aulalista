@@ -385,9 +385,7 @@ def _etiqueta_corta(etiqueta: str) -> str:
 def _resumen_de_seccion(s: dict, campos: list[dict]) -> None:
     """Lo que muestra la ficha en modo de lectura (PLAN.md §0, decisión 45): el estado de la sección, un resumen de
     sus campos y, si repite bloques (ejercicios o preguntas), una fila por bloque con datos."""
-    no_se_usa = s.get("titulo", "").split(". ", 1)[-1].startswith("Evaluación")    # decisión 37
-    s["estado"] = ("no_se_usa" if no_se_usa else "alerta" if s["alertas"]
-                   else "completa" if any(c["valor"].strip() for c in campos) else "vacia")
+    s["estado"] = ("alerta" if s["alertas"] else "completa" if any(c["valor"].strip() for c in campos) else "vacia")
     s["resumen"], s["filas"], s["vacios"] = [], [], 0
     valores = {c.get("id", ""): c["valor"] for c in campos}
     for e in s["elementos"]:

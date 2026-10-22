@@ -193,7 +193,7 @@ def test_ficha_de_la_sesion_revisa_bloques_ejercicios_estaciones_y_preguntas():
     laboratorio = almacen.errores_del_material(ficha, "laboratorio")
     assert "El laboratorio necesita de 3 a 5 ejercicios; tiene 2." in laboratorio
     assert "Ejercicio 2: falta el problema que trae a propósito." in laboratorio
-    assert "Pregunta 1: falta la respuesta correcta." in almacen.errores_del_material(ficha, "evaluación")
+    assert "Pregunta 1: falta la respuesta correcta." in almacen.errores_del_material(ficha, "evaluacion")
 
 
 def test_si_la_sesion_no_produce_un_material_no_se_exigen_sus_datos():

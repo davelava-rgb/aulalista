@@ -192,8 +192,8 @@
   <ul>
     {# El mismo orden que la página: la ficha corta primero y el plan de la sesión después (decisión 54). #}
     {% for s in (secciones | rejectattr("plan") | list) + (secciones | selectattr("plan") | list) %}
-    {% set estado_texto = {"completa": "completa", "vacia": "vacía", "alerta": "con campos por definir", "no_se_usa": "no se usa"}[s.estado] %}
-    <li><a class="pildora estado-{{ s.estado }}" href="#{{ s.ancla }}" title="{{ s.nombre }}"><i aria-hidden="true"></i>{{ s.nombre.split(" (")[0] }}{% if s.estado == "no_se_usa" %}: no se usa{% endif %}<span class="sr">, {{ estado_texto }}</span></a>{% if s.alertas %} <span class="marca alerta">{{ s.alertas }} por definir</span>{% endif %}</li>
+    {% set estado_texto = {"completa": "completa", "vacia": "vacía", "alerta": "con campos por definir"}[s.estado] %}
+    <li><a class="pildora estado-{{ s.estado }}" href="#{{ s.ancla }}" title="{{ s.nombre }}"><i aria-hidden="true"></i>{{ s.nombre.split(" (")[0] }}<span class="sr">, {{ estado_texto }}</span></a>{% if s.alertas %} <span class="marca alerta">{{ s.alertas }} por definir</span>{% endif %}</li>
     {% endfor %}
   </ul>
 </nav>
@@ -205,19 +205,17 @@
   {# Cada sección se dibuja dos veces: un resumen para leer y sus campos para editar (decisión 45). Sin JavaScript
      se ven solo los campos, como antes. Una sección con alertas se abre siempre en edición. #}
   {% set leer = modo_lectura and s.estado != "alerta" %}
-  <section class="seccion tarjeta estado-{{ s.estado }}{{ ' leer' if leer }}{{ ' apagada' if s.estado == 'no_se_usa' }}" id="{{ s.ancla }}" aria-labelledby="t-{{ s.ancla }}">
+  <section class="seccion tarjeta estado-{{ s.estado }}{{ ' leer' if leer }}" id="{{ s.ancla }}" aria-labelledby="t-{{ s.ancla }}">
     <div class="sec-cabeza">
       <button type="button" class="sec-plegar" aria-expanded="true" aria-controls="cuerpo-{{ s.ancla }}">
         <span class="sec-flecha" aria-hidden="true"></span><span class="sr">Plegar o desplegar {{ s.nombre.split(" (")[0] }}</span></button>
       <h2 id="t-{{ s.ancla }}">{{ s.nombre }}</h2>
       {% if s.origen_comun %}<span class="sec-fuente">De {{ s.origen_comun }}</span>{% endif %}
-      <span class="sec-estado estado-{{ s.estado }}">{{ {"completa": "Completa", "vacia": "Vacía", "alerta": "Por definir", "no_se_usa": "No se usa"}[s.estado] }}</span>
-      <button type="button" class="secundario sec-editar" data-editar="{{ s.ancla }}">{{ "Ver lo escrito" if s.estado == "no_se_usa" else "Editar" }}<span class="sr"> {{ s.nombre.split(" (")[0] }}</span></button>
+      <span class="sec-estado estado-{{ s.estado }}">{{ {"completa": "Completa", "vacia": "Vacía", "alerta": "Por definir"}[s.estado] }}</span>
+      <button type="button" class="secundario sec-editar" data-editar="{{ s.ancla }}">Editar<span class="sr"> {{ s.nombre.split(" (")[0] }}</span></button>
     </div>
     <div class="sec-cuerpo" id="cuerpo-{{ s.ancla }}">
     <div class="sec-resumen">
-      {% if s.estado == "no_se_usa" %}<p class="nota">No se usa: AulaLista no genera la evaluación (decisión 37). Lo escrito se guarda.</p>
-      {% else %}
       {% if s.resumen %}
       <dl class="resumen-ficha">
         {% for r in s.resumen %}<dt{% if r.completa != r.etiqueta %} title="{{ r.completa }}"{% endif %}>{{ r.etiqueta }}</dt><dd>{% if r.valor %}<span>{{ r.valor }}</span>{% else %}<span class="vacio">Ninguno</span>{% endif %}</dd>{% endfor %}
@@ -236,10 +234,9 @@
       </table>
       {% endif %}
       {% if s.vacios and s.filas %}<p><button type="button" class="secundario" data-editar="{{ s.ancla }}" data-bloque="vacio">Agregar {{ s.filas[0].nombre | lower }}</button></p>{% endif %}
-      {% endif %}
     </div>
     <div class="sec-campos">
-    {% if s.titulo.split(". ", 1)[-1].startswith("Evaluación") %}<p class="mensaje">AulaLista no genera la evaluación (decisión 37). Lo que escribas aquí se guarda, pero no se usa. PBQ quiere decir «Performance Based Question»: una pregunta que se responde haciendo una tarea, no eligiendo una opción.</p>{% endif %}
+    {% if s.titulo.split(". ", 1)[-1].startswith("Evaluación") %}<p class="mensaje">Las preguntas se revisan al guardar, junto con los ejercicios. La evaluación se genera desde su página al terminar la etapa 9 (decisión 64). PBQ quiere decir «Performance Based Question»: una pregunta que se responde haciendo una tarea, no eligiendo una opción.</p>{% endif %}
     {% for e in s.elementos %}
       {% if e.repetible %}
         {% if e.encabezado %}<p class="nota">{{ e.encabezado }}</p>{% endif %}
@@ -404,7 +401,7 @@
   window.addEventListener("beforeunload", (evento) => { if (sinGuardar) { evento.preventDefault(); evento.returnValue = ""; } });
 
   // Secciones plegables: la ficha se recorre sin desplazarse por todos sus campos. Una ficha confirmada se abre
-  // desplegada, para leerla (decisión 63); solo queda plegada la sección que no se usa. En una sin confirmar se
+  // desplegada entera, para leerla (decisión 63). En una sin confirmar se
   // pliegan las completas. Sin JavaScript, todo queda desplegado.
   const tarjetas = [...formulario.querySelectorAll("section.seccion.tarjeta")];
   const plegar = (seccion, plegada) => {
@@ -414,7 +411,7 @@
   document.documentElement.classList.add("plegable-js");
   tarjetas.forEach((seccion) => {
     const confirmada = formulario.classList.contains("ficha-lectura");
-    plegar(seccion, seccion.classList.contains(confirmada ? "estado-no_se_usa" : "estado-completa"));
+    plegar(seccion, !confirmada && seccion.classList.contains("estado-completa"));
     seccion.querySelector(".sec-plegar").addEventListener("click", () => plegar(seccion, !seccion.classList.contains("plegada")));
     seccion.querySelector("h2").addEventListener("click", () => plegar(seccion, !seccion.classList.contains("plegada")));
   });

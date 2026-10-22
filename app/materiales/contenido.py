@@ -4,6 +4,7 @@ El agente redactor escribe estos datos. Los generadores de archivos los conviert
 PowerPoint, Excel o HTML con el mismo diseño (CLAUDE.md: el agente no escribe Word a mano).
 """
 
+import re
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -597,6 +598,141 @@ ESQUEMA_ACTIVIDAD = _objeto({
             "categorias": TEXTOS,
         })},
     })},
+    "pasajes": ESQUEMA_LECTURA["properties"]["pasajes"],
+    "decisiones": ESQUEMA_LECTURA["properties"]["decisiones"],
+})
+
+
+# ---------- Evaluación práctica (SKILL.md, «Material 6 · Evaluación práctica (PBQ)»; PLAN.md §0, decisión 64) ----------
+
+# Las tareas que la skill permite en una pregunta. La clave es la que escribe el redactor; el texto, el de la skill.
+TAREAS_DE_EVALUACION = {
+    "ordenar": "ordenar pasos",
+    "relacionar": "relacionar elementos",
+    "clasificar": "clasificar elementos",
+    "matriz": "llenar una matriz o un registro",
+    "errores": "encontrar errores en un archivo",
+    "configuracion": "corregir una configuración",
+    "calcular": "calcular un valor",
+}
+# S[sesión]_P[pregunta]_[descripcion-corta] (SPEC §4). La sesión la comprueba el verificador; aquí, la pregunta.
+NOMBRE_DE_ARCHIVO_DE_EVALUACION = r"^S\d+_P(\d+)_[A-Za-z0-9][A-Za-z0-9-]*\.(xlsx|docx)$"
+
+
+class _SinExtras(BaseModel):
+    """Un campo que el modelo no conoce es un error: así no entran puntos, notas ni tiempos (SKILL.md, «Sin tiempos
+    ni puntajes»). En la evaluación no hay ningún campo para ellos."""
+    model_config = {"extra": "forbid"}
+
+
+class TablaDeRespuesta(_SinExtras):
+    """Lo que el alumno llena en la hoja (SKILL.md: «La respuesta se escribe en una tabla o un formato que ya viene en
+    la hoja del alumno»). Una celda vacía es una celda que llena el alumno: cada una es una decisión (decisión 64 c)."""
+    titulo: str = Field(min_length=1)
+    encabezados: list[str] = Field(min_length=1)
+    filas: list[list[str]] = Field(min_length=1)
+
+    @field_validator("filas")
+    @classmethod
+    def mismas_columnas(cls, filas, info):
+        columnas = len(info.data.get("encabezados", []))
+        if any(len(f) != columnas for f in filas):
+            raise ValueError("cada fila de la tabla de respuesta debe tener tantas celdas como encabezados")
+        return filas
+
+    @property
+    def por_llenar(self) -> int:
+        return sum(1 for fila in self.filas for celda in fila if not celda.strip())
+
+
+class ClaveDePregunta(_SinExtras):
+    """Lo que trae la clave de corrección por pregunta (SKILL.md, «La clave trae, por cada pregunta»)."""
+    respuesta: list[list[str]] = Field(min_length=1)     # la tabla del alumno, completa, tal como se vería
+    aceptadas: list[str] = Field(default_factory=list)  # otras respuestas aceptadas, si la pregunta admite más de una
+    partes: list[str] = Field(min_length=1)              # las partes de la respuesta, una por línea
+    problemas: list[str] = Field(default_factory=list)  # los problemas sembrados en cada archivo
+    errores_comunes: list[str] = Field(min_length=1)     # los errores que más cometen los alumnos y por qué
+
+
+class PreguntaDeEvaluacion(_SinExtras):
+    numero: int = Field(ge=1)
+    concepto: str = Field(min_length=1)                  # un concepto del vocabulario de la sesión
+    tarea: Literal["ordenar", "relacionar", "clasificar", "matriz", "errores", "configuracion", "calcular"]
+    titulo: str = Field(min_length=1)                    # con una acción concreta
+    situacion: str = Field(min_length=1)                 # de 2 a 3 líneas
+    archivos: list[str] = Field(default_factory=list)   # nombres exactos de los archivos que usa
+    pasos: list[str] = Field(min_length=1, max_length=10)
+    tabla_de_respuesta: TablaDeRespuesta
+    clave: ClaveDePregunta
+
+    @model_validator(mode="after")
+    def clave_completa(self):
+        """La clave es la misma tabla del alumno, completa: las celdas que trae la hoja no cambian y las vacías se
+        llenan todas. Si no, la pregunta no tiene una respuesta correcta clara."""
+        tabla, respuesta = self.tabla_de_respuesta, self.clave.respuesta
+        if len(respuesta) != len(tabla.filas) or any(len(f) != len(tabla.encabezados) for f in respuesta):
+            raise ValueError(f"pregunta {self.numero}: la respuesta de la clave no tiene la forma de la tabla del alumno")
+        for fila, completa in zip(tabla.filas, respuesta):
+            for celda, valor in zip(fila, completa):
+                if celda.strip() and celda.strip() != valor.strip():
+                    raise ValueError(f"pregunta {self.numero}: la clave cambia una celda que ya trae la hoja del alumno")
+                if not valor.strip():
+                    raise ValueError(f"pregunta {self.numero}: la clave deja una celda de la respuesta sin llenar")
+        if not tabla.por_llenar:
+            raise ValueError(f"pregunta {self.numero}: la tabla de respuesta no tiene ninguna celda para el alumno")
+        return self
+
+
+class Indicaciones(_SinExtras):
+    """Las dos líneas después de la portada (SKILL.md, «Formato»)."""
+    consulta: str = Field(min_length=1)                  # material que el alumno puede consultar
+    entrega: str = Field(min_length=1)                   # forma de entrega de las respuestas
+
+
+class Evaluacion(_SinExtras):
+    indicaciones: Indicaciones
+    preguntas: list[PreguntaDeEvaluacion] = Field(min_length=1, max_length=5)
+    archivos: list[ArchivoPractica] = Field(default_factory=list)
+    pasajes: list[Pasaje] = Field(default_factory=list)
+    decisiones: list[Decision] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def preguntas_y_archivos(self):
+        """Preguntas numeradas desde 1, sin saltos; cada archivo con el nombre de su pregunta y usado por ella. Así
+        cada pregunta funciona sola, con sus propios archivos (SKILL.md: «Cada pregunta funciona sola»)."""
+        if [p.numero for p in self.preguntas] != list(range(1, len(self.preguntas) + 1)):
+            raise ValueError("las preguntas van numeradas desde 1, sin saltos")
+        nombres = {a.nombre for a in self.archivos}
+        for archivo in self.archivos:
+            forma = re.match(NOMBRE_DE_ARCHIVO_DE_EVALUACION, archivo.nombre)
+            if not forma:
+                raise ValueError(f"el archivo «{archivo.nombre}» no sigue la forma S[sesión]_P[pregunta]_[descripcion].xlsx o .docx")
+            dueña = int(forma.group(1))
+            if dueña > len(self.preguntas) or archivo.nombre not in self.preguntas[dueña - 1].archivos:
+                raise ValueError(f"el archivo «{archivo.nombre}» es de la pregunta {dueña}, y esa pregunta no lo usa")
+        for p in self.preguntas:
+            for nombre in p.archivos:
+                if nombre not in nombres:
+                    raise ValueError(f"pregunta {p.numero}: usa «{nombre}», que no está en los archivos")
+        return self
+
+
+_ESQUEMA_CELDAS = {"type": "array", "items": TEXTOS}
+ESQUEMA_EVALUACION = _objeto({
+    "indicaciones": _objeto({"consulta": _TEXTO, "entrega": _TEXTO}),
+    "preguntas": {"type": "array", "items": _objeto({
+        "numero": {"type": "integer"},
+        "concepto": _TEXTO,
+        "tarea": {"type": "string", "enum": list(TAREAS_DE_EVALUACION)},
+        "titulo": _TEXTO,
+        "situacion": _TEXTO,
+        "archivos": TEXTOS,
+        "pasos": TEXTOS,
+        "tabla_de_respuesta": _objeto({"titulo": _TEXTO, "encabezados": TEXTOS, "filas": _ESQUEMA_CELDAS}),
+        "clave": _objeto({"respuesta": _ESQUEMA_CELDAS, "aceptadas": TEXTOS, "partes": TEXTOS, "problemas": TEXTOS,
+                          "errores_comunes": TEXTOS}),
+    })},
+    "archivos": ESQUEMA_LABORATORIO["properties"]["archivos"],
     "pasajes": ESQUEMA_LECTURA["properties"]["pasajes"],
     "decisiones": ESQUEMA_LECTURA["properties"]["decisiones"],
 })

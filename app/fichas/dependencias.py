@@ -9,17 +9,18 @@ from pathlib import Path
 from app.fichas import almacen, plantillas, referencia
 from app.fuentes import convertir
 
-TODOS = ("lectura", "diapositivas", "laboratorio", "actividad")
+TODOS = ("lectura", "diapositivas", "laboratorio", "actividad", "evaluacion")
 
 # Qué materiales desactualiza cada grupo de campos. La clave es el comienzo del id del campo; gana la más larga.
-# Un campo que no está aquí desactualiza los cuatro: ante la duda, se avisa.
+# Un campo que no está aquí desactualiza todos: ante la duda, se avisa. Las preguntas de la evaluación solo la
+# desactualizan a ella (decisión 64 g).
 AFECTA = {
     "lectura.": ("lectura", "diapositivas"),
     "ejercicio.": ("laboratorio",),
     "herramientas.": ("laboratorio",),
     "portada.": ("lectura", "diapositivas", "laboratorio"),
-    "evaluacion.": (),
-    "pregunta.": (),
+    "evaluacion.": ("evaluacion",),
+    "pregunta.": ("evaluacion",),
     "curso.horas": (),
     "curso.numero_sesiones": (),
     "materiales.cuales": (),
@@ -144,12 +145,22 @@ def revisar(carpeta_curso: Path, sesion: int, anterior: dict | None = None) -> l
     return marcados
 
 
-def lectura_nueva(carpeta_curso: Path, sesion: int, material: dict) -> bool:
-    """La lectura se generó de nuevo después de este material, que la usaba (decisión 62 d)."""
-    usada = material.get("lectura_usada")
+def _fuente_nueva(carpeta_curso: Path, sesion: int, material: dict, fuente: str) -> bool:
+    """El material `fuente` se generó de nuevo después de este material, que lo usaba."""
+    usada = material.get(f"{fuente}_usada")
     if not usada or material.get("estado") in (None, "", "trabajando"):
         return False
-    return usada != almacen.cargar_estado(carpeta_curso, sesion)["materiales"].get("lectura", {}).get("fecha", "")
+    return usada != almacen.cargar_estado(carpeta_curso, sesion)["materiales"].get(fuente, {}).get("fecha", "")
+
+
+def lectura_nueva(carpeta_curso: Path, sesion: int, material: dict) -> bool:
+    """La lectura se generó de nuevo después de este material, que la usaba (decisión 62 d)."""
+    return _fuente_nueva(carpeta_curso, sesion, material, "lectura")
+
+
+def laboratorio_nuevo(carpeta_curso: Path, sesion: int, material: dict) -> bool:
+    """El laboratorio se generó de nuevo después de la evaluación, que lo usaba (decisión 64 g)."""
+    return _fuente_nueva(carpeta_curso, sesion, material, "laboratorio")
 
 
 def por_migrar(estado_sesion: dict) -> bool:

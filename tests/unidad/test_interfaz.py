@@ -616,7 +616,7 @@ def test_el_aviso_de_la_ficha_del_curso_no_nombra_una_seccion_de_la_sesion(sesio
 
 def test_los_titulos_sobre_niebla_usan_el_magenta_para_texto():
     css = (servidor.RAIZ / "web" / "estaticos" / "estilo.css").read_text(encoding="utf-8")
-    assert ".seccion.tarjeta.apagada h2, .mensaje h2 { color: var(--principal-texto); }" in css
+    assert ".mensaje h2 { color: var(--principal-texto); }" in css
 
 
 def test_lo_aceptado_al_aprobar_se_ve_en_el_tablero_y_en_el_recorrido(sesion):  # noqa: F811
@@ -732,7 +732,8 @@ def test_cada_seccion_trae_su_estado_y_su_resumen():
         _seccion("3. Vocabulario", _campo("c", "Conceptos", "", "falta definir")),
         _seccion("5. Evaluación práctica (PBQ)", _campo("d", "Material", "La lectura.")),
     ])
-    assert [s["estado"] for s in secciones] == ["completa", "vacia", "alerta", "no_se_usa"]
+    # La evaluación ya no se marca «No se usa» (decisión 64 i): su estado es el de cualquier sección.
+    assert [s["estado"] for s in secciones] == ["completa", "vacia", "alerta", "completa"]
     assert secciones[0]["resumen"] == [{"etiqueta": "Alcance", "completa": "Alcance (obligatorio)",
                                         "valor": "Calidad de datos y su ciclo."}]
     # En un campo de varias líneas, cada línea es un elemento: no se leen pegados.
@@ -812,9 +813,9 @@ def test_las_secciones_de_la_ficha_se_pliegan_y_editar_alterna_con_cancelar(sesi
 
 
 def test_la_ficha_confirmada_se_abre_desplegada_y_editar_solo_en_lo_desplegado(sesion):  # noqa: F811
-    """Decisión 63: confirmada, se abre desplegada salvo lo que no se usa; «Editar» solo en una sección desplegada."""
+    """Decisión 63: confirmada, se abre desplegada entera; «Editar» solo en una sección desplegada."""
     pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
-    assert 'plegar(seccion, seccion.classList.contains(confirmada ? "estado-no_se_usa" : "estado-completa"));' in pagina
+    assert 'plegar(seccion, !confirmada && seccion.classList.contains("estado-completa"));' in pagina
     assert '<span class="sr">Plegar o desplegar 1. Sesión</span>' in pagina      # la flecha dice su sección
     assert 'setProperty("--alto-indice", indice.offsetHeight + "px")' in pagina   # el índice mide su alto real
     css = (servidor.RAIZ / "web" / "estaticos" / "estilo.css").read_text(encoding="utf-8")

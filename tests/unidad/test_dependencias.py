@@ -10,17 +10,19 @@ from fastapi.testclient import TestClient
 from app import servidor
 from app.fichas import almacen, dependencias
 from app.fuentes import convertir
-from app.materiales import actividad, comun, diapositivas, laboratorio, lectura
+from app.materiales import actividad, comun, diapositivas, evaluacion, laboratorio, lectura
 from tests.unidad.test_lectura import sesion  # noqa: F401
 
 cliente = TestClient(servidor.app)
-CUATRO = {"lectura", "diapositivas", "laboratorio", "actividad"}
-ESTADOS = {"lectura": lectura, "diapositivas": diapositivas, "laboratorio": laboratorio, "actividad": actividad}
+# Con la evaluación (decisión 64), cinco; el nombre queda del tiempo de la decisión 62.
+CUATRO = {"lectura", "diapositivas", "laboratorio", "actividad", "evaluacion"}
+ESTADOS = {"lectura": lectura, "diapositivas": diapositivas, "laboratorio": laboratorio, "actividad": actividad,
+           "evaluacion": evaluacion}
 
 
 def _generar_todos(carpeta):
-    """Los cuatro materiales generados y aprobados con las fichas de ahora: guardan lo que usan."""
-    for clave in ("lectura", "diapositivas", "laboratorio", "actividad"):
+    """Los materiales generados y aprobados con las fichas de ahora: guardan lo que usan."""
+    for clave in ("lectura", "diapositivas", "laboratorio", "actividad", "evaluacion"):
         comun.actualizar(carpeta, 1, clave, estado="trabajando", previo="")
         ahora = datetime.now().isoformat(timespec="seconds")
         comun.actualizar(carpeta, 1, clave, estado="aprobada", fecha=ahora, aprobada=ahora, desactualizado=False)
@@ -48,8 +50,8 @@ def _desactualizados(carpeta):
     ("sesion", "ejercicio.1.respuesta", {"laboratorio"}),
     ("curso", "herramientas.ejercicios", {"laboratorio"}),
     ("curso", "herramientas.adjuntos", {"laboratorio"}),
-    ("sesion", "evaluacion.entrega", set()),
-    ("sesion", "pregunta.1.respuesta", set()),
+    ("sesion", "evaluacion.entrega", {"evaluacion"}),        # decisión 64 g
+    ("sesion", "pregunta.1.respuesta", {"evaluacion"}),
     ("curso", "publico.quienes", CUATRO),
     ("curso", "caso.empresa", CUATRO),
     ("curso", "curso.idioma", CUATRO),
@@ -157,3 +159,19 @@ def test_lo_usado_queda_guardado_al_generar(sesion):  # noqa: F811
     material = almacen.cargar_estado(sesion, 1)["materiales"]["laboratorio"]
     assert set(material["usado"]) == {"curso", "sesion", "linea_de_la_sesion", "datos_fijos", "fuentes"}
     assert json.dumps(material["usado"])   # se guarda como datos simples
+
+
+def test_una_lectura_o_un_laboratorio_nuevos_desactualizan_la_evaluacion(sesion):  # noqa: F811
+    """Decisión 64 g: la evaluación sale de la lectura y del laboratorio aprobados."""
+    _generar_todos(sesion)
+    assert not evaluacion.estado(sesion, 1).get("desactualizado")
+    time.sleep(1.1)   # la fecha va en segundos: la nueva tiene que ser distinta
+    ahora = datetime.now().isoformat(timespec="seconds")
+    comun.actualizar(sesion, 1, "laboratorio", estado="aprobada", fecha=ahora, aprobada=ahora)
+    assert evaluacion.estado(sesion, 1)["desactualizado"] is True
+    assert not lectura.estado(sesion, 1).get("desactualizado")
+    _generar_todos(sesion)
+    time.sleep(1.1)
+    ahora = datetime.now().isoformat(timespec="seconds")
+    comun.actualizar(sesion, 1, "lectura", estado="aprobada", fecha=ahora, aprobada=ahora)
+    assert evaluacion.estado(sesion, 1)["desactualizado"] is True

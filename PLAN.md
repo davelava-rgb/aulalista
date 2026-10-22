@@ -267,6 +267,8 @@ Fases de la etapa 9 (decisión 64, aprobada el 2026-10-22). Cada fase termina co
 
 Costo: el redactor y la ejecución se parecen a los del laboratorio. Un laboratorio costó entre 0,94 y 1,36 USD por corrida (de 2 a 15 llamadas). La evaluación tiene menos preguntas que ejercicios, así que se espera algo menos. Se mide al cerrar la fase 9c.
 
+Estado: la fase 9a está terminada (2026-10-22). La clave interna del material es «evaluacion», sin tilde, como las demás claves que van en direcciones y nombres de archivo. La evaluación todavía no se genera desde la interfaz (decisión 46): llega en la fase 9d.
+
 
 Reglas de las fichas (etapa 4):
 

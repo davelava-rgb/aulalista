@@ -87,7 +87,8 @@ CONTROLES = {
                          "ayuda": "Marcadas por defecto. Agrega otras en «Otros», separadas por comas."},
     "materiales.cuales": {"tipo": "casillas", "titulo": "Materiales que se producen en esta sesión", "opciones": MATERIALES, "todos": TODOS_LOS_MATERIALES,
                           "ayuda": "Sin ninguna marcada se producen todos los que AulaLista genera: lectura, "
-                                   "diapositivas, laboratorio y actividad web. La evaluación no se genera (decisión 37)."},
+                                   "diapositivas, laboratorio, actividad web y evaluación. La evaluación se genera desde su "
+                                   "página al terminar la etapa 9 (decisión 64)."},
     "modelos.aprobados": {"tipo": "archivos", "titulo": "Modelos de diseño y tono (PDF)", "extension": ".pdf",
                           "ayuda": "Sube uno o varios PDF. Dan los colores y la tipografía que la ficha deja vacíos, "
                                    "y guían el tono. Las secciones de cada material siguen siendo las de la skill."},

@@ -27,7 +27,7 @@ MAX_PREGUNTAS_POR_VEZ = 4  # SPEC §3: cuatro preguntas como máximo por vez
 
 # Sin práctica interactiva ni guía del profesor (PLAN.md §0, decisiones 34 y 35). La actividad web es otro material
 # (decisión 57): en la ficha se marca «actividad web» y aquí vale «actividad», la clave del material.
-MATERIALES = ("lectura", "diapositivas", "laboratorio", "actividad", "evaluación")
+MATERIALES = ("lectura", "diapositivas", "laboratorio", "actividad", "evaluacion")
 
 
 class FichaIncompleta(ValueError):
@@ -108,8 +108,29 @@ def texto_de_ejercicios(ficha: dict) -> tuple[str, list[int]]:
     return "\n\n".join(bloques), numeros
 
 
+def texto_de_preguntas(ficha: dict) -> tuple[str, list[int]]:
+    """Las preguntas llenas de la evaluación, con sus etiquetas, si la sesión la produce (PLAN.md §0, decisión 64 h):
+    la IA las revisa junto con los ejercicios antes de confirmar la ficha."""
+    if "evaluacion" not in materiales_de_la_sesion(ficha):
+        return "", []
+    ids = ("concepto", "tarea", "archivo", "problema", "respuesta")
+    numeros = bloques_llenos(ficha, "pregunta", plantillas.MAX_PREGUNTAS, ids)
+    etiquetas = {c.id: c.etiqueta for c in plantillas.FICHA_DE_LA_SESION[1][4].elementos[2].campos}
+    bloques = []
+    for n in numeros:
+        bloques.append("\n".join(
+            f"- {etiquetas[i].replace('[número]', str(n))}: {valor(ficha, f'pregunta.{n}.{i}')}" for i in ids
+        ))
+    return "\n\n".join(bloques), numeros
+
+
 def huella_de_ejercicios(ficha: dict) -> str:
-    return hashlib.sha256(texto_de_ejercicios(ficha)[0].encode("utf-8")).hexdigest()
+    """Cambia si cambia un ejercicio o una pregunta de la evaluación: entonces se revisan de nuevo."""
+    # Sin preguntas, la huella es la de antes: las fichas ya revisadas no se revisan otra vez sin motivo.
+    texto, preguntas = texto_de_ejercicios(ficha)[0], texto_de_preguntas(ficha)[0]
+    if preguntas:
+        texto += "\n\n" + preguntas
+    return hashlib.sha256(texto.encode("utf-8")).hexdigest()
 
 
 MARCA_PROPUESTO = re.compile(r"[ \t]*\(\s*propuest[oa]s?\s*\)", re.I)
@@ -324,7 +345,7 @@ def materiales_de_la_sesion(ficha_sesion: dict) -> set[str]:
         return set(MATERIALES)
     sin_tildes = texto.replace("í", "i").replace("á", "a").replace("ó", "o")
     claves = {"lectura": "lectura", "diapositiva": "diapositivas", "laboratorio": "laboratorio",
-              "actividad": "actividad", "evaluacion": "evaluación"}
+              "actividad": "actividad", "evaluacion": "evaluacion"}
     return {material for clave, material in claves.items() if clave in sin_tildes}
 
 
@@ -388,7 +409,7 @@ def errores_del_material(ficha: dict, material: str) -> list[str]:
                                      ("respuesta", "la respuesta correcta"), ("accion", "la acción del alumno")):
                 if not valor(ficha, f"ejercicio.{n}.{campo_id}"):
                     lista.append(f"Ejercicio {n}: falta {nombre}.")
-    if material == "evaluación":
+    if material == "evaluacion":
         ids = ("concepto", "tarea", "archivo", "problema", "respuesta")
         preguntas = bloques_llenos(ficha, "pregunta", plantillas.MAX_PREGUNTAS, ids)
         if not preguntas:

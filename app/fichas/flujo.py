@@ -45,19 +45,22 @@ ESQUEMA_PROPUESTA = {
     "additionalProperties": False,
 }
 
+_REVISION_DE_UNO = {
+    "type": "object",
+    "properties": {
+        "numero": {"type": "integer"},
+        "funciona_solo": {"type": "boolean"},
+        "sin_llenar_a_mano": {"type": "boolean"},
+        "motivo": {"type": "string"},
+    },
+    "required": ["numero", "funciona_solo", "sin_llenar_a_mano", "motivo"], "additionalProperties": False,
+}
 ESQUEMA_REVISION = {
     "type": "object",
-    "properties": {"ejercicios": {"type": "array", "items": {
-        "type": "object",
-        "properties": {
-            "numero": {"type": "integer"},
-            "funciona_solo": {"type": "boolean"},
-            "sin_llenar_a_mano": {"type": "boolean"},
-            "motivo": {"type": "string"},
-        },
-        "required": ["numero", "funciona_solo", "sin_llenar_a_mano", "motivo"], "additionalProperties": False,
-    }}},
-    "required": ["ejercicios"],
+    # «preguntas»: las de la evaluación, revisadas con los ejercicios (decisión 64 h). Vacía si no hay.
+    "properties": {"ejercicios": {"type": "array", "items": _REVISION_DE_UNO},
+                   "preguntas": {"type": "array", "items": _REVISION_DE_UNO}},
+    "required": ["ejercicios", "preguntas"],
     "additionalProperties": False,
 }
 
@@ -663,9 +666,11 @@ def problemas_de_ejercicios_guardados(ficha: dict) -> list[str]:
 
 
 async def revisar_ejercicios(ficha: dict, curso: str, sesion: int, consulta=agente.query) -> list[str]:
-    """Las tres preguntas de la skill (Paso 2.4). La segunda la revisa errores() sin IA."""
+    """Las tres preguntas de la skill (Paso 2.4). La segunda la revisa errores() sin IA. Si la sesión produce la
+    evaluación, sus preguntas se revisan en la misma llamada (decisión 64 h)."""
     texto, numeros = almacen.texto_de_ejercicios(ficha)
-    if not numeros:
+    texto_preguntas, preguntas = almacen.texto_de_preguntas(ficha)
+    if not numeros and not preguntas:
         return []
     huella = almacen.huella_de_ejercicios(ficha)
     guardada = ficha.get("revision_ejercicios") or {}
@@ -680,6 +685,15 @@ async def revisar_ejercicios(ficha: dict, curso: str, sesion: int, consulta=agen
         "Responde por cada ejercicio con su número, las dos respuestas y un motivo de una oración. "
         "Si las dos respuestas son sí, el motivo puede ser «Cumple».\n\n" + texto
     )
+    if preguntas:
+        pedido += (
+            "\n\nRevisa también cada pregunta de la evaluación práctica con las mismas dos preguntas: ¿funciona "
+            "sola, sin el resultado de otra pregunta ni de un ejercicio? ¿Se puede resolver con lo que trae, sin "
+            "inventar datos que faltan? Escribir la respuesta en la tabla de la hoja es la tarea, no un dato que "
+            "falta. Responde en «preguntas», con el número de cada pregunta.\n\n" + texto_preguntas
+        )
+    else:
+        pedido += "\n\nNo hay preguntas de evaluación: deja «preguntas» vacía."
     respuesta = await agente.consultar(
         pedido, tarea="revision_ejercicios", esquema=ESQUEMA_REVISION, curso=curso,
         etapa="revisión de ejercicios", sesion=f"S{sesion}", consulta=consulta,
@@ -690,6 +704,11 @@ async def revisar_ejercicios(ficha: dict, curso: str, sesion: int, consulta=agen
             problemas.append(f"Ejercicio {e['numero']}: no funciona solo. {e['motivo']}")
         if not e["sin_llenar_a_mano"]:
             problemas.append(f"Ejercicio {e['numero']}: hay que llenar algo a mano. {e['motivo']}")
+    for p in respuesta.get("preguntas", []) if preguntas else []:
+        if not p["funciona_solo"]:
+            problemas.append(f"Pregunta {p['numero']} de la evaluación: no funciona sola. {p['motivo']}")
+        if not p["sin_llenar_a_mano"]:
+            problemas.append(f"Pregunta {p['numero']} de la evaluación: le faltan datos para resolverla. {p['motivo']}")
     ficha["revision_ejercicios"] = {"huella": huella, "problemas": problemas}
     return problemas
 
@@ -770,8 +789,8 @@ async def corregir_ejercicios(carpeta_curso: Path, curso: str, sesion: int, cons
 
 # ---------- «Guardar» en la ficha de la sesión (PLAN.md §0, decisión 54, fase 2) ----------
 
-# AulaLista no genera la evaluación (decisión 37): el plan no la necesita para estar listo.
-_MATERIALES_DEL_PLAN = ("lectura", "diapositivas", "laboratorio")
+# La evaluación cuenta solo si la sesión la produce (decisión 64 h); la actividad web no pide nada de la ficha.
+_MATERIALES_DEL_PLAN = ("lectura", "diapositivas", "laboratorio", "evaluacion")
 
 
 def plan_por_preparar(ficha: dict) -> bool:

@@ -22,7 +22,8 @@ FICHAS = (FICHA_DEL_CURSO, FICHA_DE_LA_SESION)
 # Subcarpeta de materiales/ con lo que usa AulaLista y no el profesor: contenido, explicaciones, imágenes, el JSON
 # del verificador, el programa del diseñador (decisión 42). En materiales/ quedan solo los archivos para el profesor.
 TRABAJO = "_trabajo"
-MATERIALES = {"Lectura": "lectura", "Diapositivas": "diapositivas", "Laboratorio": "laboratorio", "Actividad": "actividad"}
+MATERIALES = {"Lectura": "lectura", "Diapositivas": "diapositivas", "Laboratorio": "laboratorio", "Actividad": "actividad",
+              "Evaluacion": "evaluacion"}
 
 
 def ordenar_materiales(carpeta: Path) -> None:
@@ -190,6 +191,8 @@ def actualizar(carpeta_curso: Path, sesion: int, clave: str, **cambios) -> dict:
                 material["razones"] = []
                 if clave != "lectura":
                     material["lectura_usada"] = datos["materiales"].get("lectura", {}).get("fecha", "")
+                if clave == "evaluacion":   # la evaluación también sale del laboratorio (decisión 64 g)
+                    material["laboratorio_usada"] = datos["materiales"].get("laboratorio", {}).get("fecha", "")
         almacen.guardar_estado(carpeta_curso, sesion, datos)
         return material
 
