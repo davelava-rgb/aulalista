@@ -664,6 +664,17 @@ def test_las_secciones_de_la_ficha_se_pliegan_y_editar_alterna_con_cancelar(sesi
     assert "seccion === abierta) cancelar();" in pagina
 
 
+def test_la_ficha_confirmada_se_abre_desplegada_y_editar_solo_en_lo_desplegado(sesion):  # noqa: F811
+    """Decisión 63: confirmada, se abre desplegada salvo lo que no se usa; «Editar» solo en una sección desplegada."""
+    pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
+    assert 'plegar(seccion, seccion.classList.contains(confirmada ? "estado-no_se_usa" : "estado-completa"));' in pagina
+    assert '<span class="sr">Plegar o desplegar 1. Sesión</span>' in pagina      # la flecha dice su sección
+    assert 'setProperty("--alto-indice", indice.offsetHeight + "px")' in pagina   # el índice mide su alto real
+    css = (servidor.RAIZ / "web" / "estaticos" / "estilo.css").read_text(encoding="utf-8")
+    assert ".plegable-js .seccion.plegada .sec-editar { display: none; }" in css
+    assert "scroll-margin-top: calc(var(--alto-indice, 7rem) + 0.5rem)" in css
+
+
 # ---------- Diseño integrado: datos del panel de cursos (PLAN.md §0, decisión 50, fase 1) ----------
 
 def test_el_resumen_de_un_curso_dice_su_avance_en_una_linea(sesion):  # noqa: F811
