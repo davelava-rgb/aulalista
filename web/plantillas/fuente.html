@@ -22,14 +22,46 @@
   {% endif %}
 {% endif %}
 
-<table class="datos">
+{% set b = busqueda %}
+{# Buscar en la fuente: el profesor comprueba aquí la prueba de una afirmación. Se busca en el servidor y se muestra
+   por tramos de pasajes, para no cargar miles de filas de una vez. #}
+<form method="get" class="buscar-fuente" role="search" aria-label="Buscar en la fuente">
+  <p class="campo-buscar"><label for="buscar-q"><b>Texto</b></label>
+    <input type="search" id="buscar-q" name="q" class="texto" value="{{ b.q }}" autocomplete="off"></p>
+  <p class="campo-pagina"><label for="buscar-pagina"><b>Página</b></label>
+    <input type="number" id="buscar-pagina" name="pagina" class="texto" min="1"{% if b.ultima_pagina %} max="{{ b.ultima_pagina }}"{% endif %} value="{{ b.pagina or '' }}"></p>
+  <p class="campo-boton"><button type="submit">Buscar</button></p>
+</form>
+<p class="nota">Sin distinguir tildes ni mayúsculas.{% if b.ultima_pagina %} Páginas de 1 a {{ b.ultima_pagina }}.{% endif %}</p>
+
+{% macro enlace(tramo) %}?{{ {"q": b.q, "pagina": b.pagina or "", "tramo": tramo} | dictsort | rejectattr(1, "equalto", "") | list | urlencode }}{% endmacro %}
+
+<p class="resultado-busqueda" role="status">
+  {% if not b.hallados %}Ningún pasaje coincide con la búsqueda.
+  {% elif b.filtrada %}{{ b.hallados }} {{ "pasaje coincide" if b.hallados == 1 else "pasajes coinciden" }}{% if b.q %} con «{{ b.q }}»{% endif %}{% if b.pagina %} en la página {{ b.pagina }}{% endif %}.
+  {% endif %}
+  {% if b.hallados %}Se ven los pasajes {{ b.desde }} a {{ b.hasta }} de {{ b.hallados }}.{% endif %}
+  {% if b.filtrada %}<a href="?">Quitar la búsqueda</a>{% endif %}
+</p>
+
+{% if pasajes %}
+<table class="datos pasajes">
   <thead><tr><th scope="col">N</th><th scope="col">Ubicación</th><th scope="col">Texto</th></tr></thead>
   <tbody>
     {% for p in pasajes %}
     <tr{% if p.origen == "ia" %} class="ia"{% endif %}>
-      <td>{{ p.n }}</td><td class="ubicacion">{{ p.ubicacion }}</td><td>{{ p.texto }}</td>
+      <td>{{ p.n }}</td><td class="ubicacion">{{ p.ubicacion }}</td><td>{% for t in p.partes %}{% if t.marca %}<mark>{{ t.texto }}</mark>{% else %}{{ t.texto }}{% endif %}{% endfor %}</td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+{% endif %}
+
+{% if b.tramos > 1 %}
+<nav class="tramos" aria-label="Más pasajes">
+  {% if b.tramo > 1 %}<a class="boton secundario" href="{{ enlace(b.tramo - 1) }}">Anteriores</a>{% endif %}
+  <span>Tramo {{ b.tramo }} de {{ b.tramos }}</span>
+  {% if b.tramo < b.tramos %}<a class="boton secundario" href="{{ enlace(b.tramo + 1) }}">Siguientes</a>{% endif %}
+</nav>
+{% endif %}
 {% endblock %}

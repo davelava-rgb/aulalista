@@ -204,6 +204,7 @@ Esquinas suavemente redondeadas de 6px en botones, campos, mensajes y recuadros.
 
 ### Tabla de datos
 - **Style:** ancho completo, encabezado con fondo magenta y texto papel en negrita, filas pares en niebla, celdas con relleno de 0.5rem y alineadas arriba. Las filas leídas por IA van en cursiva.
+- **Pasajes de una fuente:** arriba, un buscador en una fila (campo «Texto», campo «Página» y el botón principal «Buscar»), que busca en el servidor sin distinguir tildes ni mayúsculas. La tabla va por tramos de 100 pasajes, con «Anteriores» y «Siguientes» como botones secundarios. Columnas fijas y el texto parte línea donde haga falta: la página nunca se desplaza de lado. Lo que coincide va resaltado con fondo magenta suave y negrita.
 
 ## Do's and Don'ts
 

@@ -535,6 +535,38 @@ def test_lo_que_sigue_no_repite_de_nuevo_y_contrae_al_y_del(sesion):  # noqa: F8
     assert texto == "Resuelve las fallas del laboratorio en las fichas y genéralo de nuevo."
 
 
+def test_la_busqueda_en_una_fuente_no_distingue_tildes_y_resalta_lo_que_coincide():
+    assert servidor._plano("Gestión DE Datos") == "gestion de datos"
+    partes = servidor._partes("La Gestión y la gestion.", "gestion")
+    assert [p["texto"] for p in partes if p["marca"]] == ["Gestión", "gestion"]
+    assert "".join(p["texto"] for p in partes) == "La Gestión y la gestion."     # el texto no cambia
+
+
+def test_la_pagina_de_una_fuente_se_busca_por_texto_y_pagina_y_va_por_tramos(sesion, monkeypatch):  # noqa: F811
+    # Crítica de la interfaz: 8089 pasajes en una sola página, sin buscador y con desplazamiento lateral.
+    fuente = next(iter(servidor.convertir.leer_indice(sesion)))
+    pasajes = servidor.convertir.leer_pasajes(sesion, fuente)
+    url = f"/cursos/scrum/fuentes/{fuente}"
+    palabra = max(pasajes[0]["texto"].split(), key=len).strip(".,;:")
+    pagina = cliente.get(url, params={"q": palabra.upper()}).text
+    esperados = sum(1 for p in pasajes if servidor._plano(palabra) in servidor._plano(p["texto"]))
+    assert f"{esperados} {'pasaje coincide' if esperados == 1 else 'pasajes coinciden'} con «{palabra.upper()}»" in pagina
+    assert "<mark>" in pagina and '<a href="?">Quitar la búsqueda</a>' in pagina
+    numero = pasajes[0]["pagina"]
+    pagina = cliente.get(url, params={"pagina": str(numero)}).text
+    assert f"en la página {numero}." in pagina
+    assert "Ningún pasaje coincide con la búsqueda." in cliente.get(url, params={"q": "zzzqqqxx"}).text
+    # Por tramos: con un pasaje por tramo, el primero enlaza al siguiente y el último al anterior.
+    monkeypatch.setattr(servidor, "PASAJES_POR_TRAMO", 1)
+    pagina = cliente.get(url).text
+    assert pagina.count("<tr>") + pagina.count('<tr class="ia">') == 2           # el encabezado y un pasaje
+    assert '<a class="boton secundario" href="?tramo=2">Siguientes</a>' in pagina and "Anteriores" not in pagina
+    pagina = cliente.get(url, params={"tramo": "9999"}).text                       # fuera de rango: el último
+    assert f"Tramo {len(pasajes)} de {len(pasajes)}" in pagina and "Siguientes</a>" not in pagina
+    css = (servidor.RAIZ / "web" / "estaticos" / "estilo.css").read_text(encoding="utf-8")
+    assert "table.datos.pasajes { table-layout: fixed; }" in css and "table.datos.pasajes td { overflow-wrap: anywhere; }" in css
+
+
 def test_la_ficha_confirmada_dice_aparte_y_en_rojo_lo_que_hay_que_generar_de_nuevo(sesion):  # noqa: F811
     pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
     assert "Hay que generar de nuevo" not in pagina

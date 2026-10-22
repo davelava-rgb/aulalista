@@ -4,6 +4,7 @@ import asyncio
 import json
 import re
 import threading
+import unicodedata
 from pathlib import Path
 from urllib.parse import quote
 
@@ -203,12 +204,44 @@ def convertir_fuentes(curso: str):
     return _ir_al_curso(curso, mensaje)
 
 
+PASAJES_POR_TRAMO = 100
+
+
+def _plano(texto: str) -> str:
+    """Para buscar sin distinguir tildes ni mayúsculas. Cada letra da una sola letra: las posiciones no cambian."""
+    return "".join(unicodedata.normalize("NFD", c)[0].lower()[:1] for c in texto)
+
+
+def _partes(texto: str, buscado: str) -> list[dict]:
+    """El texto en partes, con lo que coincide con la búsqueda marcado, para resaltarlo en la página."""
+    if not buscado:
+        return [{"texto": texto, "marca": False}]
+    plano, partes, desde = _plano(texto), [], 0
+    while (i := plano.find(buscado, desde)) >= 0:
+        partes += [{"texto": texto[desde:i], "marca": False}, {"texto": texto[i:i + len(buscado)], "marca": True}]
+        desde = i + len(buscado)
+    return partes + [{"texto": texto[desde:], "marca": False}]
+
+
 @app.get("/cursos/{curso}/fuentes/{archivo}")
-def ver_fuente(request: Request, curso: str, archivo: str):
+def ver_fuente(request: Request, curso: str, archivo: str, q: str = "", pagina: str = "", tramo: int = 1):
+    """Una fuente convertida, por tramos de pasajes. Se busca por texto (sin distinguir tildes ni mayúsculas) y por
+    página, en el servidor: la página funciona sin JavaScript y no carga miles de filas de una vez."""
     carpeta = _carpeta(curso)
     entrada = convertir.leer_indice(carpeta).get(archivo)
     if entrada is None:
         raise HTTPException(404, "Esa fuente no está convertida.")
+    todos = convertir.leer_pasajes(carpeta, archivo)
+    q = " ".join(q.split())
+    buscado = _plano(q)
+    numero = int(pagina) if pagina.strip().isdigit() else None
+    hallados = [p for p in todos if (numero is None or p.get("pagina") == numero)
+                and (not buscado or buscado in _plano(p["texto"]))]
+    tramos = max(1, -(-len(hallados) // PASAJES_POR_TRAMO))
+    tramo = min(max(tramo, 1), tramos)
+    desde = (tramo - 1) * PASAJES_POR_TRAMO
+    pasajes = [{**p, "partes": _partes(p["texto"], buscado)} for p in hallados[desde:desde + PASAJES_POR_TRAMO]]
+    paginas = [p["pagina"] for p in todos if isinstance(p.get("pagina"), int)]
     return plantillas.TemplateResponse(
         request,
         "fuente.html",
@@ -217,7 +250,10 @@ def ver_fuente(request: Request, curso: str, archivo: str):
             "nombre": _nombre(curso),
             "archivo": archivo,
             "entrada": entrada,
-            "pasajes": convertir.leer_pasajes(carpeta, archivo),
+            "pasajes": pasajes,
+            "busqueda": {"q": q, "pagina": numero, "filtrada": bool(q or numero), "hallados": len(hallados),
+                         "total": len(todos), "tramo": tramo, "tramos": tramos, "desde": desde + 1,
+                         "hasta": desde + len(pasajes), "ultima_pagina": max(paginas) if paginas else None},
             "panel": _panel(carpeta, curso, "fuentes"),
         },
     )
