@@ -552,45 +552,23 @@ def version_en(carpeta_curso: Path, tipo: str, sesion: int | None, fecha: str) -
     return None
 
 
-def campos_cambiados(carpeta_curso: Path, sesion: int, fecha: str) -> dict[str, list[str]] | None:
-    """Qué campos de las dos fichas cambiaron desde `fecha` (cuando se generó un material), sin IA: compara la versión
-    guardada de entonces con la de ahora, con los mismos campos que la huella de las fichas. None si no se puede
-    saber, porque falta la versión de entonces."""
-    cambios = {}
-    for tipo, numero in (("curso", None), ("sesion", sesion)):
-        antes = version_en(carpeta_curso, tipo, numero, fecha)
-        if antes is None:
-            return None
-        ahora = cargar(carpeta_curso, tipo, numero)
-        # La marca «(propuesto)» y los espacios no son un cambio de contenido: no se cuentan.
-        def limpio(ficha, campo_id):
-            return " ".join(sin_marcas(valor(ficha, campo_id)).split())
-        cambios[tipo] = [c.id for c, _ in plantillas.campos_de(tipo) if c.id not in CAMPOS_SIN_EFECTO
-                         and limpio(antes, c.id) != limpio(ahora, c.id)]
-    return cambios
-
-
 def marcar_desactualizados(carpeta_curso: Path, sesion: int, anterior: dict | None = None) -> list[str]:
-    """Los materiales ya generados no se entregan hasta validarlos con las fichas nuevas. Si las fichas dicen lo mismo
-    que cuando se generó el último material (solo cambió qué materiales se producen), no se marca ninguno.
-    `anterior` es la ficha de la sesión en su confirmación previa: sirve para las sesiones generadas antes de que se
-    guardara la huella de las fichas, que si no quedarían todas desactualizadas por cualquier cambio."""
-    with CANDADO_ESTADO:
-        estado = cargar_estado(carpeta_curso, sesion)
-        actual = huella_de_fichas(carpeta_curso, sesion)
-        if not estado.get("huella_fichas") and anterior is not None                 and huella_de_fichas(carpeta_curso, sesion, anterior) == actual:
-            # Lo no marcado sigue a las fichas de ahora: desde aquí la sesión ya tiene su huella.
-            estado["huella_fichas"] = actual
-            guardar_estado(carpeta_curso, sesion, estado)
-            return []
-        if estado.get("huella_fichas") and estado["huella_fichas"] == actual:
-            return []
-        marcados = []
-        for nombre, material in estado["materiales"].items():
-            material["desactualizado"] = True
-            marcados.append(nombre)
-        guardar_estado(carpeta_curso, sesion, estado)
-        return marcados
+    """Los materiales ya generados no se entregan hasta validarlos con las fichas nuevas. Cada uno queda
+    desactualizado solo si cambió algo que usa (PLAN.md §0, decisión 62). Devuelve los que quedaron desactualizados."""
+    from app.fichas import dependencias   # importa este módulo: se carga aquí para no formar un círculo
+    return dependencias.revisar(carpeta_curso, sesion, anterior)
+
+
+def cambiaron_las_fichas(carpeta_curso: Path, sesion: int, estado: dict, anterior: dict | None = None) -> bool:
+    """La regla de antes de la decisión 62, para un material del que no se sabe qué usó: cualquier cambio en las
+    fichas desde el último material generado. Si las fichas dicen lo mismo (solo cambió qué materiales se producen),
+    no. `anterior` es la ficha de la sesión en su confirmación previa: sirve para las sesiones generadas antes de que
+    se guardara la huella de las fichas. Actualiza la huella en `estado` cuando hace falta."""
+    actual = huella_de_fichas(carpeta_curso, sesion)
+    if not estado.get("huella_fichas") and anterior is not None             and huella_de_fichas(carpeta_curso, sesion, anterior) == actual:
+        estado["huella_fichas"] = actual
+        return False
+    return not (estado.get("huella_fichas") and estado["huella_fichas"] == actual)
 
 
 def sesiones_confirmadas(carpeta_curso: Path) -> list[int]:

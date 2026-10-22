@@ -14,7 +14,7 @@ from fastapi.templating import Jinja2Templates
 
 from app import agente, cursos, tokens
 from app.config import RAIZ, FaltaClave
-from app.fichas import almacen, controles, flujo
+from app.fichas import almacen, controles, dependencias, flujo
 from app.fichas import plantillas as plantillas_fichas
 from app.fuentes import convertir
 from app.materiales import actividad, diapositivas, laboratorio, lectura
@@ -192,6 +192,10 @@ def convertir_fuentes(curso: str):
     antes = convertir.leer_indice(carpeta)
     indice = asyncio.run(convertir.convertir_curso(carpeta, lector_de_imagenes(curso)))
     cambiadas = [n for n, e in indice.items() if antes.get(n, {}).get("fecha") != e["fecha"]]
+    if cambiadas:
+        # Una fuente con otro contenido desactualiza los materiales de las sesiones que la usan (decisión 62).
+        for numero in almacen.sesiones_confirmadas(carpeta):
+            dependencias.revisar(carpeta, numero)
     fallidas = [n for n in cambiadas if indice[n]["estado"] == convertir.NO_SE_PUEDE_LEER]
     mensaje = f"Fuentes convertidas ahora: {len(cambiadas) - len(fallidas)}. Sin cambios: {len(indice) - len(cambiadas)}."
     if fallidas:
@@ -590,6 +594,9 @@ def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False
     puede_empezar = almacen.cargar(carpeta, "curso")["confirmada"]
     sesion_lista = puede_empezar and almacen.cargar(carpeta, "sesion", sesion)["confirmada"]
     incluidos = almacen.materiales_de_la_sesion(almacen.cargar(carpeta, "sesion", sesion))
+    if puede_empezar and dependencias.por_migrar(almacen.cargar_estado(carpeta, sesion)):
+        # Materiales generados antes de la decisión 62: se busca una vez qué usaron y se revisan con la regla nueva.
+        dependencias.revisar(carpeta, sesion)
     numeros = [s["numero"] for s in almacen.sesiones_del_curso(almacen.cargar(carpeta, "curso"))] if detalle else []
     materiales, siguiente, viejos = [], None, []
     for clave, datos in MATERIALES.items():
@@ -846,21 +853,14 @@ def _recorrido(datos: dict, estado: dict) -> list[dict]:
 
 
 def _que_cambio(carpeta, sesion: int, material: dict) -> list[str]:
-    """Qué cambió desde que se generó un material desactualizado, sin IA: los campos de las fichas que ya no dicen
-    lo mismo y, para las diapositivas, si la lectura se generó de nuevo. Vacío si no se puede saber."""
+    """Por qué un material quedó desactualizado, sin IA: lo que usa y ya no dice lo mismo (decisión 62), y si la
+    lectura en que se basa se generó de nuevo. Vacío si no se sabe."""
     estado = material["estado"]
-    if not estado.get("desactualizado") or not estado.get("fecha"):
+    if not estado.get("desactualizado"):
         return []
-    frases = []
-    cambios = almacen.campos_cambiados(carpeta, sesion, estado["fecha"]) or {}
-    for tipo, donde in (("sesion", "En la ficha de la sesión"), ("curso", "En la ficha del curso")):
-        nombres = [plantillas_fichas.etiqueta_corta(tipo, c) for c in cambios.get(tipo, [])]
-        if len(nombres) > 6:
-            nombres = nombres[:5] + [f"{len(nombres) - 5} campos más"]
-        if nombres:
-            frases.append(f"{donde}: {_y(nombres)}.")
-    if material["clave"] == diapositivas.CLAVE and estado.get("lectura_fecha") \
-            and lectura.estado(carpeta, sesion).get("fecha", "") != estado["lectura_fecha"]:
+    frases = list(estado.get("razones") or [])
+    usada = estado.get("lectura_fecha") if material["clave"] == diapositivas.CLAVE else estado.get("lectura_usada")
+    if usada and lectura.estado(carpeta, sesion).get("fecha", "") != usada:
         frases.append("La lectura se generó de nuevo.")
     return frases
 

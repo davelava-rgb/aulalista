@@ -29,7 +29,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from app import agente, entrega, skill, tokens
-from app.fichas import almacen, referencia, verificacion
+from app.fichas import almacen, dependencias, referencia, verificacion
 from app.materiales import comun, diapositivas, disenador_web, estilo, lectura, navegador
 from app.materiales.contenido import ESQUEMA_ACTIVIDAD, PUNTAJE_TOTAL, PUNTOS_POR_PREGUNTA, Actividad, Lectura, Pregunta
 from app.validacion import excel, pasada2, revision, revisor, verificador
@@ -871,7 +871,12 @@ def aprobar(carpeta_curso: Path, sesion: int) -> dict:
 
 
 def estado(carpeta_curso: Path, sesion: int) -> dict:
-    return _estado(carpeta_curso, sesion)
+    """El estado guardado. Si la lectura se generó de nuevo después de este material, queda desactualizado: la usa
+    (PLAN.md §0, decisión 62 d)."""
+    material = _estado(carpeta_curso, sesion)
+    if dependencias.lectura_nueva(carpeta_curso, sesion, material):
+        return {**material, "desactualizado": True}
+    return material
 
 
 def faltan(carpeta_curso: Path, sesion: int) -> dict[str, list[str]]:

@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from app import agente, tokens
-from app.fichas import almacen
+from app.fichas import almacen, dependencias
 from app.validacion import pasada2, revision, verificador
 from app.validacion.pasajes import FICHA_DE_LA_SESION, FICHA_DEL_CURSO, Corpus
 
@@ -184,6 +184,12 @@ def actualizar(carpeta_curso: Path, sesion: int, clave: str, **cambios) -> dict:
         if cambios.get("estado") == "trabajando" and not cambios.get("previo"):
             # Las fichas con que se genera: un cambio que no las toca no desactualiza este material.
             datos["huella_fichas"] = almacen.huella_de_fichas(carpeta_curso, sesion)
+            if clave in dependencias.TODOS:
+                # Lo que usa, para saber después qué cambio lo desactualiza y cuál no (decisión 62).
+                material["usado"] = dependencias.usado(carpeta_curso, sesion)
+                material["razones"] = []
+                if clave != "lectura":
+                    material["lectura_usada"] = datos["materiales"].get("lectura", {}).get("fecha", "")
         almacen.guardar_estado(carpeta_curso, sesion, datos)
         return material
 

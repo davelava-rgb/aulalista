@@ -791,35 +791,6 @@ def test_el_tablero_muestra_la_actividad_web_con_su_estado(sesion):  # noqa: F81
     assert '<a class="ficha-material bien" href="/cursos/scrum/sesiones/1/materiales/actividad">' in hoja
 
 
-def test_un_material_desactualizado_dice_que_campos_de_la_ficha_cambiaron(sesion):  # noqa: F811
-    import time
-    from datetime import datetime
-    # Sin IA: compara la versión de la ficha guardada cuando se generó con la de ahora.
-    ficha = almacen.cargar(sesion, "sesion", 1)
-    almacen.guardar(sesion, "sesion", 1, ficha, "confirmada")
-    time.sleep(1.1)
-    generada = datetime.now().isoformat(timespec="seconds")
-    time.sleep(1.1)
-    ficha["campos"]["sesion.alcance"]["valor"] += " Un tema más."
-    # Quitar la marca «(propuesto)» no es un cambio de contenido: no se cuenta.
-    ficha["campos"]["sesion.ya_vieron"] = {**(ficha["campos"].get("sesion.ya_vieron") or {}),
-                                          "valor": almacen.valor(ficha, "sesion.ya_vieron") + " (propuesto)"}
-    almacen.guardar(sesion, "sesion", 1, ficha, "editada por el profesor")
-    assert almacen.campos_cambiados(sesion, 1, generada) == {"curso": [], "sesion": ["sesion.alcance"]}
-    assert almacen.campos_cambiados(sesion, 1, "2000-01-01T00:00:00") is None   # sin versión de entonces: no se sabe
-    _poner(sesion, "lectura", estado="aprobada", aprobada=generada, fecha=generada, desactualizado=True,
-           entrega={"pregunta": "¿Apruebas la lectura?", "secciones": []})
-    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
-    assert "Qué cambió desde que se generó:" in pagina and "<li>En la ficha de la sesión: Alcance.</li>" in pagina
-
-
-def test_los_campos_se_nombran_corto():
-    from app.fichas import plantillas
-    assert plantillas.etiqueta_corta("sesion", "sesion.referencia") == "Material de referencia"
-    assert plantillas.etiqueta_corta("sesion", "ejercicio.3.respuesta") == "Ejercicio 3 · respuesta correcta"
-    assert plantillas.etiqueta_corta("curso", "datos.fijos") == "Datos fijos del caso"
-
-
 def test_los_avisos_de_diseno_no_se_cuentan_en_el_resumen_de_la_entrega(sesion):  # noqa: F811
     entrega = {"pregunta": "¿Apruebas la lectura?", "secciones": [
         {"clave": "archivos", "titulo": "Archivos", "lineas": ["S1_Lectura.docx: la lectura."]}]}

@@ -26,7 +26,7 @@ import openpyxl
 from pydantic import ValidationError
 
 from app import agente, entrega, office, skill, tokens
-from app.fichas import almacen, plantillas, referencia, verificacion
+from app.fichas import almacen, dependencias, plantillas, referencia, verificacion
 from app.materiales import comun, docx, ejecucion, estilo, figuras, lectura, practica
 from app.materiales.contenido import ESQUEMA_LABORATORIO, Laboratorio
 from app.validacion import excel, pasada2, revision, revisor, verificador
@@ -92,7 +92,12 @@ def _avance(carpeta_curso: Path, sesion: int, texto: str) -> None:
 
 
 def estado(carpeta_curso: Path, sesion: int) -> dict:
-    return _estado(carpeta_curso, sesion)
+    """El estado guardado. Si la lectura se generó de nuevo después de este material, queda desactualizado: la usa
+    (PLAN.md §0, decisión 62 d)."""
+    material = _estado(carpeta_curso, sesion)
+    if dependencias.lectura_nueva(carpeta_curso, sesion, material):
+        return {**material, "desactualizado": True}
+    return material
 
 
 def gasto_de_la_corrida(carpeta_curso: Path, curso: str, sesion: int) -> dict | None:

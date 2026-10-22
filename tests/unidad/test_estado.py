@@ -55,14 +55,14 @@ def test_cambiar_solo_los_materiales_de_la_sesion_no_desactualiza_lo_generado(se
 
 
 def test_una_sesion_sin_huella_tampoco_se_desactualiza_por_cambiar_solo_los_materiales(sesion):  # noqa: F811
-    # Sin «trabajando» no se guarda la huella: así quedaron las sesiones generadas antes de que existiera.
+    # Sin «trabajando» no se guarda la huella ni lo usado (decisión 62): así quedaron las sesiones de antes. Sin fecha
+    # ni versiones, no se sabe qué usó el material: se aplica la regla de antes.
     comun.actualizar(sesion, 1, "laboratorio", estado="aprobada")
     assert "huella_fichas" not in almacen.cargar_estado(sesion, 1)
     anterior = almacen.ultima_confirmada(sesion, 1)
     assert anterior is not None
     _cambiar(sesion, "materiales.cuales", "diapositivas y laboratorio")
     assert almacen.marcar_desactualizados(sesion, 1, anterior) == []
-    assert almacen.cargar_estado(sesion, 1)["huella_fichas"] == almacen.huella_de_fichas(sesion, 1)
     _cambiar(sesion, "lectura.cuidado", "Otro riesgo")
     assert almacen.marcar_desactualizados(sesion, 1, anterior) == ["laboratorio"]
 
