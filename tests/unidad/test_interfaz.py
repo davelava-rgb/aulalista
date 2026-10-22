@@ -231,12 +231,17 @@ def test_si_todo_esta_aprobado_pero_desactualizado_el_siguiente_paso_lo_dice(ses
         _poner(sesion, clave, estado="aprobada", aprobada="2026-10-15T10:00:00")
     _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00", desactualizado=True)
     siguiente = servidor._vista_de_materiales(sesion, "scrum", 1)["siguiente"]
-    assert siguiente["texto"] == ("Los materiales de esta sesión están aprobados, pero la lectura quedó desactualizada: "
-                                  "la ficha cambió después. Decide si la generas de nuevo.")
+    # Una idea por oración: el paso en el texto, la causa en el motivo (crítica de la interfaz).
+    assert siguiente["texto"] == "Decide si generas de nuevo la lectura."
+    assert siguiente["motivo"] == "La ficha cambió después de aprobarla."
     assert siguiente["ancla"] == "lectura" and siguiente["boton"] == "Ir a la lectura"   # se nombra y se enlaza
     _poner(sesion, "diapositivas", estado="aprobada", aprobada="2026-10-15T10:00:00", desactualizado=True)
-    texto = servidor._vista_de_materiales(sesion, "scrum", 1)["siguiente"]["texto"]
-    assert "pero la lectura y las diapositivas quedaron desactualizadas" in texto and "Decide si las generas" in texto
+    siguiente = servidor._vista_de_materiales(sesion, "scrum", 1)["siguiente"]
+    assert siguiente["texto"] == "Decide si generas de nuevo la lectura y las diapositivas."
+    assert siguiente["motivo"] == "La ficha cambió después de aprobarlas."
+    _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00", desactualizado=False)
+    assert servidor._vista_de_materiales(sesion, "scrum", 1)["siguiente"]["motivo"] == (
+        "La lectura o la ficha cambió después de aprobarlas.")
 
 
 def test_un_material_desactualizado_avisa_una_vez_y_marca_sus_archivos(sesion):  # noqa: F811
@@ -526,8 +531,8 @@ def test_lo_que_sigue_no_repite_de_nuevo_y_contrae_al_y_del(sesion):  # noqa: F8
         _poner(sesion, clave, estado="aprobada", aprobada="2026-10-15T10:00:00")
     _poner(sesion, "laboratorio", estado="aprobada", aprobada="2026-10-15T10:00:00", desactualizado=True)
     sigue = servidor._tablero(sesion, "scrum", servidor._panel(sesion, "scrum", "curso"))["sigue"]
-    assert sigue["texto"].endswith("Decide si lo generas de nuevo.") and "de nuevo de nuevo" not in sigue["texto"]
-    assert sigue["texto"].startswith("Sesión 1: sus materiales están aprobados, pero el laboratorio")   # no «esta sesión»
+    assert sigue["texto"] == "Sesión 1: decide si generas de nuevo el laboratorio."
+    assert sigue["motivo"] == "La ficha cambió después de aprobarlo."
     assert sigue["boton"] == "Ir al laboratorio"
     pagina = cliente.get("/cursos/scrum").text
     assert "de nuevo de nuevo" not in pagina and "Ir a el " not in pagina
@@ -541,9 +546,29 @@ def test_con_la_sesion_aprobada_el_siguiente_paso_es_lo_pendiente_del_curso(sesi
     for clave in ("lectura", "diapositivas", "laboratorio", "actividad"):
         _poner(sesion, clave, estado="aprobada", aprobada="2026-10-15T10:00:00")
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
-    assert ('Los materiales de esta sesión están aprobados. En el curso sigue: <a href="/cursos/scrum/sesiones/2/materiales/lectura"'
-            ' data-atajo="s" aria-keyshortcuts="S">Sesión 2: genera la lectura.</a>') in pagina
-    assert '<a class="boton" href="/cursos/scrum/sesiones/2/materiales/lectura">Ir a la lectura</a>' in pagina
+    # El paso solo, sin anidar frases; el botón dice que es de otra sesión.
+    assert ('<strong>Siguiente paso:</strong> <a href="/cursos/scrum/sesiones/2/materiales/lectura"'
+            ' data-atajo="s" aria-keyshortcuts="S">Sesión 2: genera la lectura.</a> </p>') in " ".join(pagina.split())
+    assert '<a class="boton" href="/cursos/scrum/sesiones/2/materiales/lectura">Ir a la lectura de la sesión 2</a>' in pagina
+
+
+def test_lo_aceptado_al_aprobar_se_ve_en_el_tablero_y_en_el_recorrido(sesion):  # noqa: F811
+    # Crítica de la interfaz: «Lista» y todo en verde escondían 6 decisiones pendientes aceptadas al aprobar.
+    entrega = {"secciones": [{"clave": "pendientes", "titulo": "Decisiones pendientes",
+                              "lineas": ["Afirmación sin fuente: uno.", "REVISIÓN · ambigüedad · dos."]}]}
+    for clave in ("lectura", "diapositivas", "laboratorio", "actividad"):
+        _poner(sesion, clave, estado="aprobada", aprobada="2026-10-15T10:00:00")
+    _poner(sesion, "laboratorio", estado="aprobada", aprobada="2026-10-15T10:00:00", entrega=entrega)
+    hoja = cliente.get("/cursos/scrum").text
+    assert "Lista: todos sus materiales están aprobados. El laboratorio se aprobó con 2 decisiones pendientes." in hoja
+    assert "<span>Con 2 decisiones pendientes</span>" in hoja
+    datos = {**servidor.MATERIALES["laboratorio"], "clave": "laboratorio"}
+    recorrido = servidor._recorrido(datos, {"estado": "aprobada", "aprobada": "2026-10-15", "entrega": entrega})
+    assert recorrido[2]["nota"] == "Con 2 decisiones pendientes"
+    # Una FALLA no es una decisión aceptada: no se cuenta.
+    con_falla = {"secciones": [{"clave": "pendientes", "titulo": "", "lineas": ["FALLA: algo.", "Una duda."]}]}
+    assert servidor._aceptadas({"estado": "aprobada", "entrega": con_falla}) == 1
+    assert servidor._aceptadas({"estado": "verificada", "entrega": con_falla}) == 0
 
 
 def test_la_ficha_aprobada_y_desactualizada_dice_que_la_fecha_es_de_antes_del_cambio(sesion):  # noqa: F811

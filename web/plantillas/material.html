@@ -30,7 +30,8 @@
   <p class="siguiente" id="siguiente"><strong>Siguiente paso:</strong>
     {% if siguiente.ancla %}<a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/{{ siguiente.ancla }}" data-atajo="s" aria-keyshortcuts="S">{{ siguiente.texto }}</a>
     {% elif not puede_empezar %}<a href="/cursos/{{ curso }}/sesiones/{{ sesion }}/ficha">{{ siguiente.texto }}</a>
-    {% elif sigue_curso %}{{ siguiente.texto }} En el curso sigue: <a href="{{ sigue_curso.url }}" data-atajo="s" aria-keyshortcuts="S">{{ sigue_curso.texto }}</a>
+    {# Sesión aprobada: el paso es lo pendiente del curso, solo; que esta sesión está lista ya lo dice el panel. #}
+    {% elif sigue_curso %}<a href="{{ sigue_curso.url }}" data-atajo="s" aria-keyshortcuts="S">{{ sigue_curso.texto }}</a>
     {% else %}{{ siguiente.texto }} No queda nada pendiente en el curso.{% endif %}</p>
   {% endif %}
   {% if not m.incluido %}
@@ -143,7 +144,7 @@
     {# El material aprobado cierra con lo que sigue, no con botones que gastan: esos quedan plegados abajo. #}
     <p class="cierre"><strong>{{ m.el | capitalize }} {{ "están" if m.plural else "está" }} {{ forma(m, "aprobad") }}.</strong></p>
     {% if siguiente.ancla %}<p><a class="boton" href="/cursos/{{ curso }}/sesiones/{{ sesion }}/materiales/{{ siguiente.ancla }}">{{ siguiente.boton or siguiente.texto.rstrip(".") }}</a></p>
-    {% elif sigue_curso %}<p><a class="boton" href="{{ sigue_curso.url }}">{{ sigue_curso.boton }}</a></p>{% endif %}
+    {% elif sigue_curso %}<p><a class="boton" href="{{ sigue_curso.url }}">{{ sigue_curso.boton }}{% if sigue_curso.sesion and sigue_curso.sesion != sesion %} de la sesión {{ sigue_curso.sesion }}{% endif %}</a></p>{% endif %}
     {% elif e.estado == "con fallas" %}
     <p><strong>No se {{ "pueden" if m.plural else "puede" }} aprobar: {{ "tienen" if m.plural else "tiene" }} fallas del verificador</strong>, el programa que revisa cada material sin IA. Para aprobar{{ m.lo }}, genéra{{ m.lo }} de nuevo. Si una falla viene de un dato de las fichas, corrígelo antes.</p>
     {% endif %}

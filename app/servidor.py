@@ -608,6 +608,18 @@ def _forma(datos: dict, raiz: str) -> str:
     return raiz + datos.get("o", "a") + ("s" if datos.get("plural") else "")
 
 
+def _aceptadas(estado: dict) -> int:
+    """Cuántas decisiones pendientes aceptó el profesor al aprobar. Una FALLA no cuenta: impide aprobar."""
+    if estado.get("estado") != "aprobada" or not estado.get("entrega"):
+        return 0
+    return sum(1 for s in estado["entrega"]["secciones"] if s["clave"] == "pendientes"
+               for linea in s["lineas"] if not linea.startswith("FALLA"))
+
+
+def _decisiones(n: int) -> str:
+    return f"{n} {'decisión pendiente' if n == 1 else 'decisiones pendientes'}"
+
+
 def _situacion(datos: dict, estado: dict, incluido: bool) -> dict:
     """Indicador de un material: clase (color e icono) y texto corto. El color nunca va sin su palabra."""
     e = estado.get("estado")
@@ -655,7 +667,7 @@ def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False
         estado = modulo.estado(carpeta, sesion)   # calcula si quedó desactualizado
         incluido = clave in incluidos
         m = {**{k: v for k, v in datos.items() if k != "modulo"}, "clave": clave, "estado": estado,
-             "incluido": incluido, "situacion": _situacion(datos, estado, incluido)}
+             "incluido": incluido, "situacion": _situacion(datos, estado, incluido), "aceptadas": _aceptadas(estado)}
         faltan = modulo.faltan(carpeta, sesion) if sesion_lista and incluido else {"ficha": [], "otros": []}
         # Lo que falta «fuera de la ficha» es siempre la lectura aprobada y al día: el material espera por ella.
         el = MATERIALES[lectura.CLAVE]["el"]
@@ -705,14 +717,14 @@ def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False
     if siguiente is None and viejos:
         # Aprobados, pero no todos al día: decirlo, para que «aprobados» no se lea como «listos para entregar».
         # Se nombran y el enlace lleva al primero, para no tener que buscarlos en el panel.
+        # Una idea por oración: el paso en el texto y la causa en el motivo.
         nombres = _y([v["el"] for v in viejos])
         if len(viejos) == 1 and not viejos[0].get("plural"):
-            cuales, lo = f"{nombres} quedó {_forma(viejos[0], 'desactualizad')}", viejos[0]["lo"]
+            lo = viejos[0]["lo"]
         else:
-            femenino = all(v.get("o", "a") == "a" for v in viejos)
-            cuales, lo = f"{nombres} quedaron desactualizad{'as' if femenino else 'os'}", "las" if femenino else "los"
-        siguiente = {"texto": f"Los materiales de esta sesión están aprobados, pero {cuales}: la ficha cambió después. "
-                              f"Decide si {lo} generas de nuevo.",
+            lo = "las" if all(v.get("o", "a") == "a" for v in viejos) else "los"
+        cambio = "La lectura o la ficha" if [v["clave"] for v in viejos] == [diapositivas.CLAVE] else "La ficha"
+        siguiente = {"texto": f"Decide si generas de nuevo {nombres}.", "motivo": f"{cambio} cambió después de aprobar{lo}.",
                      "ancla": viejos[0]["clave"], "corto": viejos[0]["corto"], "boton": f"Ir {_a(viejos[0]['el'])}"}
     elif siguiente is None:
         siguiente = {"texto": "Los materiales de esta sesión están aprobados.", "ancla": "", "corto": "Listo"}
@@ -759,6 +771,7 @@ def _panel(carpeta, curso: str, actual: str) -> dict:
                                 "situacion": m["situacion"], "estado": m["estado"].get("estado") or "",
                                 "desactualizado": bool(m["estado"].get("desactualizado")),
                                 "aprobada": (m["estado"].get("aprobada") or "")[:10], "espera": m["espera"],
+                                "aceptadas": m["aceptadas"],
                                 "sigue": m["clave"] == vista["siguiente"]["ancla"]} for m in incluidos],
                 "hechos": sum(1 for m in incluidos if m["situacion"]["clase"] == "bien"),
                 "van": len(incluidos),
@@ -828,8 +841,7 @@ def _que_sigue(curso: str, panel: dict) -> dict | None:
                     "boton": "Ir a la ficha de la sesión", "motivo": "Ningún material de la sesión empieza sin ella."}
         if s["siguiente"]["ancla"]:
             m = next(x for x in s["materiales"] if x["clave"] == s["siguiente"]["ancla"])
-            # Ya dice «de nuevo» cuando hace falta. Con «Sesión N:» delante, «esta sesión» se volvería ambiguo.
-            texto = s["siguiente"]["texto"].replace("Los materiales de esta sesión", "Sus materiales", 1)
+            texto = s["siguiente"]["texto"]   # ya dice «de nuevo» cuando hace falta
             motivo = s["siguiente"].get("motivo") or (
                 (f"Falta información para generar{'las' if m['plural'] else ('lo' if m['el'].startswith('el ') else 'la')}. "
                  "La página del material dice qué.") if texto.startswith("Completa") else _motivo(m))
@@ -846,9 +858,18 @@ def _frase_de_sesion(s: dict) -> str:
     faltan = [m for m in s["materiales"] if m["situacion"]["clase"] == "neutro"]
     if not s["puede_empezar"]:
         return "Falta confirmar su ficha."
+    # Lo aceptado al aprobar no es un problema, pero se dice: «Lista» no puede esconder decisiones pendientes.
+    con_decisiones = [m for m in s["materiales"] if m.get("aceptadas")]
+    aceptadas = ""
+    if len(con_decisiones) == 1:
+        m = con_decisiones[0]
+        aceptadas = (f" {m['el'][:1].upper()}{m['el'][1:]} se {'aprobaron' if m['plural'] else 'aprobó'}"
+                     f" con {_decisiones(m['aceptadas'])}.")
+    elif con_decisiones:
+        aceptadas = f" {len(con_decisiones)} materiales se aprobaron con decisiones pendientes."
     if s["hechos"] == s["van"]:
-        return "Lista: " + ("su material está aprobado." if s["van"] == 1 else "todos sus materiales están aprobados.")
-    frase = f"{s['hechos']} de {s['van']} {'aprobado' if s['van'] == 1 else 'aprobados'}."
+        return "Lista: " + ("su material está aprobado." if s["van"] == 1 else "todos sus materiales están aprobados.") + aceptadas
+    frase = f"{s['hechos']} de {s['van']} {'aprobado' if s['van'] == 1 else 'aprobados'}." + aceptadas
     desactualizados = [m for m in problemas if m["desactualizado"]]
     if desactualizados:
         n = len(desactualizados)
@@ -914,6 +935,8 @@ def _recorrido(datos: dict, estado: dict) -> list[dict]:
             s["clave"] == "pendientes" and s["lineas"] for s in estado["entrega"]["secciones"]) else "Sin errores abiertos"]
         if e == "aprobada":
             notas[3] = "El " + _fecha(estado.get("aprobada") or "")
+            if _aceptadas(estado):    # cuántas, no solo «Con pendientes»: se aprobó aceptándolas
+                notas[2] = "Con " + _decisiones(_aceptadas(estado))
         if e == "aprobada" and estado.get("desactualizado"):
             # Sigue aprobado, pero no al día. Lo que hay que rehacer es Generar: ahí va el «!»; los pasos de después
             # vuelven a quedar pendientes, y Aprobar recuerda cuándo se aprobó la versión anterior.
