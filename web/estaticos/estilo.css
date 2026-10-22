@@ -319,8 +319,9 @@ main.hoja { min-width: 0; max-width: 50rem; margin: 0; padding: 2rem 2.5rem 4rem
 /* Cursos del panel (decisión 50): cada curso en una línea con su avance; el abierto, con sus sesiones debajo. */
 .panel-cabeza { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0 1.25rem; }
 .panel-cabeza h2 { margin: 0; color: var(--texto); font-size: 0.8125rem; font-weight: bold; opacity: 0.75; }
+/* Texto magenta sobre niebla: el magenta normal no llega a 4.5:1, el de texto sí (claro 6.2, oscuro 5.8). */
 .panel-nuevo { display: inline-flex; align-items: center; min-height: 32px; padding: 0 0.6rem; border: 1px solid var(--principal);
-  border-radius: 6px; font-size: 0.8125rem; text-decoration: none; }
+  color: var(--principal-texto); border-radius: 6px; font-size: 0.8125rem; text-decoration: none; }
 .panel-cursos { margin-top: 0.6rem !important; }
 .panel-linea { border-top: 1px solid var(--borde); }
 .panel-linea.abierto { background: var(--fondo); padding-bottom: 0.25rem; }

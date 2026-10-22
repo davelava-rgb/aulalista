@@ -1,6 +1,7 @@
 """La interfaz muestra el estado de cada material, el siguiente paso y el costo antes de gastar."""
 
 import json
+import re
 
 from fastapi.testclient import TestClient
 
@@ -320,6 +321,28 @@ def test_la_cabecera_lleva_el_logo_de_futurasoft(entorno):
     assert cliente.get("/estaticos/marca/futurasoft-logo.png").status_code == 200
     css = (servidor.RAIZ / "web" / "estaticos" / "estilo.css").read_text(encoding="utf-8")
     assert "--principal: #c537a0;" in css and "--marca: #1e0253;" in css
+
+
+def _contraste(a: str, b: str) -> float:
+    def luz(h):
+        c = [int(h[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        c = [x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4 for x in c]
+        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+    claro, oscuro = sorted((luz(a), luz(b)), reverse=True)
+    return (claro + 0.05) / (oscuro + 0.05)
+
+
+def test_el_texto_magenta_sobre_niebla_usa_el_magenta_para_texto_en_los_dos_modos():
+    # Crítica de la interfaz: «Nuevo» del panel daba 4.3:1 de día y 4.0:1 de noche (el mínimo es 4.5:1).
+    css = (servidor.RAIZ / "web" / "estaticos" / "estilo.css").read_text(encoding="utf-8")
+    dia = dict(re.findall(r"--([a-z-]+): (#[0-9a-f]{6});", css.split("}")[0]))
+    noche = dict(re.findall(r"--([a-z-]+): (#[0-9a-f]{6});", css.split(':root[data-tema="oscuro"]')[1].split("}")[0]))
+    for modo in (dia, noche):
+        assert _contraste(modo["principal-texto"], modo["suave"]) >= 4.5
+        assert _contraste(modo["principal"], modo["fondo"]) >= 4.5
+        assert _contraste(modo["principal"], modo["suave"]) < 4.5      # por eso el panel no usa el magenta normal
+    regla = re.search(r"\.panel-nuevo \{[^}]*\}", css).group(0)
+    assert "color: var(--principal-texto)" in regla
 
 
 # ---------- Panel del curso (PLAN.md §0, decisión 38) ----------
