@@ -159,6 +159,18 @@ def respuestas_para_ejecutar(carpeta_curso: Path, sesion: int) -> tuple[dict[int
     return correctas, alumno
 
 
+def origen_de_opciones(carpeta_curso: Path, sesion: int) -> practica.OrigenDeOpciones:
+    """De dónde salen las opciones de una lista (PLAN.md §0, decisión 60 c y f): el vocabulario de la sesión, los
+    datos fijos y las áreas del caso; y si la sesión enseña listas o validación de datos."""
+    ficha_curso, ficha_sesion = almacen.cargar(carpeta_curso, "curso"), _ficha_sesion(carpeta_curso, sesion)
+    vocabulario = tuple((c["concepto"], tuple(c["variantes"])) for c in almacen.vocabulario(ficha_sesion))
+    fijos = [d["valor"] for d in almacen.datos_fijos(ficha_curso)[0]]
+    areas = [a.strip() for a in re.split(r",|\s+y\s+", almacen.valor(ficha_curso, "caso.areas")) if a.strip()]
+    tema = " ".join(almacen.valor(ficha_sesion, c) for c in ("sesion.numero_titulo", "sesion.alcance"))
+    return practica.OrigenDeOpciones(vocabulario, tuple(dict.fromkeys(fijos + areas)),
+                                     bool(practica.ENSENA_LISTAS.search(tema)))
+
+
 def fecha_de_referencia(carpeta_curso: Path) -> str:
     return almacen.valor(almacen.cargar(carpeta_curso, "curso"), "datos.fecha").strip()
 
@@ -288,6 +300,17 @@ CÓMO ENTREGAR EL LABORATORIO (PLAN.md §0, decisión 33)
   - descripcion: lo que dirá la tabla de archivos («Ocho riesgos de Recursos Humanos con su opción de tratamiento»).
   - Excel: «hojas», cada una con un nombre corto, «encabezados» y «filas». Datos ficticios y coherentes con los datos
     fijos del caso. Los números van como números. {h["columnas"]}
+  - listas (decisión 60): en una columna donde el alumno escribe su respuesta y esa respuesta es una de un conjunto
+    cerrado (una categoría, un concepto del vocabulario, un área del caso, «Sí» o «No»), pon una lista con
+    «columna» (el encabezado), «opciones» y «respuestas». Sin lista si la respuesta es abierta (una explicación, un
+    cálculo, un texto) o si la sesión enseña listas o validación de datos; en ese caso «listas» va vacía.
+    - opciones: dos como mínimo, sin repetidas, escritas igual que en la ficha. Cada una es un concepto del
+      vocabulario de la sesión, un dato fijo o un área del caso, o «Sí» o «No». Los conceptos van en el orden de la
+      fuente. Pon todas las opciones del conjunto, no solo las correctas: la lista no delata la respuesta.
+    - respuestas: la respuesta correcta de cada fila de datos, en orden y escrita igual que su opción, o "" si la
+      fila no se responde. Va solo a la guía del profesor. La columna de la lista va vacía en «filas».
+    - El paso de ese ejercicio dice que el alumno elige su respuesta de la lista de la celda, sin nombrar menús ni
+      botones. El programa pone las opciones en una hoja «Opciones»: no la escribas tú.
   - Word: «parrafos» (estilo «titulo», «texto» o «lista») y, si hace falta, «tabla».
   - Si el ejercicio depende de fechas o plazos, escribe la fecha de referencia de la ficha dentro del archivo.
   - problema: el problema que el archivo trae a propósito, según la ficha. No va en la guía del alumno.
@@ -417,8 +440,15 @@ def _validar(datos: dict, carpeta_curso: Path, sesion: int) -> tuple[Laboratorio
         return None, [f"FALLA · estructura · {'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in error.errors()]
     problemas = practica.revisar(contenido, sesion, len(ejercicios_de_la_ficha(carpeta_curso, sesion)),
                                  fecha_de_referencia(carpeta_curso), respuestas_a_la_herramienta(carpeta_curso, sesion),
-                                 recuadros_permitidos(herramienta(carpeta_curso)))
+                                 recuadros_permitidos(herramienta(carpeta_curso)), origen_de_opciones(carpeta_curso, sesion))
     return (None if problemas else contenido), problemas
+
+
+def avisos_de_listas(contenido: Laboratorio) -> list:
+    """Decisión 60 e): un paso que no dice que el alumno elige de la lista es un AVISO del verificador."""
+    return [verificador.verificar.Hallazgo(nivel="AVISO", seccion=seccion, oracion="", regla="lista de opciones",
+                                           detalle=detalle)
+            for seccion, detalle in practica.avisos_de_listas(contenido)]
 
 
 def _tiene_formulas(ruta: Path) -> bool:
@@ -455,6 +485,8 @@ def bloques_de(contenido: Laboratorio) -> list[pasada2.Bloque]:
             for hoja in archivo.hojas:
                 textos += [f"{nombre} · {hoja.nombre} · " + " | ".join(str(v) for v in fila if v is not None)
                            for fila in [hoja.encabezados, *hoja.filas]]
+                textos += [f"{nombre} · {hoja.nombre} · lista de opciones de la columna {l.columna}: "
+                           + " | ".join(l.opciones) for l in hoja.listas]
         bloques.append(pasada2.Bloque(f"Ejercicio {e.numero} · {e.titulo}", oraciones(*textos)))
     return bloques
 
@@ -463,7 +495,8 @@ INDICACIONES_DE_REVISION = (
     "Es la guía de laboratorio del alumno y sus archivos de práctica. Revisa que cada ejercicio funcione solo, con sus "
     "archivos; que lo que el alumno copia funcione tal cual; que los datos del caso cuadren entre la guía, los archivos y "
     "los datos fijos de la ficha; y que ninguna parte de la guía dé la respuesta del ejercicio. El problema que un "
-    "archivo trae a propósito no es un error: es parte del ejercicio.")
+    "archivo trae a propósito no es un error: es parte del ejercicio. Una lista de opciones de una columna trae todas "
+    "las opciones y no dice cuál es la correcta: no da la respuesta (PLAN.md §0, decisión 60).")
 
 
 # ---------- Generación ----------
@@ -579,6 +612,7 @@ class _Trabajo:
                     practica_ = sorted(self.rutas["practica"].iterdir())
                     self.resultado = verificador.ejecutar(configuracion, [self.rutas["word"], *practica_, self.rutas["zip"]],
                                                           self.rutas["excel"], self.explicaciones, self.contar_paginas,
+                                                          hallazgos_extra=avisos_de_listas(contenido),
                                                           salida_json=self.rutas["verificacion_json"])
                     if comun.explicar_literales(self.resultado, self.explicaciones, self.corpus()):
                         comun.guardar_json(self.rutas["explicaciones"], self.explicaciones)

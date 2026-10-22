@@ -284,11 +284,31 @@ ESQUEMA_DIAPOSITIVAS = _objeto({
 Valor = str | int | float | None
 
 
+class Lista(BaseModel):
+    """Una columna donde el alumno elige su respuesta de una lista de opciones (PLAN.md §0, decisión 60).
+    «respuestas» trae la respuesta correcta de cada fila de datos, en orden, o "" si la fila no se responde: es lo
+    que la guía del profesor da para esa columna y nunca llega al archivo del alumno."""
+    columna: str = Field(min_length=1)
+    opciones: list[str] = Field(min_length=2)
+    respuestas: list[str] = Field(default_factory=list)
+
+    @field_validator("opciones")
+    @classmethod
+    def sin_repetidas(cls, opciones):
+        limpias = [o.strip() for o in opciones]
+        if any(not o for o in limpias):
+            raise ValueError("una opción de la lista está vacía")
+        if len({o.lower() for o in limpias}) != len(limpias):
+            raise ValueError("la lista tiene opciones repetidas")
+        return limpias
+
+
 class Hoja(BaseModel):
     """Una hoja de un Excel de práctica. Una celda que empieza con «=» es una fórmula."""
     nombre: str = Field(min_length=1, max_length=31)
     encabezados: list[str] = Field(min_length=1)
     filas: list[list[Valor]] = Field(default_factory=list)
+    listas: list[Lista] = Field(default_factory=list)
 
     @field_validator("filas")
     @classmethod
@@ -297,6 +317,24 @@ class Hoja(BaseModel):
         if any(len(f) != columnas for f in filas):
             raise ValueError("cada fila debe tener tantas celdas como encabezados")
         return filas
+
+    @model_validator(mode="after")
+    def listas_en_sus_columnas(self):
+        vistas = set()
+        for lista in self.listas:
+            if lista.columna not in self.encabezados:
+                raise ValueError(f"la lista de «{lista.columna}» no es de una columna de la hoja «{self.nombre}»")
+            if lista.columna in vistas:
+                raise ValueError(f"la columna «{lista.columna}» tiene dos listas")
+            vistas.add(lista.columna)
+            if len(lista.respuestas) != len(self.filas):
+                raise ValueError(f"la lista de «{lista.columna}» trae {len(lista.respuestas)} respuestas y la hoja "
+                                 f"tiene {len(self.filas)} filas de datos: va una por fila, \"\" si no se responde")
+            i = self.encabezados.index(lista.columna)
+            if any(f[i] not in (None, "") for f in self.filas):
+                raise ValueError(f"la columna «{lista.columna}» tiene una lista y trae datos: va vacía, para que el "
+                                 "alumno elija")
+        return self
 
 
 class Parrafo(BaseModel):
@@ -413,7 +451,9 @@ ESQUEMA_LABORATORIO = _objeto({
         "descripcion": {"type": "string"},
         "hojas": {"type": "array", "items": _objeto({
             "nombre": {"type": "string"}, "encabezados": TEXTOS,
-            "filas": {"type": "array", "items": {"type": "array", "items": _VALOR}}})},
+            "filas": {"type": "array", "items": {"type": "array", "items": _VALOR}},
+            "listas": {"type": "array", "items": _objeto({
+                "columna": {"type": "string"}, "opciones": TEXTOS, "respuestas": TEXTOS})}})},
         "parrafos": {"type": "array", "items": _objeto({
             "estilo": {"type": "string", "enum": ["titulo", "texto", "lista"]}, "texto": {"type": "string"}})},
         "tabla": {"anyOf": [ESQUEMA_TABLA, {"type": "null"}]},

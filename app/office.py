@@ -161,6 +161,27 @@ def recalcular_excel(ruta: Path) -> Path:
     return ruta
 
 
+XL_VALIDAR_LISTA = 3      # XlDVType.xlValidateList
+
+
+def lista_de_la_celda(ruta: Path, hoja: str, celda: str) -> list[str] | None:
+    """Las opciones que Excel ofrece en una celda con lista (PLAN.md §0, decisión 60), o None si no tiene lista.
+    Así se comprueba que el Excel instalado lee la lista como la escribió AulaLista."""
+    with abrir_excel() as excel:
+        libro = excel.Workbooks.Open(str(ruta.resolve()), UpdateLinks=0, ReadOnly=True, AddToMru=False)
+        try:
+            rango = libro.Worksheets(hoja).Range(celda)
+            try:
+                if rango.Validation.Type != XL_VALIDAR_LISTA:
+                    return None
+            except Exception:
+                return None            # Excel no tiene validación en esa celda
+            origen = libro.Worksheets(hoja).Evaluate(rango.Validation.Formula1.lstrip("="))
+            return [str(v[0]) for v in origen.Value] if hasattr(origen, "Value") else None
+        finally:
+            libro.Close(False)
+
+
 # ---------- Diapositivas: desbordes medidos con PowerPoint ----------
 
 PUNTOS_POR_CM = 72 / 2.54

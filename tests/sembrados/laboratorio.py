@@ -204,3 +204,65 @@ SEMBRADOS_SIN_HERRAMIENTA = {
                                        _paso("Copia la fórmula 1 en la celda C2.")),
                                    "dice «fórmula» y el curso no usa Excel"),
 }
+
+
+# ---------- Listas de opciones (PLAN.md §0, decisión 60) ----------
+# El primer archivo trae dos columnas donde el alumno elige: una con «Sí» y «No» y otra con conceptos del vocabulario.
+
+CONCEPTOS = ["Manifiesto Ágil", "Pilares de Scrum", "Valores de Scrum"]
+
+
+def _con_listas() -> dict:
+    datos = limpio()
+    hoja = datos["archivos"][0]["hojas"][0]
+    hoja["encabezados"] += ["¿Recoge en tienda?", "Concepto"]
+    for fila in hoja["filas"]:
+        fila += [None, None]
+    hoja["listas"] = [
+        {"columna": "¿Recoge en tienda?", "opciones": ["Sí", "No"], "respuestas": ["Sí", "Sí", "No", "Sí"]},
+        {"columna": "Concepto", "opciones": list(CONCEPTOS),
+         "respuestas": ["Pilares de Scrum", "Valores de Scrum", "Pilares de Scrum", ""]},
+    ]
+    datos["ejercicios"][0]["pasos"].insert(2, _paso(
+        "Elige **Sí** o **No** de la lista de la celda en la columna ¿Recoge en tienda? de cada pedido."))
+    return datos
+
+
+CON_LISTAS = _con_listas()
+
+
+def con_listas() -> dict:
+    return copy.deepcopy(CON_LISTAS)
+
+
+def con_listas_y(cambio) -> dict:
+    datos = con_listas()
+    cambio(datos)
+    return datos
+
+
+def _lista(d, n):
+    return d["archivos"][0]["hojas"][0]["listas"][n]
+
+
+# Cada error sembrado en una lista: (cambio, texto que debe aparecer en el problema). Todos son FALLA.
+SEMBRADOS_LISTAS = {
+    "falta una respuesta": (lambda d: _lista(d, 1).update(opciones=CONCEPTOS[:2]),
+                            "a la lista le falta la respuesta «Valores de Scrum»"),
+    "una sola opción": (lambda d: _lista(d, 0).update(opciones=["Sí"]), "at least 2"),
+    "otro orden": (lambda d: _lista(d, 1).update(opciones=[CONCEPTOS[1], CONCEPTOS[0], CONCEPTOS[2]]),
+                   "los conceptos van en el orden de la fuente"),
+    "variante prohibida": (lambda d: _lista(d, 1).update(opciones=["Agile", *CONCEPTOS[1:]]),
+                           "la opción «Agile» es una variante prohibida"),
+    "opción inventada": (lambda d: _lista(d, 0).update(opciones=["Sí", "No", "Tal vez"]),
+                         "la opción «Tal vez» no sale del vocabulario"),
+    "respuesta abierta": (lambda d: _lista(d, 0).update(respuestas=[
+                              "Sí, porque el cliente vive cerca de la tienda", "Sí", "No", "Sí"]),
+                          "es abierta"),
+}
+
+# La sesión enseña validación de datos: cualquier lista es una FALLA (decisión 60 f).
+LISTA_EN_SESION_DE_VALIDACION = "la sesión enseña listas o validación de datos"
+
+# El paso no dice que el alumno elige de la lista: AVISO del verificador (decisión 60 e).
+SIN_PASO_DE_LA_LISTA = (lambda d: d["ejercicios"][0]["pasos"].pop(2), "ningún paso dice que el alumno elige")

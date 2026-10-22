@@ -501,3 +501,123 @@ def test_el_laboratorio_se_reanuda_desde_lo_guardado(sesion):  # noqa: F811
     assert any("Reanudo desde lo generado el" in a for a in material["avance"])
     pagina = TestClient(servidor.app).get("/cursos/scrum/sesiones/1/materiales/laboratorio").text
     assert "Reanudar desde lo guardado" not in pagina        # ya terminó bien
+
+
+# ---------- Listas de opciones en los Excel de práctica (PLAN.md §0, decisión 60) ----------
+
+def _identidad():
+    from app.materiales import estilo
+    return estilo.Identidad(**estilo.PALETA_SOBRIA, tipografia="Calibri", logo=None)
+
+
+def _archivo_con_listas():
+    return Laboratorio.model_validate(sembrados.con_listas()).archivos[0]
+
+
+def test_el_excel_trae_la_hoja_opciones_y_la_lista_en_su_columna(tmp_path):
+    archivo = _archivo_con_listas()
+    libro = openpyxl.load_workbook(practica.crear_excel(archivo, _identidad(), tmp_path / archivo.nombre))
+    assert libro.sheetnames == ["Pedidos", practica.HOJA_DE_OPCIONES]
+    opciones = libro[practica.HOJA_DE_OPCIONES]
+    assert opciones.sheet_state == "visible"
+    assert [c.value for c in opciones["A"] if c.value is not None] == ["¿Recoge en tienda?", "Sí", "No"]
+    assert [c.value for c in opciones["B"]] == ["Concepto", *sembrados.CONCEPTOS]
+    validaciones = {str(v.sqref): v for v in libro["Pedidos"].data_validations.dataValidation}
+    assert set(validaciones) == {"D2:D5", "E2:E5"}
+    si_no, conceptos = validaciones["D2:D5"], validaciones["E2:E5"]
+    assert si_no.type == "list" and si_no.formula1 == "'Opciones'!$A$2:$A$3"
+    assert conceptos.formula1 == "'Opciones'!$B$2:$B$4"
+    assert si_no.allow_blank and si_no.showErrorMessage and si_no.errorStyle == "stop"
+    assert si_no.error == practica.MENSAJE_DE_LA_LISTA == "Elige una opción de la lista."
+    assert all(libro["Pedidos"].cell(row=f, column=4).value is None for f in range(2, 6))
+
+
+def test_un_excel_sin_listas_no_tiene_validaciones_ni_hoja_opciones(tmp_path):
+    archivo = Laboratorio.model_validate(sembrados.limpio()).archivos[0]
+    libro = openpyxl.load_workbook(practica.crear_excel(archivo, _identidad(), tmp_path / archivo.nombre))
+    assert libro.sheetnames == ["Pedidos"]
+    assert not libro["Pedidos"].data_validations.dataValidation
+
+
+def test_las_respuestas_de_la_lista_no_llegan_al_archivo_del_alumno(tmp_path):
+    archivo = _archivo_con_listas()
+    texto = ejecucion.texto_del_archivo(practica.crear_excel(archivo, _identidad(), tmp_path / archivo.nombre))
+    # «Opciones» trae cada opción una vez; la columna del alumno va vacía.
+    assert texto.count("Pilares de Scrum") == 1 and texto.count("Sí") == 1
+
+
+@pytest.mark.parametrize("cambio, esperado", [
+    (lambda h: h["listas"][0].update(columna="Estado"), "no es de una columna de la hoja"),
+    (lambda h: h["listas"][0].update(opciones=["Sí", "sí"]), "opciones repetidas"),
+    (lambda h: h["listas"][0].update(respuestas=["Sí"]), "va una por fila"),
+    (lambda h: h["filas"][0].__setitem__(3, "Sí"), "va vacía, para que el alumno elija"),
+    (lambda h: h["listas"].append(dict(h["listas"][0])), "tiene dos listas"),
+])
+def test_el_modelo_rechaza_una_lista_mal_formada(cambio, esperado):
+    datos = sembrados.con_listas()
+    cambio(datos["archivos"][0]["hojas"][0])
+    with pytest.raises(ValueError, match=esperado):
+        Laboratorio.model_validate(datos)
+
+
+def test_el_origen_de_las_opciones_sale_de_las_fichas(sesion):  # noqa: F811
+    origen = laboratorio.origen_de_opciones(sesion, 1)
+    assert [c for c, _ in origen.vocabulario] == sembrados.CONCEPTOS
+    assert dict(origen.vocabulario)["Manifiesto Ágil"] == ("Agile", "manifiesto agile")
+    assert {"Ventas", "Almacén", "Recursos Humanos", "Finanzas", "Sucursal Centro"} <= set(origen.del_caso)
+    assert origen.ensena_listas is False
+
+
+@pytest.mark.parametrize("tema, ensena", [
+    ("3 · Validación de datos en Excel", True), ("Listas desplegables para registrar pedidos", True),
+    ("Crear una lista de opciones", True), ("Pilares y valores de Scrum", False),
+])
+def test_reconoce_una_sesion_que_ensena_listas(tema, ensena):
+    assert bool(practica.ENSENA_LISTAS.search(tema)) is ensena
+
+
+@pytest.mark.parametrize("nombre", list(sembrados.SEMBRADOS_LISTAS))
+def test_cada_error_sembrado_en_una_lista_se_detecta(sesion, nombre):  # noqa: F811
+    cambio, esperado = sembrados.SEMBRADOS_LISTAS[nombre]
+    contenido, problemas = laboratorio._validar(sembrados.con_listas_y(cambio), sesion, 1)
+    assert contenido is None
+    assert any(esperado in p for p in problemas), problemas
+    assert all(p.startswith("FALLA") for p in problemas)
+
+
+def test_una_lista_en_una_sesion_que_ensena_validacion_de_datos_es_falla(sesion):  # noqa: F811
+    import dataclasses
+    origen = dataclasses.replace(laboratorio.origen_de_opciones(sesion, 1), ensena_listas=True)
+    contenido = Laboratorio.model_validate(sembrados.con_listas())
+    problemas = practica.revisar(contenido, 1, 3, permitidos=frozenset({"prompt", "formula", "plantilla"}),
+                                 origen_de_opciones=origen)
+    assert any(sembrados.LISTA_EN_SESION_DE_VALIDACION in p and p.startswith("FALLA") for p in problemas), problemas
+
+
+def test_un_paso_que_no_dice_que_se_elige_de_la_lista_es_un_aviso():
+    cambio, esperado = sembrados.SIN_PASO_DE_LA_LISTA
+    hallazgos = laboratorio.avisos_de_listas(Laboratorio.model_validate(sembrados.con_listas_y(cambio)))
+    assert len(hallazgos) == 1
+    assert hallazgos[0].nivel == "AVISO" and hallazgos[0].regla == "lista de opciones"
+    assert esperado in hallazgos[0].detalle and hallazgos[0].seccion.startswith("Ejercicio 1")
+
+
+def test_el_laboratorio_con_listas_bien_puestas_no_tiene_problemas(sesion):  # noqa: F811
+    contenido, problemas = laboratorio._validar(sembrados.con_listas(), sesion, 1)
+    assert problemas == [] and contenido is not None
+    assert laboratorio.avisos_de_listas(contenido) == []
+
+
+def test_el_laboratorio_con_listas_se_genera_y_el_verificador_no_marca_fallas(sesion):  # noqa: F811
+    material, _ = generar(sesion, sembrados.con_listas())
+    assert material["estado"] == "verificada", material.get("problemas")
+    ruta = laboratorio.archivos(sesion, 1)["practica"] / "S1_E1_pedidos-semana.xlsx"
+    assert practica.HOJA_DE_OPCIONES in openpyxl.load_workbook(ruta).sheetnames
+
+
+def test_la_revision_del_contenido_ve_la_lista_y_sabe_que_no_da_la_respuesta():
+    bloques = laboratorio.bloques_de(Laboratorio.model_validate(sembrados.con_listas()))
+    texto = " ".join(o for b in bloques for o in b.oraciones)
+    assert "lista de opciones de la columna Concepto" in texto
+    assert "Valores de Scrum" in texto and "respuestas" not in texto
+    assert "no da la respuesta" in laboratorio.INDICACIONES_DE_REVISION

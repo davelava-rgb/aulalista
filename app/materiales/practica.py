@@ -6,6 +6,7 @@ sobrio y sin portada, y el .zip con todos. Las figuras de la guía se sacan desp
 
 import re
 import zipfile
+from dataclasses import dataclass
 from pathlib import Path
 
 import openpyxl
@@ -13,6 +14,7 @@ from docx import Document
 from docx.shared import Pt, RGBColor
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.datavalidation import DataValidation
 
 from app.materiales import docx as generador_docx
 from app.materiales.contenido import ArchivoPractica, Laboratorio
@@ -20,6 +22,9 @@ from app.materiales.estilo import Identidad
 
 EXTENSIONES = ("xlsx", "docx")
 ANCHO_MAXIMO_COLUMNA = 45
+# PLAN.md §0, decisión 60: la hoja con las opciones de cada lista y el mensaje fijo de Excel.
+HOJA_DE_OPCIONES = "Opciones"
+MENSAJE_DE_LA_LISTA = "Elige una opción de la lista."
 # Lo que el alumno copia funciona tal cual: sin espacios por llenar (SKILL.md, «Ejercicios que se ejecutan»).
 POR_LLENAR = re.compile(r"\[[^\]\n]{0,40}\]|_{3,}|<[^<>\n]{1,40}>|\bX{3,}\b|\{\{?[^{}\n]{0,40}\}?\}")
 # En una fórmula, «<» y «>» son operadores: solo se buscan corchetes vacíos, guiones bajos y «XXX».
@@ -116,31 +121,75 @@ def _valor(texto):
 valor_de_celda = _valor
 
 
+def _dar_formato(hoja, identidad: Identidad, filas: list[list]) -> None:
+    """Encabezados en negrita sobre el fondo de la ficha, anchos según el contenido y la primera fila fija."""
+    fuente = identidad.tipografia
+    borde = Side(style="thin", color=identidad.principal)
+    for celda in hoja[1]:
+        celda.font = Font(name=fuente, bold=True, color=identidad.texto)
+        celda.fill = PatternFill("solid", fgColor=identidad.fondo)
+        celda.border = Border(bottom=borde)
+        celda.alignment = Alignment(vertical="center", wrap_text=True)
+    for fila in hoja.iter_rows(min_row=2):
+        for celda in fila:
+            celda.font = Font(name=fuente, color=identidad.texto)
+            celda.alignment = Alignment(vertical="top", wrap_text=isinstance(celda.value, str) and len(celda.value) > 30)
+    for i, encabezado in enumerate(filas[0], start=1):
+        largo = max([len(str(encabezado))] + [len(str(f[i - 1])) for f in filas[1:]
+                                              if i <= len(f) and f[i - 1] is not None])
+        hoja.column_dimensions[get_column_letter(i)].width = min(ANCHO_MAXIMO_COLUMNA, max(10, largo + 2))
+    hoja.freeze_panes = "A2"
+
+
+def encabezados_de_opciones(archivo: ArchivoPractica) -> list[tuple[str, str, str]]:
+    """(hoja, columna, encabezado en «Opciones») de cada lista. Si dos hojas tienen una lista en una columna del
+    mismo nombre, el encabezado lleva la hoja entre paréntesis."""
+    listas = [(h.nombre, l.columna) for h in archivo.hojas for l in h.listas]
+    repetidas = {c for _, c in listas if sum(1 for _, otra in listas if otra == c) > 1}
+    return [(h, c, f"{c} ({h})" if c in repetidas else c) for h, c in listas]
+
+
 def crear_excel(archivo: ArchivoPractica, identidad: Identidad, destino: Path) -> Path:
     libro = openpyxl.Workbook()
     libro.remove(libro.active)
-    fuente = identidad.tipografia
-    borde = Side(style="thin", color=identidad.principal)
     for hoja_ in archivo.hojas:
         hoja = libro.create_sheet(hoja_.nombre)
         hoja.append(hoja_.encabezados)
         for fila in hoja_.filas:
             hoja.append([_valor(v) for v in fila])
-        for celda in hoja[1]:
-            celda.font = Font(name=fuente, bold=True, color=identidad.texto)
-            celda.fill = PatternFill("solid", fgColor=identidad.fondo)
-            celda.border = Border(bottom=borde)
-            celda.alignment = Alignment(vertical="center", wrap_text=True)
-        for fila in hoja.iter_rows(min_row=2):
-            for celda in fila:
-                celda.font = Font(name=fuente, color=identidad.texto)
-                celda.alignment = Alignment(vertical="top", wrap_text=isinstance(celda.value, str) and len(celda.value) > 30)
-        for i, encabezado in enumerate(hoja_.encabezados, start=1):
-            largo = max([len(str(encabezado))] + [len(str(f[i - 1])) for f in hoja_.filas if f[i - 1] is not None])
-            hoja.column_dimensions[get_column_letter(i)].width = min(ANCHO_MAXIMO_COLUMNA, max(10, largo + 2))
-        hoja.freeze_panes = "A2"
+        _dar_formato(hoja, identidad, [hoja_.encabezados, *hoja_.filas])
+    _agregar_listas(libro, archivo, identidad)
     libro.save(destino)
     return destino
+
+
+def _agregar_listas(libro, archivo: ArchivoPractica, identidad: Identidad) -> None:
+    """PLAN.md §0, decisión 60: las opciones van en una hoja visible, «Opciones», una columna por lista, y cada
+    columna con lista solo acepta una de ellas. La celda puede quedar vacía."""
+    encabezados = encabezados_de_opciones(archivo)
+    if not encabezados:
+        return
+    por_hoja = {h.nombre: h for h in archivo.hojas}
+    opciones = libro.create_sheet(HOJA_DE_OPCIONES)
+    columnas = []
+    for numero, (nombre_hoja, columna, encabezado) in enumerate(encabezados, start=1):
+        hoja_ = por_hoja[nombre_hoja]
+        lista = next(l for l in hoja_.listas if l.columna == columna)
+        letra = get_column_letter(numero)
+        opciones.cell(row=1, column=numero, value=encabezado)
+        for fila, opcion in enumerate(lista.opciones, start=2):
+            opciones.cell(row=fila, column=numero, value=opcion)
+        columnas.append([encabezado, *lista.opciones])
+        if not hoja_.filas:
+            continue
+        destino = get_column_letter(hoja_.encabezados.index(columna) + 1)
+        validacion = DataValidation(
+            type="list", formula1=f"'{HOJA_DE_OPCIONES}'!${letra}$2:${letra}${len(lista.opciones) + 1}",
+            allow_blank=True, showErrorMessage=True, errorStyle="stop", error=MENSAJE_DE_LA_LISTA)
+        validacion.add(f"{destino}2:{destino}{len(hoja_.filas) + 1}")
+        libro[nombre_hoja].add_data_validation(validacion)
+    alto = max(len(c) for c in columnas)
+    _dar_formato(opciones, identidad, [[c[i] if i < len(c) else None for c in columnas] for i in range(alto)])
 
 
 def crear_word(archivo: ArchivoPractica, identidad: Identidad, destino: Path) -> Path:
@@ -205,7 +254,8 @@ def _texto_de_archivo(archivo: ArchivoPractica) -> str:
 
 def revisar(contenido: Laboratorio, sesion: int, ejercicios_de_la_ficha: int, fecha_de_referencia: str = "",
             respuestas_a_la_herramienta: dict[int, str] | None = None,
-            permitidos: frozenset[str] = frozenset({"prompt", "formula", "plantilla"})) -> list[str]:
+            permitidos: frozenset[str] = frozenset({"prompt", "formula", "plantilla"}),
+            origen_de_opciones: "OrigenDeOpciones | None" = None) -> list[str]:
     """Lo que un programa comprueba antes de crear los archivos (SKILL.md, «Material 3» y «Ejercicios que se
     ejecutan»). Cada problema es una FALLA de estructura: se arregla con una corrección completa."""
     problemas = []
@@ -232,6 +282,7 @@ def revisar(contenido: Laboratorio, sesion: int, ejercicios_de_la_ficha: int, fe
             problemas.append(f"FALLA · estructura · «{archivo.nombre}»: un Word necesita párrafos o una tabla.")
         if not any(archivo.nombre in e.archivos for e in contenido.ejercicios):
             problemas.append(f"FALLA · estructura · «{archivo.nombre}»: ningún ejercicio lo usa.")
+        problemas += _revisar_listas(archivo, origen_de_opciones or OrigenDeOpciones())
     respuestas = respuestas_a_la_herramienta or {}
     for e in contenido.ejercicios:
         for nombre in e.archivos:
@@ -284,6 +335,87 @@ def revisar(contenido: Laboratorio, sesion: int, ejercicios_de_la_ficha: int, fe
                              f"y que el alumno responde «{respuesta}». Ordena que se detenga a preguntar y escribe esa "
                              "respuesta exacta.")
     return problemas
+
+
+# ---------- Listas de opciones (PLAN.md §0, decisión 60) ----------
+
+SI_Y_NO = ("Sí", "No")
+PALABRAS_DE_UNA_OPCION = 5     # una respuesta más larga es abierta: no lleva lista
+# La sesión enseña a crear listas o validación de datos: la lista le haría el trabajo al alumno (decisión 60 f).
+ENSENA_LISTAS = re.compile(r"(?i)validaci[oó]n de datos|validar (?:los )?datos|listas? desplegables?"
+                           r"|listas? de (?:opciones|validaci[oó]n)")
+MENCIONA_LA_LISTA = re.compile(r"(?i)\blista\b")
+
+
+@dataclass(frozen=True)
+class OrigenDeOpciones:
+    """De dónde puede salir una opción: el vocabulario de la sesión en su orden (con sus variantes prohibidas), los
+    datos fijos y las áreas del caso, o «Sí» y «No». `ensena_listas`: la sesión enseña listas o validación de datos."""
+    vocabulario: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    del_caso: tuple[str, ...] = ()
+    ensena_listas: bool = False
+
+
+def _revisar_listas(archivo: ArchivoPractica, origen: OrigenDeOpciones) -> list[str]:
+    listas = [(hoja, lista) for hoja in archivo.hojas for lista in hoja.listas]
+    if not listas:
+        return []
+    numero = numero_de_ejercicio(archivo.nombre)
+    ejercicio = f"ejercicio {numero}, " if numero is not None else ""
+    if origen.ensena_listas:
+        return [f"FALLA · lista de opciones · {ejercicio}«{archivo.nombre}»: la sesión enseña listas o validación de "
+                "datos, y una lista le haría el trabajo al alumno. Quita las listas del archivo."]
+    problemas = []
+    if any(h.nombre.strip().lower() == HOJA_DE_OPCIONES.lower() for h in archivo.hojas):
+        problemas.append(f"FALLA · lista de opciones · {ejercicio}«{archivo.nombre}»: ya tiene una hoja "
+                         f"«{HOJA_DE_OPCIONES}» y AulaLista pone ahí las opciones. Cambia el nombre de esa hoja.")
+    conceptos = [c for c, _ in origen.vocabulario]
+    variantes = {v.lower(): c for c, vs in origen.vocabulario for v in vs}
+    validas = set(conceptos) | set(origen.del_caso) | set(SI_Y_NO)
+    for hoja, lista in listas:
+        donde = f"{ejercicio}«{archivo.nombre}» · hoja «{hoja.nombre}» · columna «{lista.columna}»"
+        if not hoja.filas:
+            problemas.append(f"FALLA · lista de opciones · {donde}: la hoja no tiene filas de datos donde elegir.")
+        respuestas = [r.strip() for r in lista.respuestas if r.strip()]
+        if not respuestas:
+            problemas.append(f"FALLA · lista de opciones · {donde}: ninguna fila trae su respuesta. Escribe en "
+                             "«respuestas» la respuesta correcta de cada fila.")
+        for r in dict.fromkeys(respuestas):
+            if len(r.split()) > PALABRAS_DE_UNA_OPCION:
+                problemas.append(f"FALLA · lista de opciones · {donde}: la respuesta «{r[:60]}» es abierta. Una "
+                                 "respuesta abierta no lleva lista: quita la lista de esa columna.")
+            elif r not in lista.opciones:
+                problemas.append(f"FALLA · lista de opciones · {donde}: a la lista le falta la respuesta «{r}». Cada "
+                                 "respuesta de la columna está entre las opciones, escrita igual.")
+        for opcion in lista.opciones:
+            if opcion.lower() in variantes:
+                problemas.append(f"FALLA · lista de opciones · {donde}: la opción «{opcion}» es una variante "
+                                 f"prohibida; el nombre único es «{variantes[opcion.lower()]}».")
+            elif opcion not in validas:
+                problemas.append(f"FALLA · lista de opciones · {donde}: la opción «{opcion}» no sale del vocabulario "
+                                 "de la sesión ni de los datos fijos o las áreas del caso, ni es «Sí» o «No». "
+                                 "Escríbela igual que en la ficha.")
+        del_vocabulario = [o for o in lista.opciones if o in conceptos]
+        if del_vocabulario != sorted(del_vocabulario, key=conceptos.index):
+            problemas.append(f"FALLA · lista de opciones · {donde}: los conceptos van en el orden de la fuente: "
+                             f"{', '.join(sorted(del_vocabulario, key=conceptos.index))}.")
+    return problemas
+
+
+def avisos_de_listas(contenido: Laboratorio) -> list[tuple[str, str]]:
+    """(sección, detalle) de cada ejercicio con una lista en su archivo cuyos pasos no dicen que el alumno elige de
+    la lista (decisión 60 e). Es un AVISO del verificador: se corrige o se explica."""
+    con_listas = {a.nombre for a in contenido.archivos if any(h.listas for h in a.hojas)}
+    avisos = []
+    for e in contenido.ejercicios:
+        archivos = [n for n in e.archivos if n in con_listas]
+        pasos = [p.texto for p in e.pasos] + list(e.mejora.pasos)
+        if archivos and not any(MENCIONA_LA_LISTA.search(p) for p in pasos):
+            avisos.append((f"Ejercicio {e.numero} · {e.titulo}",
+                           f"Ejercicio {e.numero}: «{archivos[0]}» tiene una lista de opciones y ningún paso dice que el "
+                           "alumno elige su respuesta de la lista de la celda. Dilo en el paso, sin nombrar menús ni "
+                           "botones."))
+    return avisos
 
 
 NOMBRE_DEL_RECUADRO = {"prompt": "prompt", "formula": "fórmula", "plantilla": "plantilla"}

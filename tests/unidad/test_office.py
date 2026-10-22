@@ -63,3 +63,18 @@ def test_powerpoint_mide_el_texto_que_no_cabe_y_guarda_una_imagen_por_diapositiv
     assert all(i.stat().st_size > 0 for i in medicion.imagenes)
     if not abierto_antes:
         assert not office.proceso_activo("POWERPNT.EXE")
+
+
+def test_excel_lee_la_lista_de_opciones_y_se_cierra(tmp_path):
+    """PLAN.md §0, decisión 60: el Excel instalado ofrece en la celda las opciones que escribió AulaLista."""
+    from app.materiales import estilo, practica
+    from app.materiales.contenido import Laboratorio
+    from tests.sembrados import laboratorio as sembrados
+    archivo = Laboratorio.model_validate(sembrados.con_listas()).archivos[0]
+    identidad = estilo.Identidad(**estilo.PALETA_SOBRIA, tipografia="Calibri", logo=None)
+    ruta = practica.crear_excel(archivo, identidad, tmp_path / archivo.nombre)
+    antes = procesos("EXCEL.EXE")
+    assert office.lista_de_la_celda(ruta, "Pedidos", "D3") == ["Sí", "No"]
+    assert office.lista_de_la_celda(ruta, "Pedidos", "E2") == sembrados.CONCEPTOS
+    assert office.lista_de_la_celda(ruta, "Pedidos", "A2") is None
+    assert procesos("EXCEL.EXE") <= antes
