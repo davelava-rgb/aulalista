@@ -182,7 +182,7 @@ Esquinas suavemente redondeadas de 6px en botones, campos, mensajes y recuadros.
 
 ### Cards / Containers
 - **Página de material:** la hoja entera es el material, sin recuadro. Arriba, la línea de ubicación, el título con su indicador y el recorrido.
-- **Recorrido:** cuatro pasos en fila (Generar, Verificar, Revisar y Aprobar), unidos por una línea de 2px. Es una secuencia de verdad, por eso lleva números en círculos de 1.375rem. Hecho: círculo y línea verde aprobado con ✓. Paso actual: borde y nombre magenta. Con problema: círculo rojo corrección con «!» y nota en rojo. Pendiente: borde fino. Cada paso lleva una nota corta debajo y su estado en palabras para los lectores de pantalla. Bajo 30rem, dos pasos por fila.
+- **Recorrido:** cuatro pasos en fila (Generar, Verificar, Revisar y Aprobar), unidos por una línea de 2px. Es una secuencia de verdad, por eso lleva números en círculos de 1.375rem. Hecho: círculo y línea verde aprobado con ✓. Paso actual: borde y nombre magenta. Con problema: círculo rojo corrección con «!» y nota en rojo. Un material aprobado que quedó desactualizado lleva el «!» en Generar, que es lo que hay que rehacer; los demás pasos vuelven a pendiente y Aprobar dice la fecha de la aprobación anterior. Pendiente: borde fino. Cada paso lleva una nota corta debajo y su estado en palabras para los lectores de pantalla. Bajo 30rem, dos pasos por fila.
 - **Bloque plegable:** `details` con borde niebla y un resumen en negrita de 44px de alto.
 - **Mensaje:** borde magenta, fondo niebla, relleno de 0.75rem 1rem.
 - **Shadow Strategy:** ninguna (ver Elevation & Depth).

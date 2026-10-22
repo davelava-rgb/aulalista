@@ -252,8 +252,10 @@ def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, m
     titulo = TITULOS_FICHA[tipo] + (f" {sesion}" if sesion else "")
     desactualizados = []
     if sesion is not None:
-        claves = [n for n, m in almacen.cargar_estado(carpeta, sesion)["materiales"].items() if m.get("desactualizado")]
-        desactualizados = _y([MATERIALES[n]["el"] if n in MATERIALES else n for n in claves])
+        # Cada uno con su enlace: la línea dice qué hay que generar de nuevo y lleva a hacerlo.
+        claves = [n for n, m in almacen.cargar_estado(carpeta, sesion)["materiales"].items()
+                  if m.get("desactualizado") and n in MATERIALES]
+        desactualizados = [{"el": MATERIALES[n]["el"], "url": _url_material(curso, sesion, n)} for n in claves]
         if errores is None:
             # Al volver a abrir la ficha, el motivo de que siga sin confirmar no se pierde.
             errores = flujo.problemas_de_ejercicios_guardados(ficha)
@@ -873,9 +875,12 @@ def _recorrido(datos: dict, estado: dict) -> list[dict]:
         if e == "aprobada":
             notas[3] = "El " + _fecha(estado.get("aprobada") or "")
         if e == "aprobada" and estado.get("desactualizado"):
-            # Sigue aprobado, pero no al día: Aprobar no se ve hecho, para no contradecir el indicador rojo.
+            # Sigue aprobado, pero no al día. Lo que hay que rehacer es Generar: ahí va el «!»; los pasos de después
+            # vuelven a quedar pendientes, y Aprobar recuerda cuándo se aprobó la versión anterior.
             cambio = "la lectura o la ficha" if datos.get("clave", "") == diapositivas.CLAVE else "la ficha"
-            clases[3], notas[3] = "falla", f"{notas[3]}; después cambió {cambio}"
+            clases = ["falla", "pendiente", "pendiente", "pendiente"]
+            notas = [f"Después cambió {cambio}", "Sin IA", "Con IA, por bloque",
+                     f"{_forma(datos, 'Aprobad')} {notas[3].lower()}, antes del cambio"]
     return [{"paso": p, "clase": c, "nota": n} for p, c, n in zip(PASOS, clases, notas)]
 
 

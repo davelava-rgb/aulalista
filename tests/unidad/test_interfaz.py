@@ -106,10 +106,14 @@ def test_el_recorrido_dice_en_que_paso_va_el_material(sesion):  # noqa: F811
     assert pasos(estado="con pendientes", entrega=pendientes)[2:] == [("hecho", "Con pendientes"), ("ahora", "Lo decides tú")]
     assert pasos(estado="verificada")[2] == ("hecho", "Sin errores abiertos")
     assert pasos(estado="aprobada", aprobada="2026-10-15T10:00:00")[3] == ("hecho", "El 15 de octubre")
-    # Desactualizado: Aprobar no se ve hecho, para no contradecir el indicador rojo; los otros pasos dicen lo mismo de siempre.
+    # Desactualizado: el «!» va en Generar, que es lo que hay que rehacer; Aprobar recuerda la aprobación anterior.
     assert pasos(estado="aprobada", desactualizado=True, aprobada="2026-10-15T10:00:00") == [
-        ("hecho", "Listo"), ("hecho", "Sin fallas"), ("hecho", "Sin errores abiertos"),
-        ("falla", "El 15 de octubre; después cambió la ficha")]
+        ("falla", "Después cambió la ficha"), ("pendiente", "Sin IA"), ("pendiente", "Con IA, por bloque"),
+        ("pendiente", "Aprobado el 15 de octubre, antes del cambio")]
+    diapositivas = [(r["clase"], r["nota"]) for r in servidor._recorrido(
+        {**servidor.MATERIALES["diapositivas"], "clave": "diapositivas"}, {"estado": "aprobada", "desactualizado": True, "aprobada": "2026-10-15"})]
+    assert diapositivas[0] == ("falla", "Después cambió la lectura o la ficha")
+    assert diapositivas[3] == ("pendiente", "Aprobadas el 15 de octubre, antes del cambio")
     assert pasos(estado="verificada", desactualizado=True)[0] == ("ahora", "Las fichas cambiaron")
 
 
@@ -529,6 +533,19 @@ def test_lo_que_sigue_no_repite_de_nuevo_y_contrae_al_y_del(sesion):  # noqa: F8
     _poner(sesion, "laboratorio", estado="con fallas", aprobada="", desactualizado=False)
     texto = servidor._vista_de_materiales(sesion, "scrum", 1)["siguiente"]["texto"]
     assert texto == "Resuelve las fallas del laboratorio en las fichas y genéralo de nuevo."
+
+
+def test_la_ficha_confirmada_dice_aparte_y_en_rojo_lo_que_hay_que_generar_de_nuevo(sesion):  # noqa: F811
+    pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
+    assert "Hay que generar de nuevo" not in pagina
+    _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00", desactualizado=True)
+    _poner(sesion, "laboratorio", estado="aprobada", aprobada="2026-10-15T10:00:00", desactualizado=True)
+    pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
+    confirmada = pagina.split('<p class="estado-ficha confirmada">')[1].split("</p>")[0]
+    assert "Confirmada." in confirmada and "generar" not in confirmada      # el verde solo dice «Confirmada»
+    pendiente = pagina.split('<p class="estado-ficha pendiente">')[1].split("</p>")[0]
+    assert ('Hay que generar de nuevo <a href="/cursos/scrum/sesiones/1/materiales/lectura">la lectura</a> y '
+            '<a href="/cursos/scrum/sesiones/1/materiales/laboratorio">el laboratorio</a>, porque las fichas cambiaron.') in pendiente
 
 
 def test_material_ficha_y_fuente_tienen_un_enlace_para_volver_al_curso(sesion):  # noqa: F811

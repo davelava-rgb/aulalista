@@ -147,9 +147,15 @@
 
 <p class="estado-ficha {{ 'confirmada' if ficha.confirmada else 'pendiente' }}">
   {{ icono('bien' if ficha.confirmada else 'error') }}
-  {% if ficha.confirmada %}Confirmada.{% if desactualizados %} Hay que generar de nuevo {{ desactualizados }}, porque las fichas cambiaron.{% endif %}
+  {% if ficha.confirmada %}Confirmada.
   {% else %}Sin confirmar. Queda confirmada al guardarla completa. Ningún material empieza sin las dos fichas confirmadas.{% endif %}
 </p>
+{# Lo que queda por hacer va aparte y en rojo: el verde de «Confirmada» no puede decir «todo listo» (crítica de la interfaz). #}
+{% if ficha.confirmada and desactualizados %}
+<p class="estado-ficha pendiente">{{ icono('error') }} Hay que generar de nuevo
+  {%- for d in desactualizados %}{% if not loop.first %}{{ " y" if loop.last else "," }}{% endif %} <a href="{{ d.url }}">{{ d.el }}</a>{% endfor -%}
+  , porque las fichas cambiaron.</p>
+{% endif %}
 
 {% if errores %}
 <section class="mensaje" role="alert">
