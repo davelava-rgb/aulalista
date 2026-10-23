@@ -43,7 +43,7 @@ Por cada sesión, hasta seis materiales:
 | N.º | Material | Formato | Límites |
 |---|---|---|---|
 | 1 | Lectura | Word, A4 | Sin material de referencia: 6 páginas como máximo, de 2 a 4 bloques. Con material de referencia: los temas de esas páginas, menos las exclusiones, sin máximo de páginas (PLAN.md §0, decisión 23) |
-| 2 | Diapositivas | PowerPoint 16:9 | De 14 a 18 diapositivas, con notas del profesor |
+| 2 | Diapositivas | PowerPoint 16:9 | Una diapositiva por parte del contenido, sin notas del profesor (PLAN.md §0, decisión 66) |
 | 3 | Guía de laboratorio y archivos de práctica | Word, más Excel y Word en un .zip | De 3 a 5 ejercicios |
 | 4 | Guía del profesor | Word | Una sección por ejercicio |
 | 5 | Práctica interactiva | Un solo archivo HTML | De 5 a 7 estaciones |

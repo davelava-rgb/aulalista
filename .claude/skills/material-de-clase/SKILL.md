@@ -138,12 +138,12 @@ Estas reglas valen para todo ejercicio que el alumno ejecuta en una herramienta:
 
 ## Material 2 · Diapositivas
 
-- PowerPoint 16:9, de 14 a 18 diapositivas.
+- PowerPoint 16:9. La cantidad de diapositivas la da el contenido: una por concepto de la lectura, más portada, idea central y cierre. No hay un número fijo.
 - Portada, idea central, una diapositiva por concepto y cierre con "Aplícalo así" y "Cuidado con".
 - Una idea por diapositiva. Frases cortas, no párrafos.
 - Recursos gráficos cuando ayuden a entender: tablas, columnas comparativas, pasos numerados, procesos, ciclos, organigramas, mapas mentales, matrices, tableros de tarjetas y gráficas de barras con cifras de las fuentes. Al menos la mitad de las diapositivas de concepto lleva uno.
-- Los ejemplos van en recuadros legibles a distancia. Si uno no cabe, divídelo en dos diapositivas o muestra una parte y remite a la lectura en las notas.
-- Notas del profesor en cada diapositiva: qué destacar y qué preguntar al grupo.
+- Los ejemplos van en recuadros legibles a distancia. Si uno no cabe, divídelo en dos diapositivas.
+- Sin notas del profesor.
 - Mismo orden y mismos ejemplos que la lectura. No agregues contenido nuevo.
 - Sin diapositivas de relleno como "Preguntas" o "Gracias".
 - Revisa en una imagen de cada diapositiva que ningún texto se salga de su recuadro.
@@ -159,9 +159,8 @@ Estructura de cada ejercicio en la guía del alumno:
 3. Nombres exactos de los archivos de práctica.
 4. Instrucción en pasos numerados.
 5. Lo que el alumno copia, en uno o dos recuadros, solo si el ejercicio lo necesita. Si es un prompt, usa rol, contexto, tarea, formato de salida y restricciones.
-6. "Mejora el resultado (opcional)": un pedido de seguimiento que enseñe a iterar. El título lleva siempre la palabra "(opcional)".
 
-El ejercicio no lleva las secciones "Cómo se ve un buen resultado" ni "Criterio de calidad".
+El ejercicio no lleva las secciones "Cómo se ve un buen resultado", "Criterio de calidad" ni "Mejora el resultado".
 
 Imágenes:
 
@@ -357,7 +356,7 @@ Las decisiones pendientes: los errores que la corrección no cerró y lo que enc
 - ¿Las cifras, los nombres y la fecha de referencia coinciden entre materiales y con la ficha del curso?
 - ¿Un alumno del público descrito entiende los casos?
 - ¿El diseño es uniforme?
-- En el laboratorio: ¿cada imagen aclara un paso, sale del archivo real y no muestra la respuesta? ¿Algún ejercicio trae "Cómo se ve un buen resultado" o "Criterio de calidad"? Elimínalos.
+- En el laboratorio: ¿cada imagen aclara un paso, sale del archivo real y no muestra la respuesta? ¿Algún ejercicio trae "Cómo se ve un buen resultado", "Criterio de calidad" o "Mejora el resultado"? Elimínalos.
 - ¿Algún material muestra minutos, puntos, notas o porcentajes? Elimínalos.
 - En la evaluación: ¿cada pregunta tiene una sola respuesta correcta o una lista cerrada? ¿Algún otro material da una respuesta?
 
