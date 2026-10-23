@@ -228,7 +228,7 @@ Contenido:
 
 Página del alumno:
 
-- Con el contenido aprobado, un diseñador escribe la página a medida en un solo archivo HTML, con el CSS y el JavaScript dentro.
+- Con el contenido aprobado, AulaLista arma la página con su plantilla fija (un solo archivo HTML, con el CSS y el JavaScript dentro), con los colores y la tipografía de la ficha (PLAN.md §0, decisión 70).
 - El contenido va tal cual en la página, en un bloque de datos, y la página dibuja su texto desde ahí. El diseño solo agrega etiquetas cortas.
 - No carga nada de afuera, salvo fuentes de Google. Funciona sin conexión.
 - Solo los colores y la tipografía de la ficha, con modo claro y oscuro. Funciona en celular y con el teclado.

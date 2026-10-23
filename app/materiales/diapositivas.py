@@ -44,7 +44,7 @@ VUELTAS_DEL_VERIFICADOR = comun.VUELTAS_DEL_VERIFICADOR
 FIJAS = contenido_.FIJAS                    # portada, idea central, «Aplícalo así», «Cuidado con» y cierre
 ORIENTACION = (12, 20)                      # diapositivas de concepto a las que apunta el redactor; no es tope (decisión 69)
 ARREGLOS_DE_DISENO = 4                      # decisión 56: correcciones del diseñador, contando las de la revisión visual
-REVISIONES_VISUALES = 2                     # decisión 56: la primera, sobre el primer diseño que corre, aunque tenga fallas
+REVISIONES_VISUALES = 1                     # decisión 71: una sola, sobre el primer diseño que corre, aunque tenga fallas
 FUENTE_LECTURA = "lectura aprobada"        # así se llama la lectura entre las fuentes de la revisión
 SECCIONES_DE_LA_SKILL = ("Reglas comunes", "Paso 3 · Vocabulario de la sesión", "Material 2 · Diapositivas")
 # «bloque» y «tipo» ordenan y dan forma a las diapositivas: una corrección por oraciones no los toca.

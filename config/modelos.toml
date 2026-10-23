@@ -121,18 +121,3 @@ modelo = "claude-opus-5-5"
 tope_usd = 2.00
 max_turns = 3
 esfuerzo = "low"
-
-# Agente diseñador de la página del alumno de la actividad web: escribe el HTML completo, a medida (decisión 57).
-[diseno_web]
-modelo = "claude-opus-5-5"
-tope_usd = 4.00
-max_turns = 3
-esfuerzo = "low"
-cache = "1h"
-
-# Arreglos de la página de la actividad: devuelve solo los trozos que cambian (decisión 57 f).
-[arreglo_web]
-modelo = "claude-opus-5-5"
-tope_usd = 2.00
-max_turns = 3
-esfuerzo = "low"

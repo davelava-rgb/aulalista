@@ -1,7 +1,8 @@
 """Fase 8d: la página del alumno recorrida en un navegador real, sin IA (PLAN.md §5.7).
 
-La referencia es una página que diseñó Opus en la fase 8c (tests/fixtures/actividad_referencia.html). Cada error
-sembrado se le agrega con un trozo de HTML, CSS o JavaScript. Playwright tarda unos segundos por página.
+La referencia es la plantilla fija de la actividad (app/disenador/actividad.html, decisión 70): la página que diseñó
+Opus en la fase 8c, con los colores de la ficha de prueba. Cada error sembrado se le agrega con un trozo de HTML, CSS
+o JavaScript. Playwright tarda unos segundos por página.
 """
 
 import asyncio
@@ -11,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from app.materiales import actividad, disenador_web, navegador
+from app.materiales import actividad, disenador_web, estilo, navegador
 from app.materiales.contenido import Actividad
 from tests.conftest import consulta_en_secuencia
 from tests.sembrados.actividad import LIMPIA
@@ -20,7 +21,7 @@ from tests.unidad.test_lectura import sesion  # noqa: F401
 
 pytestmark = pytest.mark.skipif(not navegador.disponible(), reason="Playwright o su navegador no están instalados.")
 
-REFERENCIA = (Path(__file__).resolve().parents[1] / "fixtures" / "actividad_referencia.html").read_text(encoding="utf-8")
+REFERENCIA = disenador_web.plantilla_con_identidad(estilo.Identidad(**estilo.PALETA_SOBRIA, tipografia="Calibri", logo=None))
 DATOS = disenador_web.datos_de_la_pagina(Actividad.model_validate(LIMPIA), "scrum", 1, "Scrum Master con IA",
                                          actividad.NOTA_DEL_PUNTAJE)
 
@@ -69,15 +70,15 @@ def test_cada_error_sembrado_de_la_pagina_lo_encuentra_el_navegador(tmp_path, id
 
 # ---------- El recorrido dentro del diseño ----------
 
-def disenar(sesion, *disenos):  # noqa: F811
+def disenar(sesion):  # noqa: F811
     lectura_aprobada(sesion)
-    consulta = consulta_en_secuencia(copy.deepcopy(LIMPIA), SIN_ERRORES, *disenos)
+    consulta = consulta_en_secuencia(copy.deepcopy(LIMPIA), SIN_ERRORES)
     material = asyncio.run(actividad.generar(sesion, "scrum", 1, consulta=consulta, probar_en_navegador=True))
     return material, consulta
 
 
 def test_la_entrega_dice_lo_que_reviso_el_navegador(sesion):  # noqa: F811
-    material, _ = disenar(sesion, {"html": REFERENCIA, "notas": ""})
+    material, _ = disenar(sesion)
     assert material["estado"] == "verificada", material["problemas"]
     texto = json.dumps(material["entrega"], ensure_ascii=False)
     assert "Recorrí la página en un navegador, sin conexión, como un alumno:" in texto
@@ -85,20 +86,21 @@ def test_la_entrega_dice_lo_que_reviso_el_navegador(sesion):  # noqa: F811
     assert "No recorrí la página" not in texto
 
 
-def test_una_falla_del_navegador_vuelve_al_disenador_con_su_captura(sesion):  # noqa: F811
+def test_una_falla_del_navegador_deja_la_actividad_con_fallas_sin_ia(sesion, monkeypatch):  # noqa: F811
+    """Decisión 70: no hay diseñador que arregle. Una falla de la plantilla queda como falla y se corrige en el código."""
     chico = "<style>[data-accion=\"comprobar\"]{height:30px!important;min-height:30px!important;padding:0!important}</style>"
-    arreglo = {"cambios": [{"buscar": chico, "reemplazar": ""}], "notas": "Botón de 44 px."}
-    material, consulta = disenar(sesion, {"html": con(chico), "notas": ""}, arreglo)
-    assert material["estado"] == "verificada" and material["diseno"]["arreglos"] == 1
-    assert not isinstance(consulta.llamadas[3]["prompt"], str)   # el arreglo va con imágenes
-    assert actividad.archivos(sesion, 1)["pagina"].exists()
+    monkeypatch.setattr(disenador_web, "plantilla_con_identidad", lambda identidad: con(chico))
+    material, consulta = disenar(sesion)
+    assert material["estado"] == "con fallas" and len(consulta.llamadas) == 2
+    assert any("px" in p for p in material["diseno"]["problemas"])
+    assert not actividad.archivos(sesion, 1)["pagina"].exists()
 
 
 def test_por_omision_la_generacion_recorre_la_pagina(sesion):  # noqa: F811
     """La generación corre dentro de asyncio: ahí la API síncrona de Playwright fallaba y la página se entregaba sin
     recorrer, como si Playwright no estuviera instalado."""
     lectura_aprobada(sesion)
-    consulta = consulta_en_secuencia(copy.deepcopy(LIMPIA), SIN_ERRORES, {"html": REFERENCIA, "notas": ""})
+    consulta = consulta_en_secuencia(copy.deepcopy(LIMPIA), SIN_ERRORES)
     material = asyncio.run(actividad.generar(sesion, "scrum", 1, consulta=consulta))
     assert material["diseno"]["navegador"], material["diseno"]
     assert "Recorrí la página en un navegador" in json.dumps(material["entrega"], ensure_ascii=False)

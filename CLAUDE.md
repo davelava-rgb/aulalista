@@ -29,7 +29,7 @@ Si encuentras una contradicción nueva entre estos documentos, avísale al profe
 - El verificador es `.claude/skills/material-de-clase/scripts/verificar.py`. No usa IA. El formato de `verificacion.json` está escrito al inicio de ese archivo.
 - El agente escribe el contenido como datos estructurados. Los generadores de `app/materiales/` crean los archivos. El agente no escribe Word, PowerPoint ni HTML a mano.
 - Excepción (`PLAN.md` §0, decisión 32): el diseño de las diapositivas lo escribe el agente diseñador como programa pptxgenjs, con el contenido ya aprobado. Corre con Node con permisos limitados, sin require ni red, y un programa comprueba que todo su texto salga tal cual del contenido.
-- Excepción (`PLAN.md` §0, decisión 57): la página del alumno de la actividad web la escribe el agente diseñador en HTML, a medida, con el contenido ya aprobado. AulaLista pone ese contenido tal cual en la página. Un programa comprueba que todo el texto salga de él y que la página no cargue nada de afuera, y Playwright la recorre como un alumno.
+- La página del alumno de la actividad web es una plantilla fija de AulaLista (`app/disenador/actividad.html`, decisión 70) con los colores y la tipografía de la ficha; el contenido aprobado va tal cual en su bloque de datos. Un programa comprueba que todo el texto salga de él y que la página no cargue nada de afuera, y Playwright la recorre como un alumno. No hay diseñador con IA para esta página.
 - Office instalado (Word, PowerPoint, Excel) se controla con `pywin32` solo desde `app/office.py`. Siempre se cierra la aplicación al terminar.
 
 ## Reglas que no se negocian (SPEC §6)

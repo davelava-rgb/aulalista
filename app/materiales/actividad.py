@@ -10,12 +10,10 @@ Flujo:
    muestra puntos; los tiempos siguen siendo FALLA. Las fallas se corrigen hasta VUELTAS_DEL_VERIFICADOR veces.
 5. Segunda pasada: la revisión del contenido con IA, por bloque, contra la lectura aprobada, las fuentes y las fichas.
    Una sola corrección; después, el verificador y la revisión solo de los bloques que cambiaron (decisión 22).
-6. Con el contenido sin fallas, el agente diseñador escribe la página del alumno a medida (disenador_web.py). Un
-   programa la revisa y el diseñador la arregla hasta ARREGLOS_DE_DISENO veces. Si quedan fallas, no se entrega.
+6. Con el contenido sin fallas, AulaLista arma la página del alumno con su plantilla fija y la identidad de la
+   ficha (disenador_web.py, decisión 70). Un programa la revisa y Playwright la recorre como un alumno
+   (navegador.py). Si algo falla, es un error de la plantilla: la página no se entrega.
 7. Entrega en el formato del SPEC §8. El profesor la aprueba desde la página. El revisor independiente es opcional.
-
-   Con la página sin fallas de los controles, Playwright la recorre como un alumno (navegador.py, fase 8d); sus
-   fallas también vuelven al diseñador, con capturas.
 """
 
 import asyncio
@@ -38,7 +36,6 @@ from app.validacion.pasajes import Corpus
 MATERIAL = "Actividad web"
 CLAVE = "actividad"
 VUELTAS_DEL_VERIFICADOR = comun.VUELTAS_DEL_VERIFICADOR
-ARREGLOS_DE_DISENO = 3   # decisión 57 f: el diseñador corrige hasta tres veces
 PASOS = (4, 6)
 SECCIONES_DE_LA_SKILL = ("Reglas comunes", "Paso 3 · Vocabulario de la sesión", "Actividad web")
 NOTA_DEL_PUNTAJE = "El puntaje es una orientación. La nota la pone el profesor."
@@ -635,53 +632,33 @@ class _Trabajo:
     # ---------- Diseño de la página del alumno (decisión 57 e y f) ----------
 
     async def disenar(self) -> None:
-        """El diseñador escribe la página con el contenido aprobado. AulaLista la revisa y le pide hasta
-        ARREGLOS_DE_DISENO arreglos. Si quedan fallas, la página no se entrega: las fallas impiden aprobar."""
+        """Decisión 70: AulaLista arma la página del alumno con su plantilla fija, la identidad de la ficha y el
+        contenido aprobado. Un programa la revisa y Playwright la recorre. Si algo falla, es un error de la plantilla:
+        la página no se entrega y las fallas impiden aprobar."""
         carpeta = self.rutas["diseno"]
+        carpeta.mkdir(parents=True, exist_ok=True)
         nombre_curso = almacen.valor(almacen.cargar(self.carpeta_curso, "curso"), "curso.nombre").strip() or self.curso
         datos_ = disenador_web.datos_de_la_pagina(self.contenido, self.curso, self.sesion, nombre_curso, NOTA_DEL_PUNTAJE)
-        comun_ = {"curso": self.curso, "sesion": f"S{self.sesion}", "material": CLAVE, "consulta": self.consulta,
-                  "sistema": disenador_web.escribir_sistema(datos_, self.identidad, carpeta)}
-        self.avance("Diseño: el agente diseñador escribe la página del alumno con el contenido aprobado.")
-        respuesta = await agente.consultar(disenador_web.pedido_de_diseno(), tarea="diseno_web",
-                                           esquema=disenador_web.ESQUEMA_DISENO, etapa="diseño", **comun_)
-        html_, pendientes = respuesta["html"], []
-        self.diseno = {"arreglos": 0, "notas": respuesta.get("notas", ""), "problemas": [], "navegador": []}
-        for intento in range(ARREGLOS_DE_DISENO + 1):
-            (carpeta / "pagina.html").write_text(html_, encoding="utf-8")   # con la marca, para los arreglos
-            pagina = disenador_web.armar(html_, datos_)
-            problemas = pendientes + disenador_web.revisar(pagina, datos_, self.identidad)
-            capturas: list[Path] = []
-            if not problemas and self.navegador:
-                # Las pruebas en el navegador corren solo sobre una página que ya pasa los controles (fase 8d).
-                prueba = carpeta / "prueba.html"
-                prueba.write_text(pagina, encoding="utf-8")
-                shutil.rmtree(carpeta / "capturas", ignore_errors=True)
-                informe = await asyncio.to_thread(navegador.probar, prueba, datos_, carpeta / "capturas")
-                problemas, capturas = informe.fallas, informe.capturas
-                self.diseno["navegador"] = informe.lineas
-            ronda = "primera versión" if intento == 0 else f"arreglo {intento}"
-            self.avance(f"Diseño, {ronda}: " + (f"{comun.cuantos(len(problemas), 'problema')}: " + " | ".join(problemas)
-                                                 if problemas else "la página pasa los controles"
-                                                 + (" y el recorrido en el navegador." if self.navegador else ".")))
-            if not problemas:
-                self.rutas["pagina"].write_text(pagina, encoding="utf-8")
-                self.diseno.update(estado="diseñada", problemas=[])
-                return
-            if intento == ARREGLOS_DE_DISENO:
-                break
-            self.diseno["arreglos"] += 1
-            pedido = disenador_web.pedido_de_arreglo(html_, problemas, con_imagenes=bool(capturas))
-            datos_pedido = {"tarea": "arreglo_web", "esquema": disenador_web.ESQUEMA_ARREGLO,
-                            "etapa": f"diseño, arreglo {intento + 1}", **comun_}
-            imagenes = [(f"Captura de la falla {k}, como se ve ahora: {problemas[k - 1]}", c.read_bytes())
-                        for k, c in enumerate(capturas, start=1)]
-            respuesta = (await agente.consultar_con_imagenes(pedido, imagenes, **datos_pedido) if imagenes
-                         else await agente.consultar(pedido, **datos_pedido))
-            html_, pendientes = disenador_web.aplicar_cambios(html_, respuesta["cambios"])
+        self.avance("Página del alumno: AulaLista la arma con su plantilla fija y la identidad de la ficha.")
+        pagina = disenador_web.pagina_fija(datos_, self.identidad)
+        self.diseno = {"arreglos": 0, "notas": "Plantilla fija de AulaLista (decisión 70).", "problemas": [],
+                       "navegador": []}
+        problemas = disenador_web.revisar(pagina, datos_, self.identidad)
+        if not problemas and self.navegador:
+            prueba = carpeta / "prueba.html"
+            prueba.write_text(pagina, encoding="utf-8")
+            shutil.rmtree(carpeta / "capturas", ignore_errors=True)
+            informe = await asyncio.to_thread(navegador.probar, prueba, datos_, carpeta / "capturas")
+            problemas = informe.fallas
+            self.diseno["navegador"] = informe.lineas
+        if not problemas:
+            self.rutas["pagina"].write_text(pagina, encoding="utf-8")
+            self.diseno.update(estado="diseñada", problemas=[])
+            self.avance("Página del alumno: pasa los controles" + (" y el recorrido en el navegador." if self.navegador else "."))
+            return
         self.diseno.update(estado="con fallas", problemas=problemas)
-        self.avance(f"Diseño: la página sigue con {comun.cuantos(len(problemas), 'falla')} después de "
-                    f"{ARREGLOS_DE_DISENO} arreglos. No la entrego.")
+        self.avance(f"Página del alumno: {comun.cuantos(len(problemas), 'falla')} de la plantilla: " + " | ".join(problemas)
+                    + ". No la entrego: hay que corregir la plantilla.")
 
 
 async def _generar(carpeta_curso, curso, sesion, rutas, consulta, disenar=True, probar_en_navegador=None) -> dict:
@@ -767,8 +744,8 @@ def _entrega(material: dict) -> dict:
     archivos_ = material["archivos"]
     diseno = material.get("diseno") or {}
     lineas_archivos = [
-        *([f"{archivos_['pagina']}: la página del alumno, diseñada a medida. Ábrela en el navegador y compártela con "
-           "los alumnos."] if archivos_.get("pagina") else []),
+        *([f"{archivos_['pagina']}: la página del alumno, con la plantilla de AulaLista y los colores de la ficha. "
+           "Ábrela en el navegador y compártela con los alumnos."] if archivos_.get("pagina") else []),
         f"{archivos_['vista']}: el contenido de la actividad con sus respuestas, para revisarlo: "
         f"{material['pasos']} pasos, {material['preguntas']} preguntas y {material['puntaje_total']} puntos en total.",
         f"{archivos_['excel']}: el archivo de verificación, con la hoja Hallazgos.",
@@ -778,7 +755,7 @@ def _entrega(material: dict) -> dict:
     if diseno.get("estado") == "diseñada":
         probe.append("Revisé la página del alumno con un programa: el contenido es el aprobado, todo su texto sale de él "
                      "salvo etiquetas cortas, no carga nada de afuera salvo las fuentes de Google, no muestra tiempos y "
-                     f"usa solo los colores de la ficha. Arreglos del diseñador: {diseno.get('arreglos', 0)}.")
+                     "usa solo los colores de la ficha.")
         if diseno.get("navegador"):
             probe.append("Recorrí la página en un navegador, sin conexión, como un alumno:")
             probe += diseno["navegador"]

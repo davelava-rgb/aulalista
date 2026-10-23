@@ -99,67 +99,70 @@ def test_una_etiqueta_corta_no_es_texto_ajeno():
     assert revisar(PAGINA.replace('"Comprobar"', '"Comprobar mi respuesta ahora"')) == []
 
 
-# ---------- Arreglos por trozos ----------
+# ---------- La página fija (decisión 70) ----------
 
-def test_un_arreglo_cambia_solo_los_trozos_unicos():
-    html_, problemas = disenador_web.aplicar_cambios("a b c b", [{"buscar": "a", "reemplazar": "x"},
-                                                                 {"buscar": "b", "reemplazar": "y"},
-                                                                 {"buscar": "z", "reemplazar": "w"}])
-    assert html_ == "x b c b"
-    assert "aparece 2 veces" in problemas[0] and "aparece 0 veces" in problemas[1]
+def test_la_plantilla_toma_los_colores_y_la_tipografia_de_la_ficha():
+    otra = estilo.Identidad(principal="1F4E79", acento="2E86AB", advertencia="B03A2E", fondo="EEF4FA", texto="2B2B2B",
+                            tipografia="Georgia", logo=None)
+    pagina = disenador_web.plantilla_con_identidad(otra)
+    assert "{{" not in pagina and disenador_web.MARCA in pagina
+    assert "--principal:#1F4E79" in pagina and "--acento:#2E86AB" in pagina and "--advertencia:#B03A2E" in pagina
+    assert "--fondo:#EEF4FA" in pagina and "--texto:#2B2B2B" in pagina and "#0F4C5C" not in pagina
+    assert "--cuerpo:Georgia," in pagina
 
 
-# ---------- El diseño dentro de la generación ----------
+def test_la_pagina_fija_pasa_los_controles_con_cualquier_paleta():
+    datos = disenador_web.datos_de_la_pagina(Actividad.model_validate(LIMPIA), "scrum", 1, "Scrum", actividad.NOTA_DEL_PUNTAJE)
+    for nombre, paleta in (("Sobria", estilo.PALETA_SOBRIA),
+                           ("Vino", {"principal": "6D1A36", "acento": "9C7A1E", "advertencia": "B03A2E", "fondo": "F7F1F3",
+                                     "texto": "2B2B2B"})):
+        identidad = estilo.Identidad(**paleta, tipografia="Calibri", logo=None)
+        pagina = disenador_web.pagina_fija(datos, identidad)
+        assert disenador_web.revisar(pagina, datos, identidad) == [], nombre
+        assert disenador_web.MARCA not in pagina and '"titulo": "Scrum en la Sucursal Norte"' in pagina
 
-def disenar(sesion, *disenos):  # noqa: F811
+
+# ---------- La página dentro de la generación ----------
+
+def disenar(sesion, probar_en_navegador=False):  # noqa: F811
     lectura_aprobada(sesion)
-    consulta = consulta_en_secuencia(copy.deepcopy(LIMPIA), SIN_ERRORES, *disenos)
-    material = asyncio.run(actividad.generar(sesion, "scrum", 1, consulta=consulta, probar_en_navegador=False))
+    consulta = consulta_en_secuencia(copy.deepcopy(LIMPIA), SIN_ERRORES)
+    material = asyncio.run(actividad.generar(sesion, "scrum", 1, consulta=consulta, probar_en_navegador=probar_en_navegador))
     return material, consulta
 
 
-def test_con_el_contenido_aprobado_el_disenador_entrega_la_pagina(sesion):  # noqa: F811
-    material, consulta = disenar(sesion, {"html": PAGINA, "notas": "Una columna con el caso."})
+def test_con_el_contenido_aprobado_aulalista_arma_la_pagina_sin_ia(sesion):  # noqa: F811
+    material, consulta = disenar(sesion)
     rutas = actividad.archivos(sesion, 1)
     assert material["estado"] == "verificada", material["problemas"]
-    assert material["diseno"] == {"arreglos": 0, "notas": "Una columna con el caso.", "problemas": [], "estado": "diseñada",
-                                  "navegador": []}
+    assert material["diseno"] == {"arreglos": 0, "notas": "Plantilla fija de AulaLista (decisión 70).", "problemas": [],
+                                  "estado": "diseñada", "navegador": []}
     assert material["archivos"]["pagina"] == "S1_Actividad.html" and rutas["pagina"].exists()
     pagina = rutas["pagina"].read_text(encoding="utf-8")
     assert disenador_web.MARCA not in pagina and '"titulo": "Scrum en la Sucursal Norte"' in pagina
-    assert len(consulta.llamadas) == 3   # redacción, revisión y diseño
-    opciones = consulta.llamadas[2]["options"]
-    assert opciones.model == "claude-opus-5-5" and opciones.max_budget_usd == 4.00
-    sistema = Path(opciones.system_prompt["path"]).read_text(encoding="utf-8")
-    assert sistema.startswith("ERES EL DISEÑADOR DE LA PÁGINA") and "CONTRATO PARA LAS PRUEBAS" in sistema
-    assert '"principal": "#0F4C5C"' in sistema
+    assert "--principal:#0F4C5C" in pagina
+    assert len(consulta.llamadas) == 2   # redacción y revisión: ninguna llamada para el diseño
     lineas = json.dumps(material["entrega"], ensure_ascii=False)
-    assert "S1_Actividad.html: la página del alumno" in lineas and "No recorrí la página en un navegador" in lineas
+    assert "S1_Actividad.html: la página del alumno, con la plantilla de AulaLista" in lineas
+    assert "No recorrí la página en un navegador" in lineas and "Arreglos del diseñador" not in lineas
 
 
-def test_una_falla_de_la_pagina_se_arregla_por_trozos(sesion):  # noqa: F811
-    con_fetch = PAGINA.replace('"use strict";', '"use strict"; fetch("x");')
-    arreglo = {"cambios": [{"buscar": '"use strict"; fetch("x");', "reemplazar": '"use strict";'}], "notas": "Quité fetch."}
-    material, consulta = disenar(sesion, {"html": con_fetch, "notas": ""}, arreglo)
-    assert material["estado"] == "verificada" and material["diseno"]["arreglos"] == 1
-    pedido = consulta.llamadas[3]["prompt"]
-    assert "El JavaScript usa «fetch(»" in pedido and consulta.llamadas[3]["options"].max_budget_usd == 2.00
-
-
-def test_si_la_pagina_sigue_con_fallas_no_se_entrega_ni_se_aprueba(sesion):  # noqa: F811
-    con_fetch = PAGINA.replace('"use strict";', '"use strict"; fetch("x");')
-    sin_cambio = {"cambios": [], "notas": ""}
-    material, consulta = disenar(sesion, {"html": con_fetch, "notas": ""},
-                                 *[copy.deepcopy(sin_cambio) for _ in range(actividad.ARREGLOS_DE_DISENO)])
-    assert len(consulta.llamadas) == 3 + actividad.ARREGLOS_DE_DISENO
+def test_una_falla_de_la_plantilla_deja_la_actividad_con_fallas_sin_llamar_a_nadie(sesion, monkeypatch):  # noqa: F811
+    rota = disenador_web.plantilla_con_identidad(IDENTIDAD).replace(
+        "</head>", '<script src="https://cdn.otro.com/libreria.js"></script></head>')
+    assert rota != disenador_web.plantilla_con_identidad(IDENTIDAD)
+    monkeypatch.setattr(disenador_web, "plantilla_con_identidad", lambda identidad: rota)
+    material, consulta = disenar(sesion)
+    assert len(consulta.llamadas) == 2
     assert material["estado"] == "con fallas" and "pagina" not in material["archivos"]
     assert not actividad.archivos(sesion, 1)["pagina"].exists()
-    assert any(p.startswith("FALLA · diseño de la página · El JavaScript usa «fetch(»") for p in material["problemas"])
+    assert any(p.startswith("FALLA · diseño de la página · Carga algo de afuera") for p in material["problemas"])
+    assert "hay que corregir la plantilla" in json.dumps(material["avance"], ensure_ascii=False)
     with pytest.raises(actividad.NoSePuedeAprobar):
         actividad.aprobar(sesion, 1)
 
 
-def test_con_el_contenido_con_fallas_no_se_disena(sesion):  # noqa: F811
+def test_con_el_contenido_con_fallas_no_se_arma_la_pagina(sesion):  # noqa: F811
     lectura_aprobada(sesion)
     roto = copy.deepcopy(LIMPIA)
     roto["pasos"][0]["preguntas"][0]["opciones"][1]["correcta"] = True
@@ -167,12 +170,11 @@ def test_con_el_contenido_con_fallas_no_se_disena(sesion):  # noqa: F811
     consulta = consulta_en_secuencia(roto, *[copy.deepcopy(sigue) for _ in range(actividad.VUELTAS_DEL_VERIFICADOR)])
     material = asyncio.run(actividad.generar(sesion, "scrum", 1, consulta=consulta, probar_en_navegador=False))
     assert material["estado"] == "con fallas" and material["diseno"] == {}
-    assert not any("Diseña la página" in l["prompt"] for l in consulta.llamadas)
     assert "no se diseñó porque el contenido quedó con fallas" in json.dumps(material["entrega"], ensure_ascii=False)
 
 
 def test_la_pagina_del_alumno_se_abre_en_el_navegador(sesion):  # noqa: F811
-    disenar(sesion, {"html": PAGINA, "notas": ""})
+    disenar(sesion)
     respuesta = cliente.get("/cursos/scrum/sesiones/1/descargar/S1_Actividad.html")
     assert respuesta.status_code == 200 and respuesta.headers["content-disposition"].startswith("inline")
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/actividad").text

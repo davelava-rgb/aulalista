@@ -602,17 +602,18 @@ def test_con_el_contenido_aprobado_el_disenador_dibuja_y_la_revision_visual_pide
     visual = {"cambios": [{"numero": 4, "problema": "Una tabla con mucho texto.", "propuesta": "Pasar a tarjetas."},
                           {"numero": 1, "problema": "La portada sin fuerza.", "propuesta": "Título más grande."}]}
     material, consulta = generar(con_lectura, LIMPIAS, medir=medir_con_imagenes, disenar=True,
-                                 despues=(diseno, visual, diseno, VISUAL_VACIA))
+                                 despues=(diseno, visual, diseno))
     assert material["estado"] == "verificada", material.get("problemas")
     assert material["diseno"]["estado"] == "diseñada" and material["diseno"]["arreglos"] == 1
     assert consulta.llamadas[2]["options"].output_format["schema"] == disenador_esquema()
     sistema = consulta.llamadas[2]["options"].system_prompt
     assert "module.exports = async (h)" in Path(sistema["path"]).read_text(encoding="utf-8")
     assert consulta.llamadas[4]["options"].system_prompt == sistema           # el mismo archivo: se lee de caché
-    # Decisión 56: el diseño, la revisión visual y los arreglos van con Opus.
-    assert {consulta.llamadas[n]["options"].model for n in (2, 3, 4, 5)} == {"claude-opus-5-5"}
+    # Decisión 56: el diseño, la revisión visual y los arreglos van con Opus. Decisión 71: una sola revisión visual.
+    assert {consulta.llamadas[n]["options"].model for n in (2, 3, 4)} == {"claude-opus-5-5"}
+    assert len(consulta.llamadas) == 5
     rondas = [r["ronda"] for r in material["diseno"]["rondas"]]
-    assert rondas == ["diseño", "revisión visual 1", "arreglo 1", "revisión visual 2"]
+    assert rondas == ["diseño", "revisión visual 1", "arreglo 1"]
     arreglo, imagenes = _textos_del_pedido(consulta.llamadas[4]["prompt"])
     assert "DISEÑO · diapositiva 4 («Qué valora más»): Una tabla con mucho texto. Propuesta: Pasar a tarjetas." in arreglo
     assert "DISEÑO · diapositiva 1" in arreglo and "PROGRAMA ACTUAL, POR DIAPOSITIVAS" in arreglo   # la portada también
@@ -639,10 +640,10 @@ def test_la_revision_visual_corre_aunque_el_primer_diseno_tenga_fallas_y_el_arre
     """Decisión 56: la primera revisión visual no espera un diseño sin fallas, y el arreglo recibe la imagen de cada
     diapositiva con problemas."""
     material, consulta = generar(con_lectura, LIMPIAS, medir=medir_con_imagenes, disenar=True,
-                                 despues=(_diseno_con_texto_ajeno(3), VISUAL_VACIA, _con_disenador(), VISUAL_VACIA))
+                                 despues=(_diseno_con_texto_ajeno(3), VISUAL_VACIA, _con_disenador()))
     assert material["diseno"]["estado"] == "diseñada", material.get("problemas")
     rondas = [r["ronda"] for r in material["diseno"]["rondas"]]
-    assert rondas == ["diseño", "revisión visual 1", "arreglo 1", "revisión visual 2"]
+    assert rondas == ["diseño", "revisión visual 1", "arreglo 1"]
     arreglo, imagenes = _textos_del_pedido(consulta.llamadas[4]["prompt"])
     assert "Scrum nació en Japón" in arreglo
     assert imagenes == ["Diapositiva 3 («El Manifiesto Ágil»), como se ve ahora"]
