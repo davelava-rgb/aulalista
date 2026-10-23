@@ -396,6 +396,31 @@ def filas_de_revision(errores: list[revision.Error], descartados: list[dict], se
     return filas
 
 
+def completar_pasajes(datos: dict, corpus: Corpus) -> tuple[dict, int]:
+    """Decisión 67: cada pasaje del redactor trae solo su comienzo; aquí se copia el pasaje completo desde la fuente
+    y se corrige su ubicación. Un comienzo que no está en su fuente queda marcado («ubicado»: False) con el texto
+    que dio el redactor. Devuelve los datos y cuántos pasajes no se ubicaron. Un pasaje ya completo vuelve a
+    completarse igual: su comienzo es el mismo."""
+    no_ubicados = 0
+    for pasaje in datos.get("pasajes") or []:
+        completo = corpus.completar(pasaje.get("fuente", ""), pasaje.get("texto", ""))
+        if completo is None:
+            pasaje["ubicado"] = False
+            no_ubicados += 1
+        else:
+            pasaje["texto"], pasaje["ubicacion"], pasaje["ubicado"] = completo[0], completo[1], True
+    return datos, no_ubicados
+
+
+def nota_de_pasajes(material: dict) -> list[str]:
+    """La línea de «Qué no pude probar» cuando algún pasaje del redactor no se encontró en su fuente."""
+    cuantos_ = material.get("pasajes_no_ubicados") or 0
+    if not cuantos_:
+        return []
+    return [f"{cuantos(cuantos_, 'pasaje')} del redactor no se encontraron en su fuente: esas frases se revisaron solo "
+            "con los pasajes que eligió el programa (PLAN.md §0, decisión 67)."]
+
+
 def filas_de_decisiones(decisiones: list, seccion: str) -> list[dict]:
     """Filas de la hoja Hallazgos con lo que anotó el redactor. El tipo «nota» ya no se pide (decisión 66 e); se
     conserva para leer los contenidos anteriores."""

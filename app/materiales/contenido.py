@@ -42,11 +42,14 @@ class Aplicalo(BaseModel):
 
 
 class Pasaje(BaseModel):
-    """Ancla de una oración: el pasaje de la fuente que la sostiene, copiado tal cual."""
+    """Ancla de una oración: el pasaje de la fuente que la sostiene. El redactor da su comienzo y el programa lo
+    completa desde la fuente (decisión 67). «ubicado» es False si el comienzo no se encontró: la frase se revisa
+    entonces solo con los pasajes que elige el programa."""
     oracion: str = ""
     fuente: str
     ubicacion: str
     texto: str
+    ubicado: bool = True
 
 
 # Tipos de decisión del redactor (PLAN.md §0, decisiones 24 y 66 e):

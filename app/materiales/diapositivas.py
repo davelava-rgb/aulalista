@@ -279,9 +279,9 @@ CON_LECTURA = {
                "  aplicalo.frases: de 0 a 2 frases de introducción.\n"
                "- cuidado.riesgos: los riesgos de «Cuidado con» de la lectura, de 1 a 3."),
     "pasajes": (f"- pasajes: para cada frase que dice algo del tema, «oracion» con la frase, «fuente» «{FUENTE_LECTURA}», en\n"
-                "  «ubicacion» la parte de la lectura (por ejemplo, el subtítulo del bloque) y en «texto» la oración de la\n"
-                "  lectura copiada tal cual. Si una frase cita una fuente del curso, agrega también el pasaje copiado de esa\n"
-                "  fuente con su ubicación.\n"
+                "  «ubicacion» la parte de la lectura (por ejemplo, el subtítulo del bloque) y en «texto» las primeras 6 a 10\n"
+                "  palabras de la oración de la lectura, tal cual: AulaLista la completa. Si una frase cita una fuente del\n"
+                "  curso, agrega también el comienzo del pasaje de esa fuente con su ubicación.\n"
                 "- decisiones: una entrada por punto, con «texto» y «tipo»:\n"
                 "  - «sin fuente»: afirmas algo del tema que la lectura no dice. Copia la frase. El profesor decide si queda.\n"
                 "  - «decisión»: te apartas de la lectura en algo que cambia lo que ve el alumno: omites un tema, cambias el\n"
@@ -301,8 +301,8 @@ SIN_LECTURA = {
                "  para usar, una línea por elemento. aplicalo.frases: de 0 a 2 frases de introducción.\n"
                "- cuidado.riesgos: los riesgos de «Cuidado con» de la ficha de la sesión, de 1 a 3."),
     "pasajes": ("- pasajes: los pasajes de las fuentes que usaste, para que la revisión los compare: «oracion» de las\n"
-                "  diapositivas que sostiene, la fuente, la ubicación y en «texto» el pasaje copiado de la fuente, de 40\n"
-                "  palabras como máximo.\n"
+                "  diapositivas que sostiene, la fuente, la ubicación y en «texto» solo el comienzo del pasaje: sus primeras\n"
+                "  6 a 10 palabras, copiadas tal cual. AulaLista busca ese comienzo en la fuente y copia el pasaje completo.\n"
                 "- decisiones: una entrada por punto, con «texto» y «tipo»:\n"
                 "  - «sin fuente»: afirmas algo del tema que no está en ninguna fuente ni ficha. Copia la frase.\n"
                 "  - «decisión»: te apartas de las fichas o de las fuentes, o eliges algo que cambia lo que ve el alumno.\n"
@@ -728,6 +728,7 @@ class _Trabajo:
         veces. Devuelve True si quedó sin fallas ni avisos por explicar."""
         for intento in range(VUELTAS_DEL_VERIFICADOR + 1):
             self.vuelta += 1
+            self.datos, self.pasajes_no_ubicados = comun.completar_pasajes(self.datos, self.corpus())
             contenido, problemas = _validar(self.datos, self.lectura)
             completa = bool(problemas)
             comun.guardar_json(self.rutas["contenido"], self.datos)
@@ -1136,6 +1137,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, medir, disenar
         base="lectura" if trabajo.lectura is not None else "fuentes",
         referencia=[t.describir() for t in lectura._referencia(carpeta_curso, sesion)[0]] if trabajo.lectura is None else [],
         datos_agregados=trabajo.datos_agregados,
+        pasajes_no_ubicados=getattr(trabajo, "pasajes_no_ubicados", 0),
         ajustes=trabajo.ajustes,
         reanudada=guardado["fecha"] if guardado is not None else "",
         revision_visual=trabajo.revision_visual,
@@ -1262,7 +1264,7 @@ def _entrega(material: dict) -> dict:
     costo = material["costo"]
     valide.append(f"Costo de estas diapositivas: {costo['llamadas']} llamadas, {costo['costo_usd']:.2f} USD estimados.")
 
-    no_pude = []
+    no_pude = comun.nota_de_pasajes(material)
     if material.get("reanudada"):
         no_pude.append(f"Reanudé desde lo generado el {material['reanudada'][:16].replace('T', ' ')} "
                        "(PLAN.md §0, decisión 40). El historial de las vueltas de esa vez no está en el Excel.")

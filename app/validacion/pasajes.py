@@ -4,6 +4,9 @@
   La IA recibe esos pasajes y no la fuente completa (SPEC §9).
 - ubicar(): comprueba que un pasaje copiado por la IA exista tal cual en la fuente
   y devuelve su ubicación real. Así la IA no puede inventar un pasaje.
+- completar(): el redactor entrega solo el comienzo de cada pasaje (sus primeras palabras) y el programa copia
+  el pasaje completo desde la fuente, hasta el final de su oración y con un tope de palabras (PLAN.md §0,
+  decisión 67). Así la IA escribe la mitad y el pasaje sigue saliendo tal cual de la fuente.
 """
 
 import bisect
@@ -18,6 +21,8 @@ from app.fuentes import convertir
 
 FICHA_DEL_CURSO = "ficha del curso"
 FICHA_DE_LA_SESION = "ficha de la sesión"
+PALABRAS_DEL_PASAJE = 40          # tope de un pasaje completado por el programa (decisión 67)
+FIN_DE_ORACION = re.compile(r"[.!?…](?=\s|$)")
 
 
 def normal(texto: str) -> str:
@@ -82,6 +87,40 @@ class Fuente:
         if posicion < 0:
             return None
         return self.pasajes[bisect.bisect_right(self._inicios_flexibles, posicion) - 1]["ubicacion"]
+
+    def completar(self, comienzo: str, palabras: int = PALABRAS_DEL_PASAJE) -> tuple[str, str] | None:
+        """El pasaje que empieza con `comienzo`, copiado de la fuente hasta el final de su oración (o hasta
+        `palabras` palabras), y su ubicación. None si el comienzo no está en la fuente (decisión 67)."""
+        buscadas = flexible(comienzo).split()
+        if len(buscadas) < 2:
+            return None
+        inicio = self._posicion_de(buscadas)
+        if inicio is None:
+            return None
+        resto = self.continuo[inicio:]
+        fin = FIN_DE_ORACION.search(resto)
+        oracion = resto[:fin.end()] if fin else resto
+        trozos = oracion.split()
+        if len(trozos) > palabras:
+            oracion = " ".join(trozos[:palabras])
+        return oracion.strip(), self.pasajes[bisect.bisect_right(self.inicios, inicio) - 1]["ubicacion"]
+
+    def _posicion_de(self, buscadas: list[str]) -> int | None:
+        """Dónde empieza en `continuo` la primera palabra de `buscadas`, comparando palabra por palabra sin tildes,
+        mayúsculas ni signos. Prueba primero el comienzo entero y, si no está, sus primeras cinco palabras: el
+        redactor pudo copiar mal el final."""
+        if not hasattr(self, "_palabras"):
+            self._palabras = [(flexible(m.group(0)), m.start()) for m in re.finditer(r"\S+", self.continuo)]
+            self._palabras = [(p, i) for p, i in self._palabras if p]
+        secuencia = [p for p, _ in self._palabras]
+        for largo in (len(buscadas), min(5, len(buscadas))):
+            objetivo = buscadas[:largo]
+            if len(objetivo) < 2:
+                break
+            for i in range(len(secuencia) - len(objetivo) + 1):
+                if secuencia[i:i + len(objetivo)] == objetivo:
+                    return self._palabras[i][1]
+        return None
 
 
 PALABRAS_VACIAS = set("""
@@ -161,6 +200,12 @@ class Corpus:
     def ubicar(self, fuente: str, pasaje: str) -> str | None:
         if fuente in self.fuentes:
             return self.fuentes[fuente].ubicar(pasaje)
+        return None
+
+    def completar(self, fuente: str, comienzo: str) -> tuple[str, str] | None:
+        """El pasaje completo que empieza con `comienzo` en `fuente`, con su ubicación real, o None."""
+        if fuente in self.fuentes:
+            return self.fuentes[fuente].completar(comienzo)
         return None
 
     def ubicar_en_cualquiera(self, pasaje: str) -> tuple[str, str] | None:

@@ -132,9 +132,10 @@ CÓMO ENTREGAR LA LECTURA
 - aplicalo.plantilla: la técnica o plantilla lista para copiar, una línea por elemento, sin espacios por llenar.
 - cuidado: de 1 a 3 riesgos de una línea cada uno.
 - pasajes: los pasajes de las fuentes que usaste, para que la revisión los compare: «oracion» de la lectura que
-  sostiene, la fuente, la ubicación y en «texto» el pasaje copiado de la fuente, de 40 palabras como máximo.
-  Puedes escribir con tus palabras si no cambias el sentido. Deja iguales los nombres del vocabulario,
-  las cifras y «debe» o «puede».
+  sostiene, la fuente, la ubicación y en «texto» solo el comienzo del pasaje: sus primeras 6 a 10 palabras,
+  copiadas tal cual. AulaLista busca ese comienzo en la fuente y copia el pasaje completo.
+  En la lectura puedes escribir con tus palabras si no cambias el sentido. Deja iguales los nombres del
+  vocabulario, las cifras y «debe» o «puede».
 - decisiones: una entrada por punto, con «texto» y «tipo»:
   - «sin fuente»: afirmas algo del tema que no está en ninguna fuente ni ficha: una definición, una deducción
     o una cifra propia. Copia la oración. El profesor decide si queda.
@@ -388,6 +389,7 @@ class _Trabajo:
         Devuelve True si quedó sin fallas ni avisos por explicar."""
         for intento in range(VUELTAS_DEL_VERIFICADOR + 1):
             self.vuelta += 1
+            self.datos, self.pasajes_no_ubicados = comun.completar_pasajes(self.datos, self.corpus())
             contenido, problemas = _validar(self.datos, self.con_referencia)
             completa = bool(problemas)            # la estructura solo se arregla con una corrección completa
             _guardar_json(self.rutas["contenido"], self.datos)
@@ -524,6 +526,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
         revision={"bloques": revisados, "errores": len(errores), "corregidos": sum(e.estado == "corregido" for e in errores),
                   "pendientes": len(pendientes), "descartados": len(trabajo.descartados)},
         datos_agregados=trabajo.datos_agregados,
+        pasajes_no_ubicados=getattr(trabajo, "pasajes_no_ubicados", 0),
         reanudada=guardado["fecha"] if guardado is not None else "",
         avisos_de_diseno=trabajo.identidad.avisos,
         avisos_explicados=sum(1 for h in (trabajo.resultado.hallazgos if trabajo.resultado else [])
@@ -647,7 +650,7 @@ def _entrega(material: dict) -> dict:
     costo = material["costo"]
     valide.append(f"Costo de esta lectura: {costo['llamadas']} llamadas, {costo['costo_usd']:.2f} USD estimados.")
 
-    no_pude = []
+    no_pude = comun.nota_de_pasajes(material)
     if material.get("reanudada"):
         no_pude.append(f"Reanudé desde lo generado el {material['reanudada'][:16].replace('T', ' ')} "
                        "(PLAN.md §0, decisión 40). El historial de las vueltas de esa vez no está en el Excel.")

@@ -336,7 +336,8 @@ CÓMO ENTREGAR EL LABORATORIO (PLAN.md §0, decisión 33)
   - problema: el problema que el archivo trae a propósito, según la ficha. No va en la guía del alumno.
 {h["ejecucion"]}
 - pasajes: los pasajes de las fuentes que usaste: «oracion» del laboratorio que sostiene, la fuente, la ubicación y
-  en «texto» el pasaje copiado, de 40 palabras como máximo.
+  en «texto» solo el comienzo del pasaje: sus primeras 6 a 10 palabras, copiadas tal cual. AulaLista busca ese
+  comienzo en la fuente y copia el pasaje completo.
 - decisiones: una entrada por punto, con «texto» y «tipo» («sin fuente» o «decisión»). Lo que solo describe tu
   trabajo no se anota.
 """ + (f"- El programa agrega al inicio de la guía: «{aviso}». No lo repitas.\n" if aviso else "")
@@ -617,6 +618,7 @@ class _Trabajo:
     async def verificar(self) -> bool:
         for intento in range(VUELTAS_DEL_VERIFICADOR + 1):
             self.vuelta += 1
+            self.datos, self.pasajes_no_ubicados = comun.completar_pasajes(self.datos, self.corpus())
             contenido, problemas = _validar(self.datos, self.carpeta_curso, self.sesion)
             # La revisión del programa nombra el ejercicio de cada problema; un error del esquema no (va completa).
             completa, ejercicios = bool(problemas), ejercicios_nombrados(problemas)
@@ -818,6 +820,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, co
         revision={"bloques": revisados, "errores": len(errores), "corregidos": sum(e.estado == "corregido" for e in errores),
                   "pendientes": len(pendientes), "descartados": len(trabajo.descartados)},
         datos_agregados=trabajo.datos_agregados,
+        pasajes_no_ubicados=getattr(trabajo, "pasajes_no_ubicados", 0),
         reanudada=guardado["fecha"] if guardado is not None else "",
         avisos_de_diseno=trabajo.identidad.avisos,
         avisos_explicados=sum(1 for h in hallazgos if h.nivel == "AVISO" and h.regla not in comun.AVISOS_INFORMATIVOS),
@@ -934,6 +937,7 @@ def _entrega(material: dict) -> dict:
     decidi += [f"Dato nuevo del caso, agregado a la ficha del curso: {d}" for d in material["datos_agregados"]]
     if not decidi:
         decidi.append("Nada que revisar: todo salió de las fichas y de las fuentes.")
+    no_pude += comun.nota_de_pasajes(material)
     return entrega.componer(archivos=lineas_archivos, probe=probe, valide=valide,
                             pendientes=material["problemas"], no_pude=no_pude, decidi=decidi)
 

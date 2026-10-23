@@ -403,8 +403,9 @@ CÓMO ENTREGAR LA EVALUACIÓN (PLAN.md §0, decisión 64)
 - Ninguna parte de la hoja del alumno ni de sus archivos da la respuesta. La respuesta solo va en la clave.
 - Sin minutos, puntos, notas ni porcentajes en ninguna parte. El profesor decide el tiempo y la calificación.
 - Un programa resuelve cada pregunta como un alumno, sin la clave, y compara lo que sale con la clave.
-- pasajes: los pasajes de las fuentes que usaste: «oracion» que sostiene, la fuente, la ubicación y en «texto» el
-  pasaje copiado, de 40 palabras como máximo.
+- pasajes: los pasajes de las fuentes que usaste: «oracion» que sostiene, la fuente, la ubicación y en «texto» solo
+  el comienzo del pasaje: sus primeras 6 a 10 palabras, copiadas tal cual. AulaLista busca ese comienzo en la fuente
+  y copia el pasaje completo.
 - decisiones: una entrada por punto, con «texto» y «tipo» («sin fuente» o «decisión»). Lo que solo describe tu
   trabajo no se anota.
 """
@@ -631,6 +632,7 @@ class _Trabajo:
     async def verificar(self) -> bool:
         for intento in range(VUELTAS_DEL_VERIFICADOR + 1):
             self.vuelta += 1
+            self.datos, self.pasajes_no_ubicados = comun.completar_pasajes(self.datos, self.corpus())
             contenido, problemas = _validar(self.datos)
             completa = bool(problemas)
             comun.guardar_json(self.rutas["contenido"], self.datos)
@@ -827,6 +829,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, ejecutar_, gua
         revision={"bloques": revisados, "errores": len(errores), "corregidos": sum(e.estado == "corregido" for e in errores),
                   "pendientes": len(pendientes), "descartados": len(trabajo.descartados)},
         datos_agregados=trabajo.datos_agregados,
+        pasajes_no_ubicados=getattr(trabajo, "pasajes_no_ubicados", 0),
         reanudada=guardado["fecha"] if guardado is not None else "",
         avisos_de_diseno=trabajo.identidad.avisos,
         avisos_explicados=sum(1 for h in hallazgos if h.nivel == "AVISO" and h.regla not in comun.AVISOS_INFORMATIVOS),
@@ -921,6 +924,7 @@ def _entrega(material: dict) -> dict:
     decidi += [f"Dato nuevo del caso, agregado a la ficha del curso: {d}" for d in material["datos_agregados"]]
     if not decidi:
         decidi.append("Nada que revisar: todo salió de las fichas, de las fuentes y de lo ya aprobado.")
+    no_pude += comun.nota_de_pasajes(material)
     return entrega.componer(archivos=lineas_archivos, probe=probe, valide=valide,
                             pendientes=material["problemas"], no_pude=no_pude, decidi=decidi)
 
