@@ -1,6 +1,7 @@
 """Único punto de contacto con el Claude Agent SDK (CLAUDE.md)."""
 
 import base64
+import os
 from pathlib import Path
 from collections.abc import AsyncIterable, AsyncIterator, Callable
 
@@ -24,6 +25,16 @@ class ErrorDeAgente(RuntimeError):
 
 
 VIDAS_DE_CACHE = ("5m", "1h")   # lo que admite CLAUDE_CODE_PROMPT_CACHE_TTL
+
+# Guarda para desarrollar sin gastar (PLAN.md §0, decisión 68 f): con esta variable de entorno puesta, ninguna
+# llamada real a Claude sale. Las pruebas con una consulta simulada no la miran.
+SIN_IA = "AULALISTA_SIN_IA"
+AVISO_SIN_IA = (f"La variable {SIN_IA} está puesta: AulaLista no llama a Claude mientras se desarrolla. "
+                "Quítala para generar de verdad.")
+
+
+def sin_ia() -> bool:
+    return os.environ.get(SIN_IA, "").strip() not in ("", "0", "no")
 
 
 def opciones_base(tarea: str, clave: str, **extra) -> ClaudeAgentOptions:
@@ -65,6 +76,8 @@ async def ejecutar(
     pedido: str | AsyncIterable[dict], opciones: ClaudeAgentOptions, consulta: Consulta = query
 ) -> tuple[str, ResultMessage]:
     """Envía un pedido y devuelve el texto de la respuesta y el resultado final."""
+    if consulta is query and sin_ia():
+        raise ErrorDeAgente(AVISO_SIN_IA)
     partes: list[str] = []
     resultado: ResultMessage | None = None
     try:

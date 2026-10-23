@@ -168,6 +168,9 @@
     </ul>
     {% endif %}
 
+    {% macro ultima_corrida(m) -%}
+{%- if m.gasto_corrida and m.gasto_corrida.llamadas %} La última generación gastó {{ usd(m.gasto_corrida.costo_usd) }} estimados en {{ m.gasto_corrida.llamadas }} {{ "llamada" if m.gasto_corrida.llamadas == 1 else "llamadas" }}.{% elif m.costo_ref %} La última vez, en la sesión {{ m.costo_ref.sesion }}, gastó {{ usd(m.costo_ref.costo_usd) }} estimados.{% endif -%}
+{%- endmacro %}
     {% if listo %}<details class="otras-acciones"><summary>Otras acciones</summary>{% endif %}
     {% if m.gasto_corrida %}
     {# Mientras trabaja, el gasto va en vivo; después, es lo que gastó la última generación. #}
@@ -182,7 +185,8 @@
     {% set bloqueado = not puede_empezar or m.faltan.ficha or m.faltan.otros or e.estado == "trabajando" %}
     <form method="post" action="{{ base }}" class="accion"
           {% if ficha_por_preparar %}data-preparar="Preparando la ficha…"{% endif %}
-          {% if e.estado == "aprobada" %}data-confirmar="{{ m.el | capitalize }} ya {{ 'están' if m.plural else 'está' }} {{ forma(m, 'aprobad') }}. Si {{ m.lo }} generas de nuevo, AulaLista {{ m.lo }} reemplaza, gasta tokens y tendrás que aprobar{{ m.lo }} otra vez. ¿Generar de nuevo?"{% endif %}>
+          {% if e.estado == "aprobada" %}data-confirmar="{{ m.el | capitalize }} ya {{ 'están' if m.plural else 'está' }} {{ forma(m, 'aprobad') }}. Si {{ m.lo }} generas de nuevo, AulaLista {{ m.lo }} reemplaza, gasta tokens y tendrás que aprobar{{ m.lo }} otra vez.{{ ultima_corrida(m) }} ¿Generar de nuevo?"
+          {% elif e.estado and e.estado != "trabajando" %}data-confirmar="Generar de nuevo reemplaza {{ m.el }} y gasta tokens.{{ ultima_corrida(m) }} ¿Generar de nuevo?"{% endif %}>
       <button type="submit" {% if bloqueado %}disabled aria-describedby="motivo-{{ m.clave }}"{% endif %}{% if generado or aprobable or m.reanudable %} class="secundario"{% endif %}>
         {{ 'Generar de nuevo' if e.estado else m.generar }}
       </button>

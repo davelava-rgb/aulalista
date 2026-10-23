@@ -1047,3 +1047,21 @@ def test_los_avisos_de_diseno_no_se_cuentan_en_el_resumen_de_la_entrega(sesion):
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     assert "1 archivo. Sin decisiones pendientes.</p>" in pagina and "aviso de diseño" not in pagina
     assert "<summary>Detalles de la entrega</summary>" in pagina and "<li>La ficha no trae logo.</li>" in pagina
+
+
+# ---------- Decisión 68 f: generar de nuevo pide confirmación con el costo de la última corrida ----------
+
+def test_generar_de_nuevo_pide_confirmacion_con_el_costo(sesion):  # noqa: F811
+    _poner(sesion, "lectura", estado="verificada", corrida_desde=tokens.lineas("scrum"))
+    with open(sesion / "tokens.jsonl", "a", encoding="utf-8") as archivo:
+        archivo.write(json.dumps({"fecha": "x", "curso": "scrum", "sesion": "S1", "material": "lectura",
+                                  "etapa": "redacción", "tokens_entrada": 1, "tokens_salida": 1, "costo_usd": 0.42}) + "\n")
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    assert ('data-confirmar="Generar de nuevo reemplaza la lectura y gasta tokens. La última generación gastó 0.42 USD '
+            'estimados en 1 llamada. ¿Generar de nuevo?"') in pagina
+    # Aprobada: el aviso de la aprobación también dice el costo.
+    _poner(sesion, "lectura", estado="aprobada", aprobada="2026-10-15T10:00:00")
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    assert "La lectura ya está aprobada." in pagina and "La última generación gastó 0.42 USD estimados" in pagina
+    # Sin generar nunca, no hay confirmación.
+    assert "data-confirmar=" not in cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text

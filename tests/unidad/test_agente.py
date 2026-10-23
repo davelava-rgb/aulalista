@@ -99,3 +99,24 @@ def test_el_esfuerzo_de_cada_tarea():
     for tarea, esfuerzo in esperado.items():
         assert agente.opciones_base(tarea, "k").effort == esfuerzo, tarea
     assert agente.opciones_base("redaccion", "k").max_turns == 5   # sin herramientas, no hacen falta 40 turnos
+
+
+# ---------- Decisión 68 f: AULALISTA_SIN_IA detiene toda llamada real ----------
+
+def test_con_la_variable_puesta_ninguna_llamada_real_sale(entorno, monkeypatch):
+    entorno["env"].write_text("ANTHROPIC_API_KEY=sk-ant-de-prueba\n", encoding="utf-8")
+    monkeypatch.setenv(agente.SIN_IA, "1")
+    with pytest.raises(agente.ErrorDeAgente, match="AULALISTA_SIN_IA está puesta"):
+        asyncio.run(agente.probar_conexion())            # usaría query() de verdad: se detiene antes
+    assert tokens.total(tokens.CURSO_SISTEMA)["llamadas"] == 0
+    # Una consulta simulada (las pruebas) sigue funcionando con la variable puesta.
+    respuesta = asyncio.run(agente.probar_conexion(consulta=consulta_simulada()))
+    assert respuesta["texto"] == "Conexión correcta."
+
+
+def test_la_variable_vacia_o_en_cero_no_detiene_nada(monkeypatch):
+    for valor in ("", "0", "no"):
+        monkeypatch.setenv(agente.SIN_IA, valor)
+        assert agente.sin_ia() is False
+    monkeypatch.delenv(agente.SIN_IA)
+    assert agente.sin_ia() is False
