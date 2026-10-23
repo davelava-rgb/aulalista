@@ -69,3 +69,23 @@ def test_error_del_sdk_se_avisa_y_se_registra(entorno):
     with pytest.raises(agente.ErrorDeAgente, match="401"):
         asyncio.run(agente.probar_conexion(consulta))
     assert tokens.total(tokens.CURSO_SISTEMA)["llamadas"] == 1
+
+
+# ---------- Decisión 68 b: caché de una hora por tarea ----------
+
+def test_el_diseno_pide_la_cache_de_una_hora():
+    for tarea in ("diseno", "diseno_web"):
+        assert agente.opciones_base(tarea, "k").env["CLAUDE_CODE_PROMPT_CACHE_TTL"] == "1h"
+
+
+def test_sin_cache_en_la_tarea_no_se_toca_la_variable():
+    assert "CLAUDE_CODE_PROMPT_CACHE_TTL" not in agente.opciones_base("conexion", "k").env
+
+
+def test_una_vida_de_cache_desconocida_se_rechaza(tmp_path, monkeypatch):
+    from app import config
+    ruta = tmp_path / "modelos.toml"
+    ruta.write_text('[rara]\nmodelo = "m"\ntope_usd = 0.01\ncache = "2h"\n', encoding="utf-8")
+    monkeypatch.setattr(config, "RUTA_MODELOS", ruta)
+    with pytest.raises(ValueError, match="5m"):
+        agente.opciones_base("rara", "k")

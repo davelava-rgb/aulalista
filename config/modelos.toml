@@ -1,5 +1,6 @@
 # Modelo y tope de gasto por tarea.
 # tope_usd es el máximo en dólares para una sola llamada al SDK.
+# cache = "1h" pide la caché de una hora para esa llamada (decisión 68 b). Sin cache, dura 5 minutos.
 
 [conexion]
 modelo = "claude-haiku-4-5-20251001"
@@ -100,11 +101,14 @@ esfuerzo = "medium"
 
 # Agente diseñador: escribe el programa pptxgenjs de las diapositivas (decisión 32). Esfuerzo medio: con el
 # esfuerzo por defecto, dos tercios de lo que escribía era razonamiento (decisión 41).
+# Caché de una hora (decisión 68 b): el diseño dura de 5 a 7 minutos y la caché normal, de 5 minutos, expiraba
+# antes del primer arreglo. Con una hora, los arreglos leen la guía y los datos en vez de escribirlos otra vez.
 [diseno]
 modelo = "claude-opus-5-5"
 tope_usd = 4.00
 max_turns = 3
 esfuerzo = "medium"
+cache = "1h"
 
 # Arreglos del diseñador: corrige solo las diapositivas que nombran los problemas, viendo su imagen. Va con Opus,
 # como el diseño: con Sonnet, los arreglos no veían la causa de un desborde (decisión 56).
@@ -120,6 +124,7 @@ modelo = "claude-opus-5-5"
 tope_usd = 4.00
 max_turns = 3
 esfuerzo = "medium"
+cache = "1h"
 
 # Arreglos de la página de la actividad: devuelve solo los trozos que cambian (decisión 57 f).
 [arreglo_web]

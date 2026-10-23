@@ -23,6 +23,9 @@ class ErrorDeAgente(RuntimeError):
     """El SDK terminó con un error."""
 
 
+VIDAS_DE_CACHE = ("5m", "1h")   # lo que admite CLAUDE_CODE_PROMPT_CACHE_TTL
+
+
 def opciones_base(tarea: str, clave: str, **extra) -> ClaudeAgentOptions:
     """Opciones comunes de toda llamada.
 
@@ -47,6 +50,13 @@ def opciones_base(tarea: str, clave: str, **extra) -> ClaudeAgentOptions:
     }
     if "esfuerzo" in datos:
         valores["effort"] = datos["esfuerzo"]  # «low» a «max»: cuánto razona antes de responder
+    if "cache" in datos:
+        # Cuánto vive la caché del pedido: «5m» (lo normal) o «1h». La de una hora cuesta más al escribirse y sirve
+        # cuando la llamada dura más de cinco minutos y otra llamada va a leer su comienzo después (decisión 68 b).
+        # Variable documentada del CLI: CLAUDE_CODE_PROMPT_CACHE_TTL (docs/en/agent-sdk/cost-tracking).
+        if datos["cache"] not in VIDAS_DE_CACHE:
+            raise ValueError(f"La tarea «{tarea}» tiene cache = «{datos['cache']}»; vale «5m» o «1h».")
+        valores["env"]["CLAUDE_CODE_PROMPT_CACHE_TTL"] = datos["cache"]
     valores.update(extra)
     return ClaudeAgentOptions(**valores)
 
