@@ -204,8 +204,8 @@ def aviso_de_adjuntos(carpeta_curso: Path) -> str:
 # ---------- Pedidos al agente ----------
 
 def _contexto(carpeta_curso: Path, sesion: int, paginas: list[str] | None = None) -> str:
-    ficha_curso = almacen.ruta_ficha(carpeta_curso, "curso", extension=".md").read_text(encoding="utf-8")
-    ficha_sesion = almacen.ruta_ficha(carpeta_curso, "sesion", sesion, ".md").read_text(encoding="utf-8")
+    ficha_curso = almacen.texto_para_materiales(carpeta_curso, "curso")
+    ficha_sesion = almacen.texto_para_materiales(carpeta_curso, "sesion", sesion)
     fuentes = verificacion.fuentes_utilizables(carpeta_curso)
     partes = [
         "REGLAS DE LA SKILL (son obligatorias):",
@@ -248,7 +248,7 @@ def _de_la_herramienta(herramienta_: frozenset[str]) -> dict[str, str]:
             f"- Herramienta de los ejercicios, según la ficha del curso: {nombre_de_la_herramienta(herramienta_)}. Cada\n"
             "  ejercicio practica el tema de la sesión con la acción de la ficha. Los modelos y la referencia dan la\n"
             "  estructura de la guía, no la herramienta."
-            + (f"\n  En este curso no hay {' ni '.join(prohibidos)}: no los escribas en ningún ejercicio ni en la mejora."
+            + (f"\n  En este curso no hay {' ni '.join(prohibidos)}: no los escribas en ningún ejercicio."
                if prohibidos else "")
             + ("" if ia or excel else
                "\n  El alumno hace la acción a mano en su archivo de práctica: lo abre, revisa lo que dicen los pasos y\n"
@@ -279,7 +279,7 @@ CÓMO ENTREGAR EL LABORATORIO (PLAN.md §0, decisión 33)
 {h["herramienta"]}
 - Devuelve solo los datos del esquema. Un programa crea la guía en Word con esta estructura: portada, «Antes de
   empezar», la tabla de archivos, {h["formula"]}y cada ejercicio con «Área:», «Situación», «Archivos de práctica»,
-  «Pasos», sus recuadros y «{docx.MEJORA}». También crea los archivos de práctica reales, la figura de cada
+  «Pasos» y sus recuadros. También crea los archivos de práctica reales, la figura de cada
   ejercicio que la necesite y el .zip.
 - antes_de_empezar:
   - contexto: de 2 a 4 oraciones con la empresa o institución del caso, qué hace y qué debe hacer ahora, y la fecha
@@ -309,8 +309,8 @@ CÓMO ENTREGAR EL LABORATORIO (PLAN.md §0, decisión 33)
     Lo que se copia funciona tal cual: sin corchetes, guiones bajos ni espacios por llenar, salvo en una plantilla.
   - Comillas («» o “”) solo para copiar texto tal cual de una fuente: el verificador las busca en las fuentes. El
     texto que el alumno escribe va en **negrita**, sin comillas.
-  - mejora: «texto» con lo que se agrega y para qué; «pasos» y «copiar» si hacen falta, con las mismas reglas.
-  - No escribas «Cómo se ve un buen resultado» ni «Criterio de calidad»: la skill no los permite.
+  - No escribas «Cómo se ve un buen resultado», «Criterio de calidad» ni «Mejora el resultado»: la skill no los
+    permite.
 - archivos: cada archivo de práctica, con nombre S{sesion}_E[ejercicio]_[descripcion-corta] en minúsculas y con
   guiones («S{sesion}_E1_riesgos-rrhh.xlsx»). Excel (.xlsx) para datos y Word (.docx) para textos. Cada ejercicio
   usa solo sus archivos: ninguno necesita el resultado de otro.
@@ -337,7 +337,8 @@ CÓMO ENTREGAR EL LABORATORIO (PLAN.md §0, decisión 33)
 {h["ejecucion"]}
 - pasajes: los pasajes de las fuentes que usaste: «oracion» del laboratorio que sostiene, la fuente, la ubicación y
   en «texto» el pasaje copiado, de 40 palabras como máximo.
-- decisiones: una entrada por punto, con «texto» y «tipo» («sin fuente», «decisión» o «nota»).
+- decisiones: una entrada por punto, con «texto» y «tipo» («sin fuente» o «decisión»). Lo que solo describe tu
+  trabajo no se anota.
 """ + (f"- El programa agrega al inicio de la guía: «{aviso}». No lo repitas.\n" if aviso else "")
 
 
@@ -490,12 +491,11 @@ def bloques_de(contenido: Laboratorio) -> list[pasada2.Bloque]:
         *antes.contexto, *antes.reglas,
         *[" | ".join(fila) for tabla in antes.tablas for fila in [tabla.encabezados, *tabla.filas]]))]
     for e in contenido.ejercicios:
-        recuadros = [*e.copiar, *e.mejora.copiar]
+        recuadros = list(e.copiar)
         textos = [e.titulo, e.situacion, *[docx.sin_marcas(p.texto) for p in e.pasos],
                   *[p.figura.descripcion for p in e.pasos if p.figura],
                   *[f"{r.titulo}: {r.explicacion}" for r in recuadros if r.explicacion],
-                  *[f"{r.titulo}: {linea}" for r in recuadros for linea in r.lineas],
-                  e.mejora.texto, *[docx.sin_marcas(p) for p in e.mejora.pasos]]
+                  *[f"{r.titulo}: {linea}" for r in recuadros for linea in r.lineas]]
         for nombre in e.archivos:
             archivo = por_nombre.get(nombre)
             if archivo is None:
@@ -604,8 +604,7 @@ class _Trabajo:
                                      f"{imagen.letra_pt} puntos y no se lee sin ampliar. Muestra menos columnas o filas.")
                 self.imagenes[(e.numero, i)] = imagen
         hojas = {a.nombre: [h.nombre for h in a.hojas] for a in contenido.archivos}
-        formulas = [l for e in contenido.ejercicios for r in [*e.copiar, *e.mejora.copiar] if r.tipo == "formula"
-                    for l in r.lineas]
+        formulas = [l for e in contenido.ejercicios for r in e.copiar if r.tipo == "formula" for l in r.lineas]
         docx.generar_laboratorio(contenido, self.identidad, self.portada, self.rutas["word"], self.imagenes, self.aviso,
                                  nombre_zip=self.rutas["zip"].name, hojas=hojas,
                                  funciones=practica.funciones_usadas(formulas), sesion=self.sesion)

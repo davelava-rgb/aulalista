@@ -286,7 +286,6 @@ def generar_lectura(contenido: Lectura, identidad: Identidad, portada: Portada, 
 
 # ---------- Laboratorio (SKILL.md, «Material 3»; PLAN.md §0, decisión 33) ----------
 
-MEJORA = "Mejora el resultado (opcional)"
 CADA_UNO_SOLO = "Cada ejercicio funciona solo. Puedes hacerlos en cualquier orden."
 ANTES_DE_COPIAR = [
     "Las fórmulas de esta guía usan los nombres de las funciones en español y separan los datos con comas.",
@@ -480,13 +479,6 @@ def generar_laboratorio(contenido, identidad: Identidad, portada: Portada, desti
                         [p.figura for p in e.pasos], contador)
         documento.add_paragraph()
         for recuadro_ in e.copiar:
-            recuadro_para_copiar(documento, identidad, recuadro_)
-        documento.add_heading(MEJORA, level=2)
-        documento.add_paragraph(e.mejora.texto)
-        if e.mejora.pasos:
-            _lista_numerada(documento, e.mejora.pasos, identidad)
-            documento.add_paragraph()
-        for recuadro_ in e.mejora.copiar:
             recuadro_para_copiar(documento, identidad, recuadro_)
     destino.parent.mkdir(parents=True, exist_ok=True)
     documento.save(destino)

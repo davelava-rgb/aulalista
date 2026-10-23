@@ -40,7 +40,6 @@ LIMPIO = {
                 "Tarea: marca los pedidos que se recogen en tienda.",
                 "Formato de salida: una tabla con el número de pedido y la entrega.",
                 "Restricciones: " + NOTA]}],
-            "mejora": {"texto": "Pide que ordene la tabla por número de pedido.", "pasos": [], "copiar": []},
         },
         {
             "numero": 2, "area": "Almacén", "titulo": "Corrige el aviso del almacén",
@@ -60,7 +59,6 @@ LIMPIO = {
                 "Tarea: revisa que el aviso sea claro.",
                 "Formato de salida: el aviso corregido.",
                 "Restricciones: " + NOTA]}],
-            "mejora": {"texto": "Pide una versión más corta del aviso.", "pasos": [], "copiar": []},
         },
         {
             "numero": 3, "area": "Recursos Humanos", "titulo": "Suma las horas de capacitación",
@@ -74,14 +72,14 @@ LIMPIO = {
                        "descripcion": "Las horas de cada persona en la hoja Horas."}),
                 _paso("Copia la fórmula 1 en la celda C2."),
                 _paso("Copia la celda C2 hacia abajo, hasta la fila 3."),
+                _paso("Escribe **Promedio** en la celda A5."),
+                _paso("Copia la fórmula 2 en la celda B5."),
             ],
             "copiar": [{"tipo": "formula", "titulo": "Fórmula 1 · Revisa las horas de cada persona",
                         "explicacion": "Avisa cuando una persona tiene menos de 5 horas.",
-                        "lineas": ['=SI(B2<5,"REVISAR","OK")']}],
-            "mejora": {"texto": "Agrega el promedio de horas del equipo.",
-                       "pasos": ["Escribe **Promedio** en la celda A5.", "Copia la fórmula 2 en la celda B5."],
-                       "copiar": [{"tipo": "formula", "titulo": "Fórmula 2 · Promedio de horas",
-                                   "explicacion": "Calcula el promedio de horas.", "lineas": ["=PROMEDIO(B2:B3)"]}]},
+                        "lineas": ['=SI(B2<5,"REVISAR","OK")']},
+                       {"tipo": "formula", "titulo": "Fórmula 2 · Promedio de horas",
+                        "explicacion": "Calcula el promedio de horas.", "lineas": ["=PROMEDIO(B2:B3)"]}],
         },
     ],
     "archivos": [
@@ -167,8 +165,6 @@ def _a_mano() -> dict:
     ]
     for e in datos["ejercicios"]:
         e["copiar"] = []
-    tercero["mejora"] = {"texto": "Escribe una nota que diga a quién se le pide completar sus horas.",
-                         "pasos": ["Escribe la nota en la celda A6."], "copiar": []}
     return datos
 
 
@@ -195,8 +191,6 @@ SEMBRADOS_SIN_HERRAMIENTA = {
                                   "trae un recuadro de prompt y el curso no usa IA"),
     "fórmula en un curso sin Excel": (lambda d: d["ejercicios"][2]["copiar"].append(dict(_FORMULA)),
                                       "trae un recuadro de fórmula y el curso no usa Excel"),
-    "prompt en la mejora": (lambda d: d["ejercicios"][1]["mejora"]["copiar"].append(dict(_PROMPT)),
-                            "trae un recuadro de prompt"),
     "paso que adjunta el archivo": (lambda d: d["ejercicios"][1]["pasos"].append(
                                         _paso("Adjunta el archivo y pide una revisión del aviso.")),
                                     "dice «Adjunta» y el curso no usa IA"),

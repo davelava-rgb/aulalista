@@ -3,10 +3,11 @@
 Flujo (el mismo de la lectura, PLAN.md §0, decisión 22):
 1. Comprueba las dos fichas confirmadas y la lectura aprobada: las diapositivas salen de ella (SKILL.md, Paso 4).
 2. El agente resume la lectura en diapositivas: mismo orden, mismos ejemplos, sin contenido nuevo.
-3. El programa comprueba la estructura: de 14 a 18 diapositivas y el orden de los bloques de la lectura.
-4. El generador crea el PowerPoint 16:9 con el diseño común y las notas del profesor.
+3. El programa comprueba la estructura: el orden de los bloques de la lectura. La cantidad la da el contenido:
+   una diapositiva por concepto (decisión 66 c).
+4. El generador crea el PowerPoint 16:9 con el diseño común. Sin notas del profesor (decisión 66 a).
 5. Primera pasada: PowerPoint mide si algún texto se sale de su recuadro y guarda una imagen de cada diapositiva.
-   El verificador revisa el texto, las notas y el número de diapositivas. Sus fallas se corrigen hasta
+   El verificador revisa el texto. Sus fallas se corrigen hasta
    VUELTAS_DEL_VERIFICADOR veces.
 6. Segunda pasada: la revisión del contenido compara cada frase con la lectura aprobada y, si cita una fuente
    del curso, con esa fuente (SPEC §7). Una sola corrección y la confirmación de lo que cambió.
@@ -43,7 +44,6 @@ VUELTAS_DEL_VERIFICADOR = comun.VUELTAS_DEL_VERIFICADOR
 FIJAS = contenido_.FIJAS                    # portada, idea central, «Aplícalo así», «Cuidado con» y cierre
 ARREGLOS_DE_DISENO = 4                      # decisión 56: correcciones del diseñador, contando las de la revisión visual
 REVISIONES_VISUALES = 2                     # decisión 56: la primera, sobre el primer diseño que corre, aunque tenga fallas
-LIMITES = verificador.LIMITES[MATERIAL]
 FUENTE_LECTURA = "lectura aprobada"        # así se llama la lectura entre las fuentes de la revisión
 SECCIONES_DE_LA_SKILL = ("Reglas comunes", "Paso 3 · Vocabulario de la sesión", "Material 2 · Diapositivas")
 # «bloque» y «tipo» ordenan y dan forma a las diapositivas: una corrección por oraciones no los toca.
@@ -177,7 +177,7 @@ def paginas_de_referencia(carpeta_curso: Path, sesion: int) -> list[str] | None:
 def _contexto(carpeta_curso: Path, sesion: int, contenido_lectura: Lectura | None,
               paginas: list[str] | None = None) -> str:
     ficha_curso = almacen.texto_para_materiales(carpeta_curso, "curso")
-    ficha_sesion = almacen.ruta_ficha(carpeta_curso, "sesion", sesion, ".md").read_text(encoding="utf-8")
+    ficha_sesion = almacen.texto_para_materiales(carpeta_curso, "sesion", sesion)
     fuentes = verificacion.fuentes_utilizables(carpeta_curso)
     partes = [
         "REGLAS DE LA SKILL (son obligatorias):",
@@ -221,10 +221,9 @@ FORMATO_COMUN = f"""
 CÓMO ENTREGAR LAS DIAPOSITIVAS
 - Devuelve solo los datos del esquema. Un programa crea el PowerPoint 16:9 con el diseño común: la portada con
   el curso, la sesión, el docente y el contacto; los títulos «Idea central», «Aplícalo así» y «Cuidado con»; los
-  recuadros, los diagramas, la diapositiva de cierre y las notas.
-- En total van de {LIMITES['diapositivas_min']} a {LIMITES['diapositivas_max']} diapositivas. El programa pone {FIJAS} fijas
-  (portada, idea central, «Aplícalo así», «Cuidado con» y cierre), así que «diapositivas» trae de
-  {LIMITES['diapositivas_min'] - FIJAS} a {LIMITES['diapositivas_max'] - FIJAS}.
+  recuadros, los diagramas y la diapositiva de cierre.
+- No hay una cantidad fija de diapositivas: «diapositivas» trae una por concepto, tantas como conceptos haya. El
+  programa pone {FIJAS} fijas (portada, idea central, «Aplícalo así», «Cuidado con» y cierre).
 {{orden}}
 - tipo y lo que lleva cada uno. Deja vacío lo que el tipo no usa, y «tabla» y «grafico» en null si no los usa:
   - «frases»: de 1 a 3 frases cortas. Con una sola frase, se muestra grande, como idea destacada.
@@ -254,12 +253,11 @@ CÓMO ENTREGAR LAS DIAPOSITIVAS
     dos criterios → «matriz»; cifras → «cifras» o «grafica».
   - El texto de cada diapositiva aparece tal cual en la presentación: escríbelo como debe leerse.
   - Cada diapositiva de «diapositivas» y la idea central muestran {contenido_.MAX_PALABRAS} palabras como máximo, sin contar
-    el título. Lo que no cabe va a las notas del profesor. Pasar un detalle a las notas no es una decisión: no lo
-    anotes en «decisiones».
+    el título. Lo que no cabe se deja fuera: la lectura ya lo tiene. Dejar fuera un detalle no es una decisión: no
+    lo anotes en «decisiones».
 - Frases cortas, no párrafos: una idea por frase, que se lea de un vistazo.
+- Sin notas del profesor.
 {{contenido}}
-- notas: en todas, también en la portada, la idea central, «Aplícalo así» y «Cuidado con». En «destacar», qué
-  destacar; en «preguntar», qué preguntar al grupo. Las notas tampoco agregan contenido sin fuente.
 {{cierre}}
 - cierre.frase: la idea que se llevan. Copia tal cual una de las frases de idea_central.frases. El programa la pone
   con el docente y el contacto. Sin diapositivas de relleno como «Preguntas» o «Gracias».
@@ -274,8 +272,7 @@ CON_LECTURA = {
     "orden": ("- diapositivas: una por concepto y una idea por diapositiva, en el orden de la lectura. En «bloque» copia\n"
               "  tal cual el subtítulo del bloque de la lectura al que pertenece. Cada bloque de la lectura tiene al menos\n"
               "  una diapositiva."),
-    "contenido": ("- Los ejemplos son los mismos de la lectura. Si uno no cabe, divídelo en dos diapositivas o muestra una\n"
-                  "  parte y remite a la lectura en las notas.\n"
+    "contenido": ("- Los ejemplos son los mismos de la lectura. Si uno no cabe, divídelo en dos diapositivas.\n"
                   "- No agregues contenido que la lectura no tenga. Las diapositivas resumen la lectura; no la amplían."),
     "cierre": ("- idea_central.frases: de 1 a 3 frases que resumen la idea central de la lectura.\n"
                "- aplicalo.plantilla: la técnica o plantilla de «Aplícalo así» de la lectura, una línea por elemento.\n"
@@ -289,7 +286,7 @@ CON_LECTURA = {
                 "  - «sin fuente»: afirmas algo del tema que la lectura no dice. Copia la frase. El profesor decide si queda.\n"
                 "  - «decisión»: te apartas de la lectura en algo que cambia lo que ve el alumno: omites un tema, cambias el\n"
                 "    orden o divides un ejemplo.\n"
-                "  - «nota»: solo describes lo que hiciste sin apartarte de la lectura."),
+                "  Lo que solo describe tu trabajo no se anota."),
 }
 SIN_LECTURA = {
     "orden": ("- diapositivas: una por concepto y una idea por diapositiva. Si la ficha de la sesión trae bloques de temas,\n"
@@ -309,7 +306,7 @@ SIN_LECTURA = {
                 "- decisiones: una entrada por punto, con «texto» y «tipo»:\n"
                 "  - «sin fuente»: afirmas algo del tema que no está en ninguna fuente ni ficha. Copia la frase.\n"
                 "  - «decisión»: te apartas de las fichas o de las fuentes, o eliges algo que cambia lo que ve el alumno.\n"
-                "  - «nota»: solo describes lo que hiciste sin apartarte de las fichas ni de las fuentes."),
+                "  Lo que solo describe tu trabajo no se anota."),
 }
 
 
@@ -322,12 +319,12 @@ REGLAS_PROPIAS_CON_LECTURA = """EN LAS DIAPOSITIVAS
   reescríbela con lo que dice la lectura.
 - Las diapositivas no agregan datos del caso: deja «datos_nuevos» vacío.
 - Un texto que no cabe en su recuadro (FALLA · desborde) se arregla con frases más cortas, con menos frases o
-  dividiendo la diapositiva en dos, sin pasar del total de diapositivas.
+  dividiendo la diapositiva en dos.
 """
 REGLAS_PROPIAS_SIN_LECTURA = """EN LAS DIAPOSITIVAS
 - Esta sesión no tiene lectura: las diapositivas salen del material de referencia y de las fichas.
 - Un texto que no cabe en su recuadro (FALLA · desborde) se arregla con frases más cortas, con menos frases o
-  dividiendo la diapositiva en dos, sin pasar del total de diapositivas.
+  dividiendo la diapositiva en dos.
 """
 
 
@@ -397,9 +394,10 @@ def pedido_de_correccion(datos: dict, problemas: list[str]) -> str:
 
 # ---------- Corrección por diapositivas (PLAN.md §0, decisión 31) ----------
 # Un desborde, una diapositiva cargada o un cambio de diseño tocan una diapositiva, no el documento: se devuelven
-# solo las diapositivas nombradas. La corrección completa queda para la cantidad, el orden y los recursos en total.
+# solo las diapositivas nombradas. La corrección completa queda para el orden y los recursos en total.
+# La portada no se corrige: sale de la ficha, no del contenido (decisión 66 a).
 
-FIJAS_CORREGIBLES = ("portada", "idea_central", "aplicalo", "cuidado", "cierre")
+FIJAS_CORREGIBLES = ("idea_central", "aplicalo", "cuidado", "cierre")
 _ESQUEMA_FIJAS = ESQUEMA_DIAPOSITIVAS["properties"]
 ESQUEMA_POR_DIAPOSITIVAS = {
     "type": "object",
@@ -440,7 +438,7 @@ def es_de_una_frase(problema: str) -> bool:
 
 def diapositivas_nombradas(problemas: list[str], datos: dict) -> set[int] | None:
     """Los números de las diapositivas que nombran los problemas que no son de una frase. None si alguno es del
-    documento entero (cantidad, orden, recursos en total, tablas): entonces va la corrección completa."""
+    documento entero (orden, recursos en total, tablas): entonces va la corrección completa."""
     fijas = {v: k for k, v in numeros_de_las_fijas(datos).items()}
     numeros: set[int] = set()
     for problema in problemas:
@@ -471,7 +469,7 @@ def pedido_por_diapositivas(datos: dict, problemas: list[str], numeros: set[int]
         f"  «diapositivas». «Aplícalo así» es la {min(k for k, v in fijas.items() if v == 'aplicalo')}, «Cuidado con» "
         f"la {min(k for k, v in fijas.items() if v == 'cuidado')} y el cierre la {max(fijas)}.",
         "- En «reemplazos», una entrada por diapositiva de concepto que corriges: su «numero» y en «diapositivas» la",
-        "  versión nueva, con el mismo esquema. Para dividirla, devuelve dos, sin pasar del total de diapositivas.",
+        "  versión nueva, con el mismo esquema. Para dividirla, devuelve dos.",
         "- En «fijas», la versión nueva de la portada, la idea central, «Aplícalo así», «Cuidado con» o el cierre",
         "  solo si su número está en la lista. Las demás van en null.",
         "- En «cambios», las frases que nombran los problemas entre comillas: «oracion» copiada tal cual y «nueva»",
@@ -503,16 +501,13 @@ def _clave_de_bloque(texto: str) -> str:
 
 
 def _validar(datos: dict, contenido_lectura: Lectura | None) -> tuple[Diapositivas | None, list[str]]:
-    """Cantidad de diapositivas y orden: el de los bloques de la lectura o, sin lectura, cada bloque junto."""
+    """Orden: el de los bloques de la lectura o, sin lectura, cada bloque junto. La cantidad no se limita: una
+    diapositiva por concepto (decisión 66 c)."""
     try:
         contenido = Diapositivas.model_validate(datos)
     except ValidationError as error:
         return None, [f"FALLA · estructura · {'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in error.errors()]
     problemas = []
-    minimo, maximo = LIMITES["diapositivas_min"], LIMITES["diapositivas_max"]
-    if not minimo <= contenido.total <= maximo:
-        problemas.append(f"FALLA · estructura · diapositivas: hay {contenido.total} con las {FIJAS} fijas; "
-                         f"deben ser de {minimo} a {maximo}.")
     if contenido_lectura is None:
         problemas += _bloques_juntos(contenido)
     else:
@@ -561,7 +556,7 @@ def _palabras(contenido: Diapositivas) -> list[str]:
         palabras = sum(len(t.split()) for t in d.textos_visibles())
         if palabras > maximo:
             problemas.append(f"FALLA · estructura · diapositiva {numero} («{d.titulo}»): muestra {palabras} palabras; el "
-                             f"máximo es {maximo}, sin el título. Deja lo esencial y pasa el detalle a las notas.")
+                             f"máximo es {maximo}, sin el título. Deja lo esencial.")
     return problemas
 
 
@@ -743,7 +738,7 @@ class _Trabajo:
                 fallas, avisos = self.medir_y_verificar()
                 self.avance(f"Verificador y medición con PowerPoint, vuelta {self.vuelta}: {self.resultado.resumen()}.")
                 problemas = [comun.texto_de(h) for h in fallas + avisos]
-                completa = any(not h.oracion for h in fallas)   # cantidad, notas y desbordes: del documento entero
+                completa = any(not h.oracion for h in fallas)   # orden y desbordes: del documento entero
                 self.historial += comun.historial(fallas + avisos, self.vuelta)
             self.fallas = problemas
             if not problemas:
@@ -979,28 +974,22 @@ INDICACIONES_DE_REVISION = (
     f"La fuente de este material es la lectura aprobada (en los pasajes, «{FUENTE_LECTURA}»). Las diapositivas la "
     "resumen en frases cortas: resumir o decir lo mismo con otras palabras no es un error. Es «dato inventado» una "
     "afirmación sobre el tema que la lectura no dice, aunque esté en otra fuente del curso: las diapositivas no "
-    "agregan contenido. Una frase que cita una fuente del curso se compara también con esa fuente. Las notas del "
-    "profesor («Qué destacar», «Qué preguntar al grupo») se revisan igual; una pregunta al grupo no es una afirmación.")
+    "agregan contenido. Una frase que cita una fuente del curso se compara también con esa fuente.")
 
 
 INDICACIONES_SIN_LECTURA = (
     "Esta sesión no tiene lectura: las diapositivas salen del material de referencia y de las fichas. Una frase corta "
-    "que resume una fuente no es un error. Las notas del profesor («Qué destacar», «Qué preguntar al grupo») se revisan "
-    "igual; una pregunta al grupo no es una afirmación.")
+    "que resume una fuente no es un error.")
 
 
 def bloques_de(contenido: Diapositivas) -> list[pasada2.Bloque]:
-    """Las diapositivas por bloque de la lectura, con sus notas: la revisión trabaja bloque por bloque."""
+    """Las diapositivas por bloque de la lectura: la revisión trabaja bloque por bloque."""
     separar = verificador.verificar.separar_oraciones
 
     def oraciones(*textos):
         return [o for t in textos if t for o in separar(t)]
 
-    def notas(n):
-        return (f"Qué destacar: {n.destacar}", f"Qué preguntar al grupo: {n.preguntar}")
-
-    bloques = [pasada2.Bloque("Portada e idea central", oraciones(
-        *notas(contenido.portada.notas), *contenido.idea_central.frases, *notas(contenido.idea_central.notas)))]
+    bloques = [pasada2.Bloque("Idea central", oraciones(*contenido.idea_central.frases))]
     por_bloque: dict[str, list[str]] = {}
     for d in contenido.diapositivas:
         textos = [d.titulo, *d.frases]
@@ -1012,12 +1001,12 @@ def bloques_de(contenido: Diapositivas) -> list[pasada2.Bloque]:
             textos += [d.grafico.centro, *d.grafico.ejes]
             for e in d.grafico.elementos:
                 textos += [e.texto + (f": {_numero(e.valor)}" if e.valor is not None else ""), e.detalle, *e.hijos]
-        por_bloque.setdefault(d.bloque, []).extend(oraciones(*textos, *notas(d.notas)))
+        por_bloque.setdefault(d.bloque, []).extend(oraciones(*textos))
     bloques += [pasada2.Bloque(f"Diapositivas de «{nombre}»", lista) for nombre, lista in por_bloque.items()]
     a, c = contenido.aplicalo, contenido.cuidado
-    bloques.append(pasada2.Bloque("Aplícalo así", oraciones(*a.frases, *a.plantilla, *notas(a.notas))))
-    bloques.append(pasada2.Bloque("Cuidado con", oraciones(*c.riesgos, *notas(c.notas))))
-    bloques.append(pasada2.Bloque("Cierre", oraciones(contenido.cierre.frase, *notas(contenido.cierre.notas))))
+    bloques.append(pasada2.Bloque("Aplícalo así", oraciones(*a.frases, *a.plantilla)))
+    bloques.append(pasada2.Bloque("Cuidado con", oraciones(*c.riesgos)))
+    bloques.append(pasada2.Bloque("Cierre", oraciones(contenido.cierre.frase)))
     return bloques
 
 
@@ -1219,8 +1208,7 @@ def _entrega(material: dict) -> dict:
     archivos_ = material["archivos"]
     total = material.get("diapositivas") or 0
     lineas_archivos = [
-        f"{archivos_['pptx']}: las diapositivas, 16:9" + (f", {total} diapositivas" if total else "")
-        + ", con notas del profesor en cada una.",
+        f"{archivos_['pptx']}: las diapositivas, 16:9" + (f", {total} diapositivas" if total else "") + ".",
         f"{archivos_['excel']}: el archivo de verificación, con la hoja Hallazgos.",
     ]
     probe = []
@@ -1294,8 +1282,7 @@ def _entrega(material: dict) -> dict:
     decidi += [f"Dato nuevo del caso, agregado a la ficha del curso: {d}" for d in material.get("datos_agregados", [])]
     decidi += material.get("ajustes", [])
     if not decidi:
-        decidi.append("Nada que revisar: todo salió de la lectura aprobada. Las notas del redactor están en "
-                      "la hoja Hallazgos.")
+        decidi.append("Nada que revisar: todo salió de la lectura aprobada.")
     return entrega.componer(archivos=lineas_archivos, probe=probe, valide=valide,
                             pendientes=material["problemas"], no_pude=no_pude, decidi=decidi)
 

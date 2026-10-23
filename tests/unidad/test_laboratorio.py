@@ -67,7 +67,7 @@ def test_genera_la_guia_los_archivos_las_figuras_y_el_zip(sesion):  # noqa: F811
     assert [tabla.cell(i, 0).text for i in range(1, 4)] == nombres
     titulos = [p.text for p in guia.paragraphs if p.style.name.startswith("Heading")]
     assert titulos[:3] == ["Antes de empezar", "Archivos de práctica", "Ejercicio 1 · Clasifica los pedidos de la semana"]
-    assert titulos.count("Mejora el resultado (opcional)") == 3
+    assert not any(t.startswith("Mejora el resultado") for t in titulos)   # decisión 66 b
     assert "Cada ejercicio funciona solo. Puedes hacerlos en cualquier orden." in textos
     assert "Los 3 archivos están en el archivo comprimido S1_Laboratorio_Archivos.zip." in textos
     assert "Área: Ventas" in textos and "Situación" in textos
@@ -268,7 +268,7 @@ def test_las_formulas_se_copian_donde_dice_el_paso_y_las_calcula_excel(sesion): 
     celdas = {c["celda"]: c for c in tercero.celdas}
     assert celdas["C2"]["formula"] == '=IF(B2<5,"REVISAR","OK")'       # en inglés dentro del archivo
     assert celdas["C3"]["formula"] == '=IF(B3<5,"REVISAR","OK")'       # «hacia abajo, hasta la fila 3»
-    assert celdas["B5"]["formula"] == "=AVERAGE(B2:B3)" and celdas["B5"]["valor"] == 5   # la fórmula de la mejora
+    assert celdas["B5"]["formula"] == "=AVERAGE(B2:B3)" and celdas["B5"]["valor"] == 5   # la fórmula 2
     copia = openpyxl.load_workbook(laboratorio.archivos(sesion, 1)["ejecucion"] / "E3" / "S1_E3_capacitacion.xlsx")
     assert copia["Horas"]["A5"].value == "Promedio"                      # «Escribe **Promedio** en la celda A5»
     assert tercero.conversacion == [] and tercero.coincide

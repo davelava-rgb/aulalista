@@ -4,9 +4,9 @@ El redactor escribe el contenido y la validación lo aprueba. Después, el dise�
 pptxgenjs que dibuja ese contenido, con íconos y la identidad visual de la ficha. AulaLista:
 1. revisa el programa antes de correrlo: sin require, fs, red ni procesos;
 2. lo corre con Node con permisos limitados (app/disenador/ejecutar.js);
-3. arregla sin IA la letra chica, los colores ajenos y las notas (decisión 41);
+3. arregla sin IA la letra chica y los colores ajenos (decisión 41);
 4. comprueba el PowerPoint: cantidad de diapositivas, texto que sale tal cual del contenido aprobado y que se
-   muestra completo, frases enteras en las viñetas, letra mínima, colores de la ficha y notas en todas.
+   muestra completo, frases enteras en las viñetas, letra mínima y colores de la ficha. Sin notas (decisión 66 a).
 La medición con PowerPoint, el verificador y la revisión visual corren después, en diapositivas.py.
 """
 
@@ -130,14 +130,13 @@ CÓMO ES EL PROGRAMA
 ORDEN Y CANTIDAD
 - Una diapositiva por parte del contenido, en este orden y sin agregar ni quitar ninguna: portada, idea central,
   cada elemento de «diapositivas», «Aplícalo así», «Cuidado con» y el cierre.
-- Notas: en cada diapositiva, slide.addNotes(...) con «Qué destacar: …» y «Qué preguntar al grupo: …» de las notas de
-  esa parte, tal cual.
+- Sin notas del profesor: no uses addNotes.
 
 EL TEXTO
 - Todo el texto sale tal cual de h.contenido y de h.portada, y todo el texto de cada parte se muestra en su
   diapositiva. Puedes partir una frase en dos líneas, poner en negrita o en color algunas de sus palabras (con varios
-  trozos de texto) y elegir dónde va cada una. No cambies palabras, no resumas, no quites texto, no lo pases a las
-  notas y no agregues afirmaciones. Solo los encabezados de una tabla se pueden omitir, si la composición los deja
+  trozos de texto) y elegir dónde va cada una. No cambies palabras, no resumas, no quites texto y no agregues
+  afirmaciones. Solo los encabezados de una tabla se pueden omitir, si la composición los deja
   claros.
 - Solo puedes agregar etiquetas cortas de {etiqueta} palabras como máximo: «EJEMPLO», «Primer principio», «vs»,
   «Hoy» frente a «Con agilidad», números de paso, el número de diapositiva. Una etiqueta nombra o ubica; nunca afirma
@@ -326,7 +325,7 @@ def _textos_del_contenido(contenido: Diapositivas, portada: Portada) -> list[str
 
 
 def _textos_por_diapositiva(contenido: Diapositivas, portada: Portada) -> list[list[str]]:
-    """Lo que cada diapositiva debe mostrar, en orden: el diseño no quita texto ni lo pasa a las notas. Los
+    """Lo que cada diapositiva debe mostrar, en orden: el diseño no quita texto. Los
     encabezados de una tabla se pueden omitir: una tabla dibujada como tarjetas ya no los necesita."""
     def visibles(d):
         encabezados = d.tabla.encabezados if d.tabla else []
@@ -459,12 +458,6 @@ def con_diapositivas_base(ruta: Path, base: Path, numeros: list[int]) -> bool:
     return True
 
 
-def _notas_del_contenido(contenido: Diapositivas) -> list[str]:
-    partes = [contenido.portada, contenido.idea_central, *contenido.diapositivas, contenido.aplicalo,
-              contenido.cuidado, contenido.cierre]
-    return [p.notas.texto() for p in partes]
-
-
 def _figuras(figuras):
     for figura in figuras:
         if figura.shape_type == 6:          # grupo
@@ -494,11 +487,10 @@ def _en_sombra(nodo) -> bool:
 def ajustar_pptx(ruta: Path, contenido: Diapositivas, identidad: Identidad) -> list[str]:
     """Arreglos sin IA ni costo, antes de los controles: lo que tiene una sola respuesta correcta no vuelve al
     diseñador. La letra menor que el mínimo sube al mínimo; un color que no es de la ficha pasa al color de la ficha
-    más parecido; las notas que no son las del contenido se copian del contenido. Devuelve lo que ajustó."""
+    más parecido. Devuelve lo que ajustó."""
     presentacion = Presentation(ruta)
     permitidos = sorted(identidad.colores_permitidos())
-    notas_esperadas = _notas_del_contenido(contenido)
-    letras, colores, notas = 0, {}, []
+    letras, colores = 0, {}
     for numero, diapositiva in enumerate(presentacion.slides, start=1):
         for figura in _figuras(diapositiva.shapes):
             for parrafo in _parrafos(figura):
@@ -511,26 +503,19 @@ def ajustar_pptx(ruta: Path, contenido: Diapositivas, identidad: Identidad) -> l
             if re.fullmatch(r"[0-9A-F]{6}", valor) and valor not in permitidos and not _en_sombra(nodo):
                 colores[valor] = min(permitidos, key=lambda c: _distancia(valor, c))
                 nodo.set("val", colores[valor])
-        if numero <= len(notas_esperadas):
-            actual = diapositiva.notes_slide.notes_text_frame.text if diapositiva.has_notes_slide else ""
-            if _normal(actual) != _normal(notas_esperadas[numero - 1]):
-                diapositiva.notes_slide.notes_text_frame.text = notas_esperadas[numero - 1]
-                notas.append(numero)
     ajustes = []
     if letras:
         ajustes.append(f"subí a {LETRA_MINIMA} puntos {letras} trozos de texto con letra más chica")
     if colores:
         ajustes.append("cambié colores que no son de la ficha por el más parecido de la ficha: "
                        + ", ".join(f"{a} por {b}" for a, b in sorted(colores.items())))
-    if notas:
-        ajustes.append(f"copié del contenido las notas de las diapositivas {', '.join(map(str, notas))}")
     if ajustes:
         presentacion.save(ruta)
     return ajustes
 
 
 def revisar_pptx(ruta: Path, contenido: Diapositivas, portada: Portada, identidad: Identidad) -> list[str]:
-    """Cantidad, texto tal cual del contenido y completo, viñetas enteras, letra mínima, colores de la ficha y notas."""
+    """Cantidad, texto tal cual del contenido y completo, viñetas enteras, letra mínima y colores de la ficha."""
     presentacion = Presentation(ruta)
     problemas = []
     total = len(presentacion.slides)
@@ -542,7 +527,6 @@ def revisar_pptx(ruta: Path, contenido: Diapositivas, portada: Portada, identida
     frases = {_normal(t) for t in textos}
     esperados = _textos_por_diapositiva(contenido, portada) if total == contenido.total else []
     permitidos = identidad.colores_permitidos()
-    notas_esperadas = _notas_del_contenido(contenido)
     for numero, diapositiva in enumerate(presentacion.slides, start=1):
         ajenos, chicos, colores, partidas = [], set(), set(), []
         for figura in _figuras(diapositiva.shapes):
@@ -568,15 +552,11 @@ def revisar_pptx(ruta: Path, contenido: Diapositivas, portada: Portada, identida
             faltan = [t for t in esperados[numero - 1] if not set(re.findall(r"\w+", _normal(t))) <= vistas]
             for texto in faltan[:3]:
                 problemas.append(f"FALLA · diseño · diapositiva {numero}: falta el texto «{texto[:120]}» del contenido "
-                                 "aprobado. Muestra todo el texto de esa parte; no lo quites ni lo pases a las notas.")
+                                 "aprobado. Muestra todo el texto de esa parte; no lo quites.")
         if chicos:
             problemas.append(f"FALLA · diseño · diapositiva {numero}: hay letra de {', '.join(map(str, sorted(chicos)))} "
                              f"puntos; el mínimo es {LETRA_MINIMA}.")
         if colores:
             problemas.append(f"FALLA · diseño · diapositiva {numero}: usa colores que no son de la ficha: "
                              f"{', '.join(sorted(colores))}. Usa solo h.colores; para un tono suave, «transparency».")
-        notas = diapositiva.notes_slide.notes_text_frame.text if diapositiva.has_notes_slide else ""
-        if numero <= len(notas_esperadas) and _normal(notas) != _normal(notas_esperadas[numero - 1]):
-            problemas.append(f"FALLA · diseño · diapositiva {numero}: sus notas no son las del contenido. Copia tal "
-                             "cual «Qué destacar: …» y «Qué preguntar al grupo: …» de esa parte.")
     return problemas

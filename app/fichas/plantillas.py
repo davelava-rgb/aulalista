@@ -233,11 +233,27 @@ def _bloque_repetible_lleno(repetible: Repetible, numero: int, valores: dict) ->
     return any((valores.get(f"{repetible.prefijo}.{numero}.{c.id}") or {}).get("valor") for c in repetible.campos)
 
 
-def renderizar(tipo: str, valores: dict, anotar=lambda campo_id: "") -> str:
+# Campos que no van a ningún material: las horas solo sirven para repartir el tema en sesiones (SPEC §6).
+SOLO_PARA_LA_FICHA = ("curso.horas",)
+
+
+def _etiqueta_breve(etiqueta: str) -> str:
+    """La etiqueta sin «(obligatorio)» ni las instrucciones de la plantilla que van después de «:», «.» o «(»."""
+    return re.split(r":|\. | \(", etiqueta.replace(" (obligatorio)", ""), maxsplit=1)[0].strip()
+
+
+def _titulo_breve(titulo: str) -> str:
+    return re.split(r":| \(", titulo, maxsplit=1)[0].strip()
+
+
+def renderizar(tipo: str, valores: dict, anotar=lambda campo_id: "", para_redactor: bool = False) -> str:
     """Escribe la ficha con el texto exacto de la plantilla.
 
     valores: {id: {"valor": ...}}. `anotar` devuelve la nota de origen de un campo,
     por ejemplo «(fuente: silabo.pdf)». Con valores vacíos, el resultado es la plantilla.
+
+    Con `para_redactor` (decisión 66 d) sale la versión limpia que recibe la IA: etiquetas breves, sin notas de
+    origen, sin los textos de ayuda de la plantilla, sin campos vacíos y sin lo que no va a ningún material.
     """
     titulo, secciones = PLANTILLAS[tipo]
     lineas = [titulo]
@@ -247,17 +263,21 @@ def renderizar(tipo: str, valores: dict, anotar=lambda campo_id: "") -> str:
 
     def linea_simple(campo: Campo, campo_id: str, sangria: str):
         texto = valor(campo_id).strip()
+        if para_redactor:
+            if texto and campo_id not in SOLO_PARA_LA_FICHA:
+                lineas.append(f"{sangria}{_etiqueta_breve(campo.etiqueta)}: {texto}")
+            return
         nota = anotar(campo_id)
         lineas.append(f"{sangria}{campo.etiqueta}:" + (f" {texto}" if texto else "") + (f" {nota}" if nota else ""))
 
     for seccion in secciones:
-        lineas += ["", seccion.titulo]
+        lineas += ["", _titulo_breve(seccion.titulo) if para_redactor else seccion.titulo]
         for elemento in seccion.elementos:
             if isinstance(elemento, Repetible):
-                if elemento.encabezado:
+                if elemento.encabezado and not para_redactor:
                     lineas.append(elemento.encabezado)
                 llenos = [n for n in range(1, elemento.maximo + 1) if _bloque_repetible_lleno(elemento, n, valores)]
-                if not llenos:
+                if not llenos and not para_redactor:
                     for campo in elemento.campos:
                         lineas.append(f"{elemento.sangria}{campo.etiqueta}:")
                 for numero in llenos:
@@ -265,14 +285,21 @@ def renderizar(tipo: str, valores: dict, anotar=lambda campo_id: "") -> str:
                         etiqueta = campo.etiqueta.replace("[número]", str(numero))
                         linea_simple(Campo(campo.id, etiqueta), f"{elemento.prefijo}.{numero}.{campo.id}", elemento.sangria)
             elif elemento.tipo == "grupo":
-                lineas.append(f"- {elemento.etiqueta}:")
+                if para_redactor and not any(valor(sub.id).strip() for sub in elemento.subcampos):
+                    continue
+                lineas.append(f"- {_etiqueta_breve(elemento.etiqueta) if para_redactor else elemento.etiqueta}:")
                 for sub in elemento.subcampos:
                     linea_simple(sub, sub.id, "  ")
             elif elemento.tipo in ("lista", "lineas"):
+                renglones = _renglones(valor(elemento.id))
+                if para_redactor:
+                    if renglones and elemento.id not in SOLO_PARA_LA_FICHA:
+                        lineas.append(f"- {_etiqueta_breve(elemento.etiqueta)}:")
+                        lineas += [f"  {r}" for r in renglones]
+                    continue
                 nota = anotar(elemento.id)
                 cabeza = f"- {elemento.etiqueta}" + (":" if elemento.dos_puntos else "") + (f" {nota}" if nota else "")
                 lineas.append(cabeza)
-                renglones = _renglones(valor(elemento.id))
                 if renglones:
                     lineas += [f"  {r}" for r in renglones]
                 else:

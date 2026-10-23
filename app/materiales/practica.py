@@ -43,8 +43,8 @@ _NUMERO_DE_FORMULA = re.compile(r"Fórmula (\d+)")
 
 
 def formulas_por_numero(e) -> dict:
-    """Los recuadros de fórmula del ejercicio, también los de la mejora, por su número («Fórmula 2 · …»)."""
-    recuadros = [r for r in [*e.copiar, *e.mejora.copiar] if r.tipo == "formula"]
+    """Los recuadros de fórmula del ejercicio, por su número («Fórmula 2 · …»)."""
+    recuadros = [r for r in e.copiar if r.tipo == "formula"]
     numeros = {}
     for i, r in enumerate(recuadros, start=1):
         m = _NUMERO_DE_FORMULA.search(r.titulo)
@@ -53,10 +53,10 @@ def formulas_por_numero(e) -> dict:
 
 
 def textos_del_ejercicio(e) -> list[str]:
-    """Todo lo que el alumno lee en un ejercicio, también en «Mejora el resultado»."""
-    recuadros = [*e.copiar, *e.mejora.copiar]
+    """Todo lo que el alumno lee en un ejercicio."""
+    recuadros = list(e.copiar)
     return [e.situacion, *[p.texto for p in e.pasos], *[r.explicacion for r in recuadros],
-            *[l for r in recuadros for l in r.lineas], e.mejora.texto, *e.mejora.pasos]
+            *[l for r in recuadros for l in r.lineas]]
 
 
 # Nombres de las funciones: la guía los escribe en español; dentro del archivo, Excel los guarda en inglés.
@@ -297,7 +297,7 @@ def revisar(contenido: Laboratorio, sesion: int, ejercicios_de_la_ficha: int, fe
             problemas.append(f"FALLA · estructura · ejercicio {e.numero}: usa el resultado del ejercicio {otro.group(1)}. "
                              "Cada ejercicio funciona solo.")
         problemas += _revisar_herramienta(e, texto, permitidos)
-        for recuadro in [*e.copiar, *e.mejora.copiar]:
+        for recuadro in e.copiar:
             if recuadro.tipo == "plantilla":
                 continue                      # completar la plantilla es el tema del ejercicio
             patron = POR_LLENAR_EN_FORMULA if recuadro.tipo == "formula" else POR_LLENAR
@@ -306,7 +306,7 @@ def revisar(contenido: Laboratorio, sesion: int, ejercicios_de_la_ficha: int, fe
                 if m:
                     problemas.append(f"FALLA · por llenar · ejercicio {e.numero}: «{m.group(0)}» en lo que el alumno "
                                      f"copia («{linea[:80]}»). Lo que copia funciona tal cual.")
-        pasos = " ".join([p.texto for p in e.pasos] + list(e.mejora.pasos)).replace("**", "")
+        pasos = " ".join(p.texto for p in e.pasos).replace("**", "")
         copiadas = {int(m.group(1)) for m in COPIA_FORMULA.finditer(pasos)}
         for numero in sorted(set(formulas_por_numero(e)) - copiadas):
             problemas.append(f"FALLA · ejecución · ejercicio {e.numero}: ningún paso dice dónde se copia la fórmula "
@@ -465,7 +465,7 @@ def avisos_de_listas(contenido: Laboratorio, origen: OrigenDeOpciones | None = N
     con_listas = {a.nombre for a in contenido.archivos if any(h.listas for h in a.hojas)}
     for e in contenido.ejercicios:
         archivos = [n for n in e.archivos if n in con_listas]
-        pasos = [p.texto for p in e.pasos] + list(e.mejora.pasos)
+        pasos = [p.texto for p in e.pasos]
         if archivos and not any(MENCIONA_LA_LISTA.search(p) for p in pasos):
             avisos.append((f"Ejercicio {e.numero} · {e.titulo}",
                            f"Ejercicio {e.numero}: «{archivos[0]}» tiene una lista de opciones y ningún paso dice que el "
@@ -483,7 +483,7 @@ def _revisar_herramienta(e, texto: str, permitidos: frozenset[str]) -> list[str]
     """PLAN.md §0, decisión 36: un prompt solo en un curso de IA y una fórmula solo en un curso de Excel. Los
     ejercicios practican el tema de la sesión; la herramienta sale del tema del curso, no de un modelo."""
     problemas = []
-    for tipo in sorted({r.tipo for r in [*e.copiar, *e.mejora.copiar]} - permitidos):
+    for tipo in sorted({r.tipo for r in e.copiar} - permitidos):
         problemas.append(f"FALLA · herramienta · ejercicio {e.numero}: trae un recuadro de {NOMBRE_DEL_RECUADRO[tipo]} y "
                          f"el curso no usa {'IA' if tipo == 'prompt' else 'Excel'} (ficha del curso, «Herramienta de los "
                          "ejercicios»). El alumno hace la acción de la ficha en su archivo de práctica.")

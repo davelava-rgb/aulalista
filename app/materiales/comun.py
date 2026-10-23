@@ -397,7 +397,8 @@ def filas_de_revision(errores: list[revision.Error], descartados: list[dict], se
 
 
 def filas_de_decisiones(decisiones: list, seccion: str) -> list[dict]:
-    """Filas de la hoja Hallazgos con lo que anotó el redactor. Las notas solo quedan aquí (propuesta 5)."""
+    """Filas de la hoja Hallazgos con lo que anotó el redactor. El tipo «nota» ya no se pide (decisión 66 e); se
+    conserva para leer los contenidos anteriores."""
     resolucion = {"sin fuente": "Pendiente: decides tú.", "decisión": "En «Qué decidí por mi cuenta».",
                   "nota": "Informativo."}
     return [{"nivel": "REDACTOR", "seccion": seccion, "oracion": "", "regla": f"redactor: {d.tipo}",

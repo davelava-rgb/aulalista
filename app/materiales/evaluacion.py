@@ -337,8 +337,8 @@ def _aprobado(modulo, carpeta_curso: Path, sesion: int) -> dict | None:
 def _contexto(carpeta_curso: Path, sesion: int) -> str:
     """Las reglas, las fichas, las fuentes y lo ya aprobado de la sesión: la evaluación solo evalúa lo que enseñaron
     la lectura y el laboratorio, y no repite sus ejercicios ni las preguntas de la actividad web."""
-    ficha_curso = almacen.ruta_ficha(carpeta_curso, "curso", extension=".md").read_text(encoding="utf-8")
-    ficha_sesion = almacen.ruta_ficha(carpeta_curso, "sesion", sesion, ".md").read_text(encoding="utf-8")
+    ficha_curso = almacen.texto_para_materiales(carpeta_curso, "curso")
+    ficha_sesion = almacen.texto_para_materiales(carpeta_curso, "sesion", sesion)
     fuentes = verificacion.fuentes_utilizables(carpeta_curso)
     partes = [
         "REGLAS DE LA SKILL (son obligatorias):",
@@ -405,7 +405,8 @@ CÓMO ENTREGAR LA EVALUACIÓN (PLAN.md §0, decisión 64)
 - Un programa resuelve cada pregunta como un alumno, sin la clave, y compara lo que sale con la clave.
 - pasajes: los pasajes de las fuentes que usaste: «oracion» que sostiene, la fuente, la ubicación y en «texto» el
   pasaje copiado, de 40 palabras como máximo.
-- decisiones: una entrada por punto, con «texto» y «tipo» («sin fuente», «decisión» o «nota»).
+- decisiones: una entrada por punto, con «texto» y «tipo» («sin fuente» o «decisión»). Lo que solo describe tu
+  trabajo no se anota.
 """
 
 

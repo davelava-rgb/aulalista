@@ -25,12 +25,9 @@ from tests.unidad.test_lectura import LIMPIA, SIN_ERRORES, error, revision, sesi
 
 cliente = TestClient(servidor.app)
 
-NOTAS = {"destacar": "Que el equipo ve el trabajo.", "preguntar": "¿Qué ven ustedes en su tablero?"}
-
-
 def diapositiva(bloque, titulo, tipo="frases", frases=None, **otros):
     return {"bloque": bloque, "titulo": titulo, "tipo": tipo, "frases": frases or [], "columnas": [],
-            "tabla": None, "grafico": None, "notas": NOTAS, **otros}
+            "tabla": None, "grafico": None, **otros}
 
 
 def elemento(texto, detalle="", hijos=None, valor=None):
@@ -43,8 +40,7 @@ def grafico(*elementos, centro="", ejes=None):
 
 MANIFIESTO, PILARES = "El Manifiesto Ágil", "Pilares de Scrum"
 LIMPIAS = {
-    "portada": {"notas": NOTAS},
-    "idea_central": {"frases": ["Scrum ayuda a un equipo a trabajar con lo que observa."], "notas": NOTAS},
+    "idea_central": {"frases": ["Scrum ayuda a un equipo a trabajar con lo que observa."]},
     "diapositivas": [
         diapositiva(MANIFIESTO, "El Manifiesto Ágil", "tarjetas", frases=["El Manifiesto Ágil tiene cuatro aspectos."],
                     grafico=grafico(elemento("Personas"), elemento("Producto"))),
@@ -70,12 +66,12 @@ LIMPIAS = {
                     grafico=grafico(elemento("Transparencia"), elemento("Inspección"), elemento("Adaptación"))),
     ],
     "aplicalo": {"frases": ["Usa estas dos preguntas al cerrar cada semana."],
-                 "plantilla": ["Qué observamos esta semana.", "Qué cambiamos la próxima semana."], "notas": NOTAS},
-    "cuidado": {"riesgos": ["Revisar el avance sin cambiar nada después."], "notas": NOTAS},
-    "cierre": {"frase": "Scrum ayuda a un equipo a trabajar con lo que observa.", "notas": NOTAS},
+                 "plantilla": ["Qué observamos esta semana.", "Qué cambiamos la próxima semana."]},
+    "cuidado": {"riesgos": ["Revisar el avance sin cambiar nada después."]},
+    "cierre": {"frase": "Scrum ayuda a un equipo a trabajar con lo que observa."},
     "pasajes": [{"oracion": "Los pilares de Scrum son tres.", "fuente": diapositivas.FUENTE_LECTURA,
                  "ubicacion": PILARES, "texto": "Los pilares de Scrum son tres."}],
-    "decisiones": [{"texto": "Repetí una frase de cierre en cada bloque.", "tipo": "nota"}],
+    "decisiones": [{"texto": "Dividí el ejemplo del tablero en dos diapositivas.", "tipo": "decisión"}],
 }
 
 
@@ -129,10 +125,19 @@ def test_16_9_con_portada_idea_central_conceptos_y_cierre(presentacion):
     assert not any(t in ("Preguntas", "Gracias") for t in titulos)
 
 
-def test_notas_del_profesor_en_cada_diapositiva(presentacion):
+def test_sin_notas_del_profesor(presentacion):
+    """Decisión 66 a: las diapositivas no llevan notas del profesor."""
     for s in Presentation(presentacion[0]).slides:
-        notas = s.notes_slide.notes_text_frame.text
-        assert "Qué destacar:" in notas and "Qué preguntar al grupo:" in notas
+        assert not s.has_notes_slide or not s.notes_slide.notes_text_frame.text.strip()
+
+
+def test_el_esquema_no_pide_notas_ni_portada():
+    import json
+    from app.materiales.contenido import ESQUEMA_DIAPOSITIVAS
+    assert "notas" not in json.dumps(ESQUEMA_DIAPOSITIVAS)
+    assert "portada" not in ESQUEMA_DIAPOSITIVAS["properties"]
+    assert "- notas:" not in diapositivas.instrucciones_de_formato(True)
+    assert "Sin notas del profesor." in diapositivas.instrucciones_de_formato(True)
 
 
 def test_letra_legible_a_distancia(presentacion):
@@ -190,9 +195,13 @@ def lectura_limpia():
     return Lectura.model_validate(LIMPIA)
 
 
-def test_cuenta_las_cinco_fijas_y_pide_de_15_a_19():
-    _, problemas = diapositivas._validar(con(diapositivas=LIMPIAS["diapositivas"][:9]), lectura_limpia())
-    assert any("hay 14 con las 5 fijas; deben ser de 15 a 19" in p for p in problemas)
+def test_la_cantidad_la_da_el_contenido():
+    """Decisión 66 c: sin cantidad fija. Nueve conceptos (14 con las fijas) o veinte valen igual."""
+    contenido, problemas = diapositivas._validar(con(diapositivas=LIMPIAS["diapositivas"][:9]), lectura_limpia())
+    assert problemas == [] and contenido.total == 14
+    muchas = [dict(d, titulo=f"{d['titulo']} {i}") for i in range(2) for d in LIMPIAS["diapositivas"]]
+    contenido, problemas = diapositivas._validar(con(diapositivas=muchas), lectura_limpia())
+    assert not any("diapositivas:" in p for p in problemas)
 
 
 def test_sigue_el_orden_de_la_lectura():
@@ -283,13 +292,6 @@ def test_un_desborde_se_corrige_solo_en_su_diapositiva(con_lectura):
     hoja = openpyxl.load_workbook(diapositivas.archivos(con_lectura, 1)["excel"])["Hallazgos"]
     reglas = [(f[3].value, f[5].value) for f in hoja.iter_rows(min_row=2)]
     assert any(r == "desborde" and "Resuelto" in (c or "") for r, c in reglas)
-
-
-def test_menos_de_15_diapositivas_se_corrige(con_lectura):
-    cortas = con(diapositivas=LIMPIAS["diapositivas"][:9])
-    material, consulta = generar(con_lectura, cortas, {"diapositivas": LIMPIAS, "explicaciones": [], "datos_nuevos": []})
-    assert material["estado"] == "verificada"
-    assert "deben ser de 15 a 19" in consulta.llamadas[1]["prompt"]
 
 
 def test_lo_que_no_esta_en_la_lectura_se_corrige_sin_tocar_el_orden(con_lectura):
@@ -469,7 +471,7 @@ def test_la_grafica_solo_usa_cifras_de_la_lectura():
 
 
 def test_la_frase_de_cierre_sale_de_la_idea_central():
-    _, problemas = diapositivas._validar(con(cierre={"frase": "¡Gracias por su atención!", "notas": NOTAS}),
+    _, problemas = diapositivas._validar(con(cierre={"frase": "¡Gracias por su atención!"}),
                                          lectura_limpia())
     assert any("una de las frases de la idea central" in p for p in problemas)
 
@@ -535,9 +537,8 @@ def test_solo_lo_que_nombra_una_diapositiva_se_corrige_por_diapositivas():
     assert nombradas(["DISEÑO · diapositiva 4 («Y»): cargada. Propuesta: tarjetas."], LIMPIAS) == {4}
     frase = "FALLA · lenguaje de IA · «Es importante destacar que…»: dice «es importante destacar»"
     assert nombradas([desborde, frase], LIMPIAS) == {8}
-    # Del documento entero: cantidad, orden, tablas y recursos en total.
-    for problema in ["FALLA · estructura · diapositivas: hay 14 con las 5 fijas; deben ser de 15 a 19.",
-                     "FALLA · estructura · tablas: hay 3 (diapositivas 4, 5, 6); el máximo es 2.",
+    # Del documento entero: orden, tablas y recursos en total.
+    for problema in ["FALLA · estructura · tablas: hay 3 (diapositivas 4, 5, 6); el máximo es 2.",
                      "FALLA · estructura · diapositiva 9 («Z»): no sigue el orden de la lectura.",
                      "FALLA · estructura · recursos gráficos: 3 de 10 diapositivas de concepto son un diagrama."]:
         assert nombradas([desborde, problema], LIMPIAS) is None, problema
@@ -548,8 +549,8 @@ def test_la_correccion_por_diapositivas_no_toca_las_demas():
     otra = diapositiva(PILARES, "Segunda mitad", "frases", frases=["Cada uno se usa cada día."])
     respuesta = solo(8, nueva, otra)
     respuesta["reemplazos"].append({"numero": 3, "diapositivas": [nueva]})        # no está en la lista: se ignora
-    respuesta["fijas"]["cierre"] = {"frase": "Otra", "notas": NOTAS}             # no está en la lista: se ignora
-    respuesta["fijas"]["idea_central"] = {"frases": ["Idea nueva."], "notas": NOTAS}
+    respuesta["fijas"]["cierre"] = {"frase": "Otra"}                             # no está en la lista: se ignora
+    respuesta["fijas"]["idea_central"] = {"frases": ["Idea nueva."]}
     datos, no_encontradas = diapositivas.aplicar_por_diapositivas(LIMPIAS, respuesta, {2, 8})
     assert not no_encontradas
     assert [d["titulo"] for d in datos["diapositivas"]][5:7] == ["Primera mitad", "Segunda mitad"]
@@ -558,9 +559,11 @@ def test_la_correccion_por_diapositivas_no_toca_las_demas():
     assert datos["idea_central"]["frases"] == ["Idea nueva."] and datos["cierre"] == LIMPIAS["cierre"]
 
 
-def test_la_cantidad_sigue_con_la_correccion_completa(con_lectura):
-    cortas = con(diapositivas=LIMPIAS["diapositivas"][:9])
-    _, consulta = generar(con_lectura, cortas, {"diapositivas": LIMPIAS, "explicaciones": [], "datos_nuevos": []})
+def test_el_orden_sigue_con_la_correccion_completa(con_lectura):
+    """Un problema del documento entero (el orden de la lectura) va a la corrección completa. La cantidad ya no es
+    un problema (decisión 66 c)."""
+    desordenadas = con(diapositivas=LIMPIAS["diapositivas"][5:] + LIMPIAS["diapositivas"][:5])
+    _, consulta = generar(con_lectura, desordenadas, {"diapositivas": LIMPIAS, "explicaciones": [], "datos_nuevos": []})
     assert consulta.llamadas[1]["options"].output_format["schema"] == diapositivas.ESQUEMA_CORRECCIONES
     assert "Llena solo «completa»." in consulta.llamadas[1]["prompt"]
 

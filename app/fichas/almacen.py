@@ -223,16 +223,12 @@ def guardar(carpeta_curso: Path, tipo: str, sesion: int | None, ficha: dict, mot
     return ruta
 
 
-# Las horas solo sirven para repartir el tema en sesiones. Ningún material muestra tiempos (SPEC §6).
-SOLO_PARA_LA_FICHA = ("- Horas del curso:",)
-
-
 def texto_para_materiales(carpeta_curso: Path, tipo: str, sesion: int | None = None) -> str:
-    """El .md de la ficha que recibe el redactor, sin los datos que no van a ningún material."""
-    texto = ruta_ficha(carpeta_curso, tipo, sesion, ".md").read_text(encoding="utf-8")
-    # La marca «(propuesto)» del .md es para el profesor: el redactor no la recibe.
-    return "".join(MARCA_PROPUESTO.sub("", l) for l in texto.splitlines(keepends=True)
-                   if not l.startswith(SOLO_PARA_LA_FICHA))
+    """La ficha que recibe el redactor (decisión 66 d): solo los datos, con etiquetas breves. Sin «(propuesto)»,
+    sin «(fuente: …)», sin los textos de ayuda de la plantilla, sin campos vacíos y sin las horas del curso, que
+    no van a ningún material. El .md completo, con sus marcas, es para el profesor."""
+    ficha = cargar(carpeta_curso, tipo, sesion)
+    return plantillas.renderizar(tipo, ficha["campos"], para_redactor=True)
 
 
 def _slug(texto: str) -> str:

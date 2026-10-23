@@ -4,7 +4,7 @@ PLAN.md §0, decisión 35, y «Lo que no se puede construir como está escrito»
 - Fórmulas: un programa sigue los pasos tal cual. Escribe los textos y copia cada fórmula en la celda que dice el
   paso, la copia hacia abajo si el paso lo pide, y Excel calcula el archivo. Un valor de error es una FALLA.
 - Prompts: una conversación nueva con Claude, sin herramientas. El texto de cada archivo adjunto va dentro del
-  mensaje. Después van la respuesta exacta del alumno, si la ficha la trae, y los prompts de «Mejora el resultado».
+  mensaje. Después va la respuesta exacta del alumno, si la ficha la trae.
 - Lo que salió se compara con la respuesta correcta de la ficha. Cada diferencia trae un trozo copiado de la ficha
   y otro de lo que salió; un programa los busca y descarta la diferencia sin prueba. Lo que queda es pendiente.
 - A mano (PLAN.md §0, decisión 36): un ejercicio sin prompt ni fórmula lo hace Claude como alumno, en una
@@ -77,7 +77,7 @@ class Ejecucion:
                 and not (self.fallas or self.diferencias))
 
     def salida(self) -> str:
-        """Lo que salió: los valores calculados y la última respuesta de la herramienta antes de la mejora."""
+        """Lo que salió: los valores calculados y la última respuesta de la herramienta."""
         partes = [f"{c['archivo']} · hoja {c['hoja']} · celda {c['celda']}: {c['valor']}" for c in self.celdas]
         respuestas = [t.texto for t in self.conversacion if t.rol in ("herramienta", "resultado")]
         return "\n".join(partes + respuestas)
@@ -115,7 +115,7 @@ def _formulas(e: Ejercicio, carpeta_practica: Path, carpeta: Path, recalcular) -
     archivo = libros_[0]
     hoja = libros[archivo].worksheets[0].title
     escritas, fallas = [], []
-    for texto in [p.texto for p in e.pasos] + list(e.mejora.pasos):
+    for texto in [p.texto for p in e.pasos]:
         limpio = texto.replace("**", "")
         mencionado = _ultima_mencion(limpio, libros_)
         if mencionado and mencionado != archivo:
@@ -202,11 +202,10 @@ async def _conversar(e: Ejercicio, carpeta_practica: Path, respuesta_alumno: str
     mensajes = [primer_mensaje(prompts[0], adjuntos), *prompts[1:]]
     if respuesta_alumno:
         mensajes.insert(1, respuesta_alumno)
-    mejora = ["\n".join(r.lineas) for r in e.mejora.copiar if r.tipo == "prompt"]
     turnos: list[Turno] = []
-    for i, mensaje in enumerate(mensajes + mejora):
-        etapa = f"ejecución ejercicio {e.numero}" + (" · mejora" if i >= len(mensajes) else "")
-        respuesta = await agente.conversar(con_historial(turnos, mensaje), tarea="ejecucion", etapa=etapa, **llamada)
+    for mensaje in mensajes:
+        respuesta = await agente.conversar(con_historial(turnos, mensaje), tarea="ejecucion",
+                                           etapa=f"ejecución ejercicio {e.numero}", **llamada)
         turnos += [Turno("alumno", mensaje), Turno("herramienta", respuesta)]
     return turnos
 

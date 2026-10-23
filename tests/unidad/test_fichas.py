@@ -417,3 +417,34 @@ def test_la_propuesta_decide_la_herramienta_por_el_tema_del_curso(curso):
     almacen.guardar(curso, "curso", None, ficha)
     pedido = flujo.pedido_de_propuesta(curso, "sesion", 1, almacen.cargar(curso, "sesion", 1))
     assert "sin fórmulas ni prompts" in pedido and "Deja vacío «Si la herramienta debe preguntar algo»" in pedido
+
+
+# ---------- Decisión 66 d: la ficha que recibe el redactor va limpia ----------
+
+def test_el_redactor_recibe_la_ficha_limpia(curso):
+    ficha = datos.ficha("sesion", datos.SESION)
+    ficha["campos"]["sesion.alcance"] = {"valor": "Pilares", "origen": "silabo.pdf", "estado": "propuesto"}
+    ficha["campos"]["sesion.ya_vieron"] = {"valor": "", "origen": "", "estado": "falta definir"}
+    ficha["campos"]["sesion.referencia"] = {"valor": "manual.pdf: páginas 5 a 20", "origen": "", "estado": ""}
+    almacen.guardar(curso, "sesion", 1, ficha)
+    texto = almacen.texto_para_materiales(curso, "sesion", 1)
+    assert "- Alcance: Pilares\n" in texto                        # etiqueta breve, sin «(obligatorio)» ni origen
+    assert "(fuente:" not in texto and "(propuesto)" not in texto and "Falta definir" not in texto
+    assert "Lo que los alumnos ya vieron" not in texto               # un campo vacío no se escribe
+    assert "- Material de referencia:\n  manual.pdf: páginas 5 a 20\n" in texto   # sin el texto de ayuda
+    assert "por ejemplo «manual.pdf" not in texto and "(vacío:" not in texto
+    assert "4. Laboratorio\n" in texto and "repite este bloque" not in texto
+    assert "- Ejercicio 3 · Área: Recursos Humanos\n" in texto
+    assert "- Ejercicio 4 · Área" not in texto
+    # El .md del profesor sigue completo, con sus marcas y sus ayudas.
+    md = almacen.ruta_ficha(curso, "sesion", 1, ".md").read_text(encoding="utf-8")
+    assert "(fuente: silabo.pdf)" in md and "repite este bloque" in md
+
+
+def test_las_horas_del_curso_no_llegan_al_redactor(curso):
+    ficha = datos.ficha("curso", datos.CURSO)
+    ficha["campos"]["curso.horas"] = {"valor": "16", "origen": "", "estado": ""}
+    almacen.guardar(curso, "curso", None, ficha)
+    texto = almacen.texto_para_materiales(curso, "curso")
+    assert "Horas del curso" not in texto
+    assert "- Nombre del curso:" in texto

@@ -1,7 +1,7 @@
 """Generador de las diapositivas de AulaLista, con el diseño común de la skill.
 
 Diapositivas (SKILL.md, «Material 2»): PowerPoint 16:9, una idea por diapositiva, frases cortas,
-ejemplos en recuadros legibles a distancia y notas del profesor en cada diapositiva.
+ejemplos en recuadros legibles a distancia. Sin notas del profesor (decisión 66 a).
 Diseño común: la identidad visual de la ficha, tres colores como máximo más los fondos de recuadro, y
 tablas con encabezado en el color principal, filas alternas en gris muy claro y sin bordes verticales.
 En las diapositivas, los recuadros son tarjetas con encabezado de color, sin borde izquierdo; cada diapositiva
@@ -24,7 +24,7 @@ from pptx.oxml.ns import qn
 from pptx.util import Cm, Emu, Pt
 
 from app.materiales import estilo
-from app.materiales.contenido import Diapositiva, Diapositivas, Grafico, Notas, Tabla
+from app.materiales.contenido import Diapositiva, Diapositivas, Grafico, Tabla
 from app.materiales.docx import Portada, lineas_de_contacto
 from app.materiales.estilo import Identidad
 
@@ -158,10 +158,6 @@ def _titulo(diapositiva, texto: str, identidad: Identidad, bloque: str = "", ava
     tamano = TAMANO_TITULO if _cabe([texto], CUERPO_ANCHO, TITULO_ALTO, TAMANO_TITULO) else 26
     _letra(corrida, identidad, tamano, estilo.para_texto(identidad.principal), negrita=True)
     p.alignment = PP_ALIGN.LEFT
-
-
-def _notas(diapositiva, notas: Notas) -> None:
-    diapositiva.notes_slide.notes_text_frame.text = notas.texto()
 
 
 MARGEN_RECUADRO_LADO, MARGEN_RECUADRO_ALTO = Cm(0.6), Cm(0.4)
@@ -337,7 +333,7 @@ def _logo(diapositiva, identidad: Identidad, ancho_panel: int) -> bool:
     return True
 
 
-def _portada(presentacion, identidad: Identidad, portada: Portada, notas: Notas) -> None:
+def _portada(presentacion, identidad: Identidad, portada: Portada) -> None:
     diapositiva, ancho_panel = _panel(presentacion, identidad)
     color = _sobre(identidad.principal, identidad)
     centrado = identidad.estilo.portada_centrada
@@ -353,10 +349,9 @@ def _portada(presentacion, identidad: Identidad, portada: Portada, notas: Notas)
             [(portada.sesion, tamano_que_cabe([portada.sesion], ancho, Cm(4.2), base=28), color, False)],
             identidad, centrado=centrado)
     _docente_y_contacto(diapositiva, identidad, portada, ancho_panel, Cm(7.6) if logo_a_la_derecha else Cm(5.4))
-    _notas(diapositiva, notas)
 
 
-def _cierre(presentacion, identidad: Identidad, portada: Portada, frase: str, notas: Notas) -> None:
+def _cierre(presentacion, identidad: Identidad, portada: Portada, frase: str) -> None:
     """La idea que se llevan, con el docente y el contacto (decisión 29)."""
     diapositiva, ancho_panel = _panel(presentacion, identidad)
     color = _sobre(identidad.principal, identidad)
@@ -369,7 +364,6 @@ def _cierre(presentacion, identidad: Identidad, portada: Portada, frase: str, no
             anclaje=MSO_ANCHOR.MIDDLE)
     logo_a_la_derecha = _logo(diapositiva, identidad, ancho_panel)
     _docente_y_contacto(diapositiva, identidad, portada, ancho_panel, Cm(7.6) if logo_a_la_derecha else Cm(5.4))
-    _notas(diapositiva, notas)
 
 
 # ---------- Recursos gráficos (decisión 29) ----------
@@ -685,7 +679,7 @@ def _frases(diapositiva, identidad: Identidad, frases: list[str], izquierda, arr
         _filas_con_marca(diapositiva, identidad, frases, izquierda, arriba, ancho, alto)
 
 
-def _idea_central(presentacion, identidad: Identidad, frases: list[str], notas: Notas) -> None:
+def _idea_central(presentacion, identidad: Identidad, frases: list[str]) -> None:
     """La idea central sobre el fondo de recuadro, en letra grande."""
     diapositiva = _nueva(presentacion)
     fondo = _rectangulo(diapositiva, MSO_SHAPE.RECTANGLE, 0, 0, ANCHO, ALTO, identidad.fondo)
@@ -704,7 +698,6 @@ def _idea_central(presentacion, identidad: Identidad, frases: list[str], notas: 
     _rectangulo(diapositiva, MSO_SHAPE.RECTANGLE, MARGEN, Cm(3.4), Cm(3.5), Cm(0.25), identidad.acento)
     _lineas(diapositiva, MARGEN, Cm(4.2), CUERPO_ANCHO - Cm(3), Cm(12), [(texto, tamano,
             estilo.para_texto(identidad.principal, identidad.fondo), True)], identidad, anclaje=MSO_ANCHOR.MIDDLE)
-    _notas(diapositiva, notas)
 
 
 def _cifras(diapositiva, identidad: Identidad, g: Grafico, izquierda, arriba, ancho, alto) -> None:
@@ -788,14 +781,13 @@ def _de_concepto(presentacion, identidad: Identidad, d: Diapositiva, avance: tup
         if d.tabla.titulo:
             arriba, alto = _titulo_de_tabla(diapositiva, identidad, d.tabla.titulo, arriba, alto)
         tabla(diapositiva, identidad, d.tabla, arriba, alto)
-    _notas(diapositiva, d.notas)
 
 
 def generar_diapositivas(contenido: Diapositivas, identidad: Identidad, portada: Portada, destino: Path) -> Path:
     presentacion = Presentation()
     presentacion.slide_width, presentacion.slide_height = ANCHO, ALTO
-    _portada(presentacion, identidad, portada, contenido.portada.notas)
-    _idea_central(presentacion, identidad, contenido.idea_central.frases, contenido.idea_central.notas)
+    _portada(presentacion, identidad, portada)
+    _idea_central(presentacion, identidad, contenido.idea_central.frases)
     bloques = list(dict.fromkeys(d.bloque for d in contenido.diapositivas))
     for d in contenido.diapositivas:
         _de_concepto(presentacion, identidad, d, (bloques.index(d.bloque), len(bloques)))
@@ -811,15 +803,13 @@ def generar_diapositivas(contenido: Diapositivas, identidad: Identidad, portada:
         arriba, alto = arriba + alto_frases + Cm(0.3), alto - alto_frases - Cm(0.3)
     _filas_con_marca(diapositiva, identidad, aplicalo.plantilla, MARGEN, arriba, CUERPO_ANCHO, alto, marca="#",
                      color=identidad.principal, base=24)
-    _notas(diapositiva, aplicalo.notas)
 
     diapositiva = _nueva(presentacion)
     _titulo(diapositiva, "Cuidado con", identidad, "Riesgos")
     _filas_con_marca(diapositiva, identidad, contenido.cuidado.riesgos, MARGEN, CUERPO_ARRIBA, CUERPO_ANCHO, CUERPO_ALTO,
                      marca="!", color=identidad.advertencia)
-    _notas(diapositiva, contenido.cuidado.notas)
 
-    _cierre(presentacion, identidad, portada, contenido.cierre.frase, contenido.cierre.notas)
+    _cierre(presentacion, identidad, portada, contenido.cierre.frase)
 
     destino.parent.mkdir(parents=True, exist_ok=True)
     presentacion.save(destino)

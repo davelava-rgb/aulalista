@@ -367,7 +367,7 @@ Las decisiones pendientes: los errores que la corrección no cerró y lo que enc
 3. "Qué validé": la última línea que imprimió el programa, con el número de oraciones, fallas y avisos. Luego, cuántos errores encontró la revisión del contenido, cuántos se corrigieron y cuántos quedaron pendientes. Si se pidió, cuántos encontró el revisor independiente. Adjunta el archivo de verificación.
 4. "Decisiones pendientes": solo si quedó alguna. Si no, omite este punto. Incluye cada afirmación sobre el tema que no sale de ninguna fuente ni ficha (una definición, una deducción o una cifra propia): el profesor decide si queda.
 5. "Qué no pude probar": lo que quedó sin verificar y por qué.
-6. "Qué decidí por mi cuenta": solo lo que el profesor debe revisar antes de aprobar: lo que se aparta de las fichas o de las fuentes, o lo que las fichas no definían y cambia lo que lee el alumno. Las notas que solo describen el trabajo van a la hoja Hallazgos del archivo de verificación.
+6. "Qué decidí por mi cuenta": solo lo que el profesor debe revisar antes de aprobar: lo que se aparta de las fichas o de las fuentes, o lo que las fichas no definían y cambia lo que lee el alumno. Lo que solo describe el trabajo no se anota.
 7. Una sola pregunta: "¿Apruebas este material para pasar a la siguiente etapa?".
 
 ## Plantilla · Ficha del curso

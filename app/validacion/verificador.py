@@ -32,11 +32,10 @@ verificar = _cargar()
 # Límites de cada material (SPEC §4 y SKILL.md). Los demás se agregan en sus etapas.
 LIMITES = {
     "Lectura": {"paginas_max": 6},
-    # De 15 a 19: la diapositiva de cierre se suma a las de la skill (PLAN.md §0, decisión 29).
-    "Diapositivas": {"diapositivas_min": 15, "diapositivas_max": 19, "notas_en_todas": True},
-    # SKILL.md, «Material 3»: de 3 a 5 ejercicios y «Mejora el resultado» siempre con «(opcional)».
-    "Laboratorio": {"conteos": [{"nombre": "ejercicios", "patron": r"^Ejercicio \d+", "min": 3, "max": 5}],
-                    "titulos_con": [{"patron": "^Mejora el resultado", "debe_contener": "(opcional)"}]},
+    # Sin cantidad fija ni notas desde la decisión 66: la cantidad la da el contenido, una por concepto.
+    "Diapositivas": {},
+    # SKILL.md, «Material 3»: de 3 a 5 ejercicios. Sin «Mejora el resultado» desde la decisión 66 b.
+    "Laboratorio": {"conteos": [{"nombre": "ejercicios", "patron": r"^Ejercicio \d+", "min": 3, "max": 5}]},
     # La cantidad de pasos y las preguntas las revisa app/materiales/actividad.py: no son conteos de texto.
     "Actividad web": {},
     # La cantidad y el tamaño de las preguntas los revisa app/materiales/evaluacion.py (decisión 64 c).

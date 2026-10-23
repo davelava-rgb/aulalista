@@ -20,7 +20,6 @@ module.exports = async (h) => {
   const C = h.colores, c = h.contenido;
   const texto = (s, t, x, y, w, alto, o = {}) => s.addText(t, { x, y, w, h: alto, fontFace: h.fuente, fontSize: 16,
     color: C.texto, isTextBox: true, valign: "top", ...o });
-  const notas = (s, n) => s.addNotes(`Qué destacar: ${n.destacar}\nQué preguntar al grupo: ${n.preguntar}`);
   const icono = await h.icono("FaDatabase", C.blanco);
   const visibles = (d) => [...d.frases, ...d.columnas.flatMap((x) => [x.titulo, ...x.frases]),
     ...(d.tabla ? [d.tabla.titulo, ...d.tabla.encabezados, ...d.tabla.filas.flat()] : []),
@@ -33,12 +32,10 @@ module.exports = async (h) => {
   texto(s, h.portada.sesion, 0.5, 2.6, 6, 0.6, { color: C.blanco });
   texto(s, [h.portada.docente, ...h.portada.contacto].map((p) => ({ text: p, options: { breakLine: true } })), 0.5, 3.4, 6, 1.2, { color: C.blanco });
   s.addImage({ data: icono, x: 7.5, y: 1.8, w: 1.2, h: 1.2 });
-  notas(s, c.portada.notas);
 
   s = h.pres.addSlide();
   texto(s, "Idea central", 0.5, 0.4, 9, 0.6, { fontSize: 24, bold: true, color: C.principal });
   texto(s, c.idea_central.frases.join(" "), 0.5, 1.4, 9, 2);
-  notas(s, c.idea_central.notas);
 
   for (const [i, d] of c.diapositivas.entries()) {
     s = h.pres.addSlide();
@@ -47,18 +44,16 @@ module.exports = async (h) => {
     texto(s, d.titulo, 0.5, 0.6, 9, 0.7, { fontSize: 24, bold: true, color: C.principal });
     const partes = visibles(d);
     texto(s, partes.map((p) => ({ text: p, options: { breakLine: true } })), 0.5, 1.5, 9, 3.5);
-    notas(s, d.notas);
+    // pie
   }
   for (const [titulo, parte, lineas] of [["Aplícalo así", c.aplicalo, [...c.aplicalo.frases, ...c.aplicalo.plantilla]],
                                           ["Cuidado con", c.cuidado, c.cuidado.riesgos]]) {
     s = h.pres.addSlide();
     texto(s, titulo, 0.5, 0.4, 9, 0.7, { fontSize: 24, bold: true, color: C.principal });
     texto(s, lineas.map((p) => ({ text: p, options: { breakLine: true } })), 0.5, 1.4, 9, 3);
-    notas(s, parte.notas);
   }
   s = h.pres.addSlide();
   texto(s, c.cierre.frase, 0.5, 1.5, 9, 1.5, { fontSize: 28, bold: true, color: C.principal });
-  notas(s, c.cierre.notas);
 };
 """
 
@@ -69,7 +64,6 @@ COMUN = r"""
   const C = h.colores, c = h.contenido;
   const texto = (s, t, x, y, w, alto, o = {}) => s.addText(t, { x, y, w, h: alto, fontFace: h.fuente, fontSize: 16,
     color: C.texto, isTextBox: true, valign: "top", ...o });
-  const notas = (s, n) => s.addNotes(`Qué destacar: ${n.destacar}\nQué preguntar al grupo: ${n.preguntar}`);
   const visibles = (d) => [...d.frases, ...d.columnas.flatMap((x) => [x.titulo, ...x.frases]),
     ...(d.tabla ? [d.tabla.titulo, ...d.tabla.encabezados, ...d.tabla.filas.flat()] : []),
     ...(d.grafico ? [d.grafico.centro, ...d.grafico.ejes,
@@ -84,28 +78,27 @@ COMUN = r"""
       texto(s, h.portada.sesion, 0.5, 2.6, 6, 0.6, { color: C.blanco });
       texto(s, [h.portada.docente, ...h.portada.contacto].map((p) => ({ text: p, options: { breakLine: true } })), 0.5, 3.4, 6, 1.2, { color: C.blanco });
       s.addImage({ data: await h.icono("FaDatabase", C.blanco), x: 7.5, y: 1.8, w: 1.2, h: 1.2 });
-      return notas(s, c.portada.notas);
+      return;
     }
     if (n === 2) {
       texto(s, "Idea central", 0.5, 0.4, 9, 0.6, { fontSize: 24, bold: true, color: C.principal });
       texto(s, c.idea_central.frases.join(" "), 0.5, 1.4, 9, 2);
-      return notas(s, c.idea_central.notas);
+      return;
     }
     if (n <= k + 2) {
       const d = c.diapositivas[n - 3];
       texto(s, d.titulo, 0.5, 0.6, 9, 0.7, { fontSize: 24, bold: true, color: C.principal });
       lista(s, visibles(d), 1.5);
-      return notas(s, d.notas);
+      return;
     }
     if (n === k + 3 || n === k + 4) {
       const [titulo, parte, lineas] = n === k + 3 ? ["Aplícalo así", c.aplicalo, [...c.aplicalo.frases, ...c.aplicalo.plantilla]]
                                                    : ["Cuidado con", c.cuidado, c.cuidado.riesgos];
       texto(s, titulo, 0.5, 0.4, 9, 0.7, { fontSize: 24, bold: true, color: C.principal });
       lista(s, lineas, 1.4);
-      return notas(s, parte.notas);
+      return;
     }
     texto(s, c.cierre.frase, 0.5, 1.5, 9, 1.5, { fontSize: 28, bold: true, color: C.principal });
-    notas(s, c.cierre.notas);
   };
 """
 
@@ -221,18 +214,15 @@ def test_la_guia_y_los_datos_van_en_el_mensaje_de_sistema_y_no_en_los_pedidos(tm
         assert "ERES EL DISEÑADOR" not in pedido and contenido.cierre.frase not in pedido
 
 
-def test_letra_chica_colores_ajenos_y_notas_se_arreglan_sin_ia(tmp_path, contenido):
-    malo = (DISENO
-            .replace('texto(s, h.portada.sesion, 0.5, 2.6, 6, 0.6, { color: C.blanco });',
-                     'texto(s, h.portada.sesion, 0.5, 2.6, 6, 0.6, { color: "00FF00", fontSize: 9 });')
-            .replace("notas(s, c.cierre.notas);", 's.addNotes("Otra nota.");'))
+def test_letra_chica_y_colores_ajenos_se_arreglan_sin_ia(tmp_path, contenido):
+    malo = DISENO.replace('texto(s, h.portada.sesion, 0.5, 2.6, 6, 0.6, { color: C.blanco });',
+                          'texto(s, h.portada.sesion, 0.5, 2.6, 6, 0.6, { color: "00FF00", fontSize: 9 });')
     corrida, salida = correr(tmp_path, contenido, malo)
     assert corrida.ok, corrida.error
     assert disenador.revisar_pptx(salida, contenido, PORTADA, IDENTIDAD) != []
     ajustes = " ".join(disenador.ajustar_pptx(salida, contenido, IDENTIDAD))
     assert "subí a 12 puntos 1 trozos" in ajustes
     assert "00FF00 por" in ajustes
-    assert f"notas de las diapositivas {contenido.total}" in ajustes
     assert disenador.revisar_pptx(salida, contenido, PORTADA, IDENTIDAD) == []
     assert disenador.ajustar_pptx(salida, contenido, IDENTIDAD) == []     # un PowerPoint correcto no se toca
 
@@ -265,9 +255,8 @@ def test_las_etiquetas_y_el_pie_unidos_con_punto_medio_se_aceptan(tmp_path, cont
     """La guía pide «1 · Qué es el gobierno de datos» y el pie con el curso y la sesión: el número y el separador no
     cuentan como palabras, y cada tramo que sale del contenido o de la portada tampoco."""
     bien = (DISENO.replace("`${i + 1} · Bloque`", "`${i + 1} · ${d.bloque}`")
-            .replace("    notas(s, d.notas);",
-                     "    texto(s, `${h.portada.curso}  ·  ${h.portada.sesion}`, 0.5, 5.1, 9, 0.3, { fontSize: 12 });\n"
-                     "    notas(s, d.notas);"))
+            .replace("    // pie",
+                     "    texto(s, `${h.portada.curso}  ·  ${h.portada.sesion}`, 0.5, 5.1, 9, 0.3, { fontSize: 12 });"))
     corrida, salida = correr(tmp_path, contenido, bien)
     assert corrida.ok, corrida.error
     assert disenador.revisar_pptx(salida, contenido, PORTADA, IDENTIDAD) == []

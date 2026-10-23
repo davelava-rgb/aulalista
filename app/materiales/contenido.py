@@ -49,11 +49,12 @@ class Pasaje(BaseModel):
     texto: str
 
 
-# Tipos de decisión del redactor (PLAN.md §0, decisión 24):
+# Tipos de decisión del redactor (PLAN.md §0, decisiones 24 y 66 e):
 # - «sin fuente»: afirma algo del tema que no está en ninguna fuente ni ficha. Va a «Decisiones pendientes».
 # - «decisión»: se aparta de las fichas o de las fuentes, o cambia lo que lee el alumno. Va a «Qué decidí».
-# - «nota»: solo describe el trabajo. Va a la hoja Hallazgos.
-TIPOS_DE_DECISION = ("sin fuente", "decisión", "nota")
+# El tipo «nota» (solo describía el trabajo) ya no se pide: el esquema no lo admite. El modelo lo acepta para leer
+# los contenidos guardados antes de la decisión 66.
+TIPOS_DE_DECISION = ("sin fuente", "decisión")
 
 
 class Decision(BaseModel):
@@ -123,15 +124,6 @@ CON_CIFRAS = ("grafica", "cifras")
 MAX_PALABRAS = 40          # por diapositiva de concepto y en la idea central, sin el título (decisión 56)
 
 
-class Notas(BaseModel):
-    """Notas del profesor de cada diapositiva: qué destacar y qué preguntar al grupo."""
-    destacar: str = Field(min_length=1)
-    preguntar: str = Field(min_length=1)
-
-    def texto(self) -> str:
-        return f"Qué destacar: {self.destacar}\nQué preguntar al grupo: {self.preguntar}"
-
-
 class Columna(BaseModel):
     titulo: str
     frases: list[str] = Field(min_length=1, max_length=5)
@@ -165,7 +157,6 @@ class Diapositiva(BaseModel):
     columnas: list[Columna] = Field(default_factory=list, max_length=2)
     tabla: Tabla | None = None
     grafico: Grafico | None = None
-    notas: Notas
 
     @property
     def es_grafica(self) -> bool:
@@ -206,38 +197,29 @@ class Diapositiva(BaseModel):
         return self
 
 
-class PortadaDiapositiva(BaseModel):
-    notas: Notas
-
-
 class IdeaCentral(BaseModel):
     frases: list[str] = Field(min_length=1, max_length=3)
-    notas: Notas
 
 
 class AplicaloDiapositiva(BaseModel):
     frases: list[str] = Field(default_factory=list, max_length=2)
     plantilla: list[str] = Field(min_length=1, max_length=6)
-    notas: Notas
 
 
 class CuidadoDiapositiva(BaseModel):
     riesgos: list[str] = Field(min_length=1, max_length=3)
-    notas: Notas
 
 
 class CierreDiapositiva(BaseModel):
     """La idea que se llevan: una frase de la idea central, con el docente y el contacto (decisión 29)."""
     frase: str = Field(min_length=1)
-    notas: Notas
 
 
 class Diapositivas(BaseModel):
-    """Portada, idea central, una diapositiva por concepto, «Aplícalo así», «Cuidado con» y cierre.
-    Las cinco fijas más las de concepto suman de 15 a 19 (lo comprueba el programa; decisión 29)."""
-    portada: PortadaDiapositiva
+    """Portada, idea central, una diapositiva por concepto, «Aplícalo así», «Cuidado con» y cierre. La portada sale
+    de la ficha, no del contenido. Sin notas del profesor ni cantidad fija: una por concepto (decisión 66 a y c)."""
     idea_central: IdeaCentral
-    diapositivas: list[Diapositiva] = Field(min_length=1, max_length=20)
+    diapositivas: list[Diapositiva] = Field(min_length=1, max_length=40)
     aplicalo: AplicaloDiapositiva
     cuidado: CuidadoDiapositiva
     cierre: CierreDiapositiva
@@ -252,10 +234,8 @@ class Diapositivas(BaseModel):
 FIJAS = 5   # portada, idea central, «Aplícalo así», «Cuidado con» y cierre
 
 
-ESQUEMA_NOTAS = _objeto({"destacar": {"type": "string"}, "preguntar": {"type": "string"}})
 ESQUEMA_DIAPOSITIVAS = _objeto({
-    "portada": _objeto({"notas": ESQUEMA_NOTAS}),
-    "idea_central": _objeto({"frases": TEXTOS, "notas": ESQUEMA_NOTAS}),
+    "idea_central": _objeto({"frases": TEXTOS}),
     "diapositivas": {"type": "array", "items": _objeto({
         "bloque": {"type": "string"},
         "titulo": {"type": "string"},
@@ -270,11 +250,10 @@ ESQUEMA_DIAPOSITIVAS = _objeto({
                 "valor": {"anyOf": [{"type": "number"}, {"type": "null"}]}})},
             "ejes": TEXTOS,
         }), {"type": "null"}]},
-        "notas": ESQUEMA_NOTAS,
     })},
-    "aplicalo": _objeto({"frases": TEXTOS, "plantilla": TEXTOS, "notas": ESQUEMA_NOTAS}),
-    "cuidado": _objeto({"riesgos": TEXTOS, "notas": ESQUEMA_NOTAS}),
-    "cierre": _objeto({"frase": {"type": "string"}, "notas": ESQUEMA_NOTAS}),
+    "aplicalo": _objeto({"frases": TEXTOS, "plantilla": TEXTOS}),
+    "cuidado": _objeto({"riesgos": TEXTOS}),
+    "cierre": _objeto({"frase": {"type": "string"}}),
     "pasajes": ESQUEMA_LECTURA["properties"]["pasajes"],
     "decisiones": ESQUEMA_LECTURA["properties"]["decisiones"],
 })
@@ -389,13 +368,6 @@ class Recuadro(BaseModel):
     lineas: list[str] = Field(min_length=1)
 
 
-class Mejora(BaseModel):
-    """«Mejora el resultado (opcional)»: un pedido de seguimiento que enseña a iterar, con sus pasos y recuadros."""
-    texto: str = Field(min_length=1)
-    pasos: list[str] = Field(default_factory=list, max_length=6)
-    copiar: list[Recuadro] = Field(default_factory=list, max_length=2)
-
-
 class AntesDeEmpezar(BaseModel):
     """Lo que comparten todos los ejercicios: el caso, la fecha de referencia, tablas y reglas (decisión 33)."""
     contexto: list[str] = Field(min_length=1, max_length=5)
@@ -411,7 +383,7 @@ class Ejercicio(BaseModel):
     archivos: list[str] = Field(default_factory=list)
     pasos: list[Paso] = Field(min_length=2, max_length=20)
     copiar: list[Recuadro] = Field(default_factory=list, max_length=4)   # vacío si el alumno trabaja a mano
-    mejora: Mejora
+    # Sin «Mejora el resultado (opcional)» desde la decisión 66 b.
 
 
 class Laboratorio(BaseModel):
@@ -444,8 +416,6 @@ ESQUEMA_LABORATORIO = _objeto({
             }), {"type": "null"}]},
         })},
         "copiar": {"type": "array", "items": _ESQUEMA_RECUADRO},
-        "mejora": _objeto({"texto": {"type": "string"}, "pasos": TEXTOS,
-                           "copiar": {"type": "array", "items": _ESQUEMA_RECUADRO}}),
     })},
     "archivos": {"type": "array", "items": _objeto({
         "nombre": {"type": "string"},

@@ -96,7 +96,7 @@ def _referencia(carpeta_curso: Path, sesion: int) -> tuple[list[referencia.Tramo
 
 def _contexto(carpeta_curso: Path, sesion: int, paginas: list[str] | None = None) -> str:
     ficha_curso = almacen.texto_para_materiales(carpeta_curso, "curso")
-    ficha_sesion = almacen.ruta_ficha(carpeta_curso, "sesion", sesion, ".md").read_text(encoding="utf-8")
+    ficha_sesion = almacen.texto_para_materiales(carpeta_curso, "sesion", sesion)
     fuentes = verificacion.fuentes_utilizables(carpeta_curso)
     tramos, excluir = _referencia(carpeta_curso, sesion)
     lineas_referencia = []
@@ -140,7 +140,7 @@ CÓMO ENTREGAR LA LECTURA
     o una cifra propia. Copia la oración. El profesor decide si queda.
   - «decisión»: te apartas de las fichas o de las fuentes, o eliges algo que las fichas no definían y que cambia
     lo que lee el alumno: omites o agregas un tema, cambias el orden, agregas un dato ficticio del caso.
-  - «nota»: solo describes lo que hiciste sin apartarte de las fichas ni de las fuentes.
+  Lo que solo describe tu trabajo no se anota.
 - agrupacion: si hubo más temas que bloques, cómo los agrupaste. Si no, texto vacío.
 {extension}
 - Una idea por oración.
@@ -665,8 +665,7 @@ def _entrega(material: dict) -> dict:
         decidi.append(f"Agrupación de temas: {material['agrupacion']}")
     decidi += [f"Dato nuevo del caso, agregado a la ficha del curso: {d}" for d in material["datos_agregados"]]
     if not decidi:
-        decidi.append("Nada que revisar: todo salió de las fichas y de las fuentes. Las notas del redactor están en "
-                      "la hoja Hallazgos.")
+        decidi.append("Nada que revisar: todo salió de las fichas y de las fuentes.")
 
     return entrega.componer(archivos=lineas_archivos, probe=probe, valide=valide,
                             pendientes=material["problemas"], no_pude=no_pude, decidi=decidi)
