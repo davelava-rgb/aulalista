@@ -28,7 +28,7 @@ from pydantic import ValidationError
 
 from app import agente, entrega, skill, tokens
 from app.fichas import almacen, dependencias, referencia, verificacion
-from app.materiales import comun, diapositivas, disenador_web, estilo, lectura, navegador
+from app.materiales import catalogo, comun, diapositivas, disenador_web, estilo, lectura, navegador
 from app.materiales.contenido import ESQUEMA_ACTIVIDAD, PUNTAJE_TOTAL, PUNTOS_POR_PREGUNTA, Actividad, Lectura, Pregunta
 from app.validacion import excel, pasada2, revision, revisor, verificador
 from app.validacion.pasajes import Corpus
@@ -637,12 +637,15 @@ class _Trabajo:
         la página no se entrega y las fallas impiden aprobar."""
         carpeta = self.rutas["diseno"]
         carpeta.mkdir(parents=True, exist_ok=True)
-        nombre_curso = almacen.valor(almacen.cargar(self.carpeta_curso, "curso"), "curso.nombre").strip() or self.curso
+        ficha_curso = almacen.cargar(self.carpeta_curso, "curso")
+        nombre_curso = almacen.valor(ficha_curso, "curso.nombre").strip() or self.curso
+        estilo_ = catalogo.estilo_actividad(almacen.valor(ficha_curso, "visual.actividad"))
         datos_ = disenador_web.datos_de_la_pagina(self.contenido, self.curso, self.sesion, nombre_curso, NOTA_DEL_PUNTAJE)
-        self.avance("Página del alumno: AulaLista la arma con su plantilla fija y la identidad de la ficha.")
-        pagina = disenador_web.pagina_fija(datos_, self.identidad)
-        self.diseno = {"arreglos": 0, "notas": "Plantilla fija de AulaLista (decisión 70).", "problemas": [],
-                       "navegador": []}
+        self.avance(f"Página del alumno: AulaLista la arma con su plantilla fija, estilo «{estilo_}», y la identidad "
+                    "de la ficha.")
+        pagina = disenador_web.pagina_fija(datos_, self.identidad, estilo_)
+        self.diseno = {"arreglos": 0, "notas": f"Plantilla fija de AulaLista, estilo «{estilo_}» (decisiones 70 y 72).",
+                       "problemas": [], "navegador": [], "estilo": estilo_}
         problemas = disenador_web.revisar(pagina, datos_, self.identidad)
         if not problemas and self.navegador:
             prueba = carpeta / "prueba.html"

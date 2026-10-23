@@ -40,8 +40,9 @@ def _pdf(ruta, color=(0.12, 0.31, 0.62), fuente="helv"):
 # ---------- Ficha: plantilla y valores por defecto ----------
 
 def test_la_plantilla_tiene_el_campo_estilo():
-    texto = plantillas.renderizar("curso", {"visual.estilo": {"valor": "moderno"}})
+    texto = plantillas.renderizar("curso", {"visual.estilo": {"valor": "moderno"}, "visual.actividad": {"valor": "tarjetas"}})
     assert "- Estilo (profesional, académico, moderno, corporativo, minimalista o cercano): moderno" in texto
+    assert "- Estilo de la página de la actividad web (editorial, sobrio, tarjetas, contraste o clásico): tarjetas" in texto
 
 
 def test_la_ficha_nueva_trae_docente_y_contacto_editables(curso):
@@ -60,6 +61,7 @@ def test_la_pagina_muestra_los_controles(curso):
     assert 'name="paleta"' in pagina and "Azul institucional" in pagina
     assert 'type="color"' in pagina
     assert '<select id="visual.estilo"' in pagina and "Moderno" in pagina
+    assert '<select id="visual.actividad"' in pagina and "Tarjetas" in pagina and "Editorial (por defecto)" in pagina
     assert 'type="radio" name="herramientas.neutral"' in pagina
     assert 'data-depende-de="herramientas.neutral"' in pagina
     assert 'type="checkbox" name="materiales.nunca"' in pagina

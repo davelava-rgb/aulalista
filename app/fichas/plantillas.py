@@ -93,6 +93,7 @@ FICHA_DEL_CURSO = (
             _c("visual.texto", "Color del texto"),
             _c("visual.tipografia", "Tipografía"),
             _c("visual.estilo", "Estilo (profesional, académico, moderno, corporativo, minimalista o cercano)"),
+            _c("visual.actividad", "Estilo de la página de la actividad web (editorial, sobrio, tarjetas, contraste o clásico)"),
         )),
         Seccion("6. Portada", (
             _c("portada.docente", "Docente"),

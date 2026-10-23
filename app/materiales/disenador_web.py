@@ -19,7 +19,7 @@ import re
 from pathlib import Path
 
 from app.config import RAIZ
-from app.materiales import estilo
+from app.materiales import catalogo, estilo
 from app.materiales.contenido import Actividad
 from app.validacion import verificador
 
@@ -67,17 +67,25 @@ MARCAS = {"{{PRINCIPAL}}": "principal", "{{ACENTO}}": "acento", "{{ADVERTENCIA}}
           "{{TEXTO}}": "texto"}
 
 
-def plantilla_con_identidad(identidad: estilo.Identidad) -> str:
-    """La plantilla con los colores y la tipografía de la ficha, con la marca del contenido todavía vacía."""
+def plantilla_con_identidad(identidad: estilo.Identidad, estilo_: str = catalogo.ESTILO_ACTIVIDAD_POR_OMISION) -> str:
+    """La plantilla con los colores, la tipografía y el estilo de la ficha (decisión 72), con la marca del contenido
+    todavía vacía. El atributo data-estilo del html elige la variante; la fuente de Google de sus títulos va en el
+    head, o nada si el estilo no la usa."""
+    nombre = catalogo.estilo_actividad(estilo_)
+    fuente = catalogo.ESTILOS_ACTIVIDAD[nombre]["fuente"]
+    enlace = (f'<link href="https://fonts.googleapis.com/css2?family={fuente}&display=swap" rel="stylesheet">'
+              if fuente else "")
     pagina = PLANTILLA.read_text(encoding="utf-8")
     for marca, campo in MARCAS.items():
         pagina = pagina.replace(marca, "#" + getattr(identidad, campo).lstrip("#").upper())
-    return pagina.replace("{{TIPOGRAFIA}}", identidad.tipografia)
+    plano = nombre.replace("á", "a")   # «clásico» → data-estilo="clasico"
+    return (pagina.replace("{{TIPOGRAFIA}}", identidad.tipografia).replace("{{ESTILO}}", plano)
+            .replace("{{FUENTE_TITULOS}}", enlace))
 
 
-def pagina_fija(datos_: dict, identidad: estilo.Identidad) -> str:
-    """La página del alumno lista: la plantilla con la identidad de la ficha y el contenido aprobado en su bloque."""
-    return armar(plantilla_con_identidad(identidad), datos_)
+def pagina_fija(datos_: dict, identidad: estilo.Identidad, estilo_: str = catalogo.ESTILO_ACTIVIDAD_POR_OMISION) -> str:
+    """La página del alumno lista: la plantilla con la identidad y el estilo de la ficha y el contenido aprobado."""
+    return armar(plantilla_con_identidad(identidad, estilo_), datos_)
 
 
 # ---------- Controles (decisión 57 f) ----------

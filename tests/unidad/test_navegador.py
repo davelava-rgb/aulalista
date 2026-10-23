@@ -38,6 +38,14 @@ def con(trozo: str, donde: str = "</head>") -> str:
     return REFERENCIA.replace(donde, trozo + donde)
 
 
+@pytest.mark.parametrize("estilo_", ["sobrio", "tarjetas", "contraste", "clásico"])
+def test_cada_estilo_de_la_plantilla_pasa_el_recorrido_completo(tmp_path, estilo_):
+    """Decisión 72: las variantes solo cambian el CSS, así que el recorrido es el mismo. «editorial» es la referencia."""
+    pagina = disenador_web.plantilla_con_identidad(estilo.Identidad(**estilo.PALETA_SOBRIA, tipografia="Calibri", logo=None), estilo_)
+    informe = probar(tmp_path, pagina)
+    assert informe.fallas == [], informe.fallas
+
+
 def test_la_referencia_pasa_el_recorrido_completo(tmp_path):
     informe = probar(tmp_path, REFERENCIA)
     assert informe.fallas == []
@@ -89,7 +97,7 @@ def test_la_entrega_dice_lo_que_reviso_el_navegador(sesion):  # noqa: F811
 def test_una_falla_del_navegador_deja_la_actividad_con_fallas_sin_ia(sesion, monkeypatch):  # noqa: F811
     """Decisión 70: no hay diseñador que arregle. Una falla de la plantilla queda como falla y se corrige en el código."""
     chico = "<style>[data-accion=\"comprobar\"]{height:30px!important;min-height:30px!important;padding:0!important}</style>"
-    monkeypatch.setattr(disenador_web, "plantilla_con_identidad", lambda identidad: con(chico))
+    monkeypatch.setattr(disenador_web, "plantilla_con_identidad", lambda identidad, estilo_="editorial": con(chico))
     material, consulta = disenar(sesion)
     assert material["estado"] == "con fallas" and len(consulta.llamadas) == 2
     assert any("px" in p for p in material["diseno"]["problemas"])

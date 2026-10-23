@@ -18,6 +18,7 @@ AFECTA = {
     "lectura.": ("lectura", "diapositivas"),
     "ejercicio.": ("laboratorio",),
     "herramientas.": ("laboratorio",),
+    "visual.actividad": ("actividad",),          # el estilo de la página solo cambia la actividad web (decisión 72)
     "portada.": ("lectura", "diapositivas", "laboratorio"),
     "evaluacion.": ("evaluacion",),
     "pregunta.": ("evaluacion",),

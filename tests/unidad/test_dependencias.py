@@ -50,6 +50,7 @@ def _desactualizados(carpeta):
     ("sesion", "ejercicio.1.respuesta", {"laboratorio"}),
     ("curso", "herramientas.ejercicios", {"laboratorio"}),
     ("curso", "herramientas.adjuntos", {"laboratorio"}),
+    ("curso", "visual.actividad", {"actividad"}),           # decisión 72
     ("sesion", "evaluacion.entrega", {"evaluacion"}),        # decisión 64 g
     ("sesion", "pregunta.1.respuesta", {"evaluacion"}),
     ("curso", "publico.quienes", CUATRO),

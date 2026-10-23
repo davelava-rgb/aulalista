@@ -18,6 +18,34 @@ PALETAS = {
 }
 
 
+# Estilos de la página de la actividad web (PLAN.md §0, decisión 72): cambian tipografías, radios, bordes y la banda
+# de la plantilla fija; no cambian su estructura ni su JavaScript. «fuente» es la fuente de Google de los títulos
+# (la página funciona sin conexión con la de respaldo), o vacío.
+ESTILOS_ACTIVIDAD = {
+    "editorial": {"descripcion": "Títulos con serifa y una banda del color principal. Es el diseño de siempre.",
+                  "fuente": "Fraunces:opsz,wght@9..144,600;9..144,700"},
+    "sobrio": {"descripcion": "Sin adornos: la tipografía de la ficha en todo, bordes rectos y cabecera clara.",
+               "fuente": ""},
+    "tarjetas": {"descripcion": "Tarjetas redondeadas con sombra suave y títulos redondos.",
+                 "fuente": "Nunito:wght@700;800"},
+    "contraste": {"descripcion": "Títulos en mayúsculas y bordes gruesos: máximo contraste.",
+                  "fuente": "Archivo:wght@700;800"},
+    "clásico": {"descripcion": "Serifa en todo el texto, cabecera clara con doble línea.",
+                "fuente": ""},
+}
+ESTILO_ACTIVIDAD_POR_OMISION = "editorial"
+
+
+def estilo_actividad(nombre: str) -> str:
+    """El nombre canónico de un estilo de la página, sin tildes ni mayúsculas; vacío o desconocido vale el de siempre."""
+    plano = " ".join((nombre or "").lower().split()).replace("á", "a").replace("é", "e").replace("í", "i") \
+        .replace("ó", "o").replace("ú", "u")
+    for candidato in ESTILOS_ACTIVIDAD:
+        if candidato.replace("á", "a") == plano:
+            return candidato
+    return ESTILO_ACTIVIDAD_POR_OMISION
+
+
 @dataclass(frozen=True)
 class Estilo:
     nombre: str

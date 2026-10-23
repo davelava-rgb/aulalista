@@ -135,8 +135,8 @@ def test_con_el_contenido_aprobado_aulalista_arma_la_pagina_sin_ia(sesion):  # n
     material, consulta = disenar(sesion)
     rutas = actividad.archivos(sesion, 1)
     assert material["estado"] == "verificada", material["problemas"]
-    assert material["diseno"] == {"arreglos": 0, "notas": "Plantilla fija de AulaLista (decisión 70).", "problemas": [],
-                                  "estado": "diseñada", "navegador": []}
+    assert material["diseno"] == {"arreglos": 0, "notas": "Plantilla fija de AulaLista, estilo «editorial» (decisiones 70 y 72).",
+                                  "problemas": [], "estado": "diseñada", "navegador": [], "estilo": "editorial"}
     assert material["archivos"]["pagina"] == "S1_Actividad.html" and rutas["pagina"].exists()
     pagina = rutas["pagina"].read_text(encoding="utf-8")
     assert disenador_web.MARCA not in pagina and '"titulo": "Scrum en la Sucursal Norte"' in pagina
@@ -151,7 +151,7 @@ def test_una_falla_de_la_plantilla_deja_la_actividad_con_fallas_sin_llamar_a_nad
     rota = disenador_web.plantilla_con_identidad(IDENTIDAD).replace(
         "</head>", '<script src="https://cdn.otro.com/libreria.js"></script></head>')
     assert rota != disenador_web.plantilla_con_identidad(IDENTIDAD)
-    monkeypatch.setattr(disenador_web, "plantilla_con_identidad", lambda identidad: rota)
+    monkeypatch.setattr(disenador_web, "plantilla_con_identidad", lambda identidad, estilo_="editorial": rota)
     material, consulta = disenar(sesion)
     assert len(consulta.llamadas) == 2
     assert material["estado"] == "con fallas" and "pagina" not in material["archivos"]
@@ -199,3 +199,32 @@ def test_un_selector_de_css_en_el_javascript_no_es_texto():
 def test_un_gris_azulado_es_gris():
     assert revisar(PAGINA.replace("--linea: #DDDDDD;", "--linea: #AEB5BB;")) == []
     assert any("colores que no son de la ficha" in f for f in revisar(PAGINA.replace("--linea: #DDDDDD;", "--linea: #3366CC;")))
+
+
+# ---------- Decisión 72: cinco estilos de la página, elegibles en la ficha ----------
+
+def test_cada_estilo_de_la_pagina_pasa_los_controles_y_lleva_su_fuente():
+    from app.materiales import catalogo
+    datos = disenador_web.datos_de_la_pagina(Actividad.model_validate(LIMPIA), "scrum", 1, "Scrum", actividad.NOTA_DEL_PUNTAJE)
+    assert list(catalogo.ESTILOS_ACTIVIDAD) == ["editorial", "sobrio", "tarjetas", "contraste", "clásico"]
+    for nombre, estilo_ in catalogo.ESTILOS_ACTIVIDAD.items():
+        pagina = disenador_web.pagina_fija(datos, IDENTIDAD, nombre)
+        assert disenador_web.revisar(pagina, datos, IDENTIDAD) == [], nombre
+        assert f'data-estilo="{nombre.replace("á", "a")}"' in pagina and "{{" not in pagina
+        assert ("fonts.googleapis.com/css2?family=" + estilo_["fuente"] in pagina) == bool(estilo_["fuente"]), nombre
+    # Vacío o desconocido: el de siempre. Con tilde o mayúsculas también se entiende.
+    assert catalogo.estilo_actividad("") == "editorial" and catalogo.estilo_actividad("Raro") == "editorial"
+    assert catalogo.estilo_actividad("Clasico") == "clásico" and catalogo.estilo_actividad("TARJETAS") == "tarjetas"
+
+
+def test_la_actividad_toma_el_estilo_de_la_ficha_del_curso(sesion):  # noqa: F811
+    from app.fichas import almacen
+    ficha = almacen.cargar(sesion, "curso")
+    almacen.aplicar_formulario(ficha, {"visual.actividad": "contraste"})
+    ficha["confirmada"] = True
+    almacen.guardar(sesion, "curso", None, ficha)
+    material, consulta = disenar(sesion)
+    assert material["estado"] == "verificada", material["problemas"]
+    assert material["diseno"]["estilo"] == "contraste" and len(consulta.llamadas) == 2
+    pagina = actividad.archivos(sesion, 1)["pagina"].read_text(encoding="utf-8")
+    assert 'data-estilo="contraste"' in pagina and "family=Archivo" in pagina

@@ -410,6 +410,7 @@ FICHA DEL CURSO
 - Color del texto:
 - Tipografía:
 - Estilo (profesional, académico, moderno, corporativo, minimalista o cercano):
+- Estilo de la página de la actividad web (editorial, sobrio, tarjetas, contraste o clásico):
 
 6. Portada
 - Docente:

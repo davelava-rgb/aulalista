@@ -14,7 +14,7 @@ el verificador y los generadores leen la ficha igual. Tipos:
 import re
 from pathlib import Path
 
-from app.materiales.catalogo import ESTILOS, PALETAS
+from app.materiales.catalogo import ESTILO_ACTIVIDAD_POR_OMISION, ESTILOS_ACTIVIDAD, ESTILOS, PALETAS
 
 OTRO = "__otro"
 SIN_LOGO = "sin logo"
@@ -58,6 +58,11 @@ CONTROLES = {
                       "por_omision": "profesional",
                       "descripciones": {nombre: e.descripcion for nombre, e in ESTILOS.items()},
                       "ayuda": "Cambia la portada, los títulos, los recuadros y el tono."},
+    "visual.actividad": {"tipo": "lista", "titulo": "Estilo de la página de la actividad web",
+                         "opciones": tuple(ESTILOS_ACTIVIDAD), "otro": False, "por_omision": ESTILO_ACTIVIDAD_POR_OMISION,
+                         "descripciones": {nombre: e["descripcion"] for nombre, e in ESTILOS_ACTIVIDAD.items()},
+                         "ayuda": "Cambia las tipografías, los bordes y la cabecera de la página del alumno. No cuesta "
+                                  "tokens: son variantes de la misma plantilla (decisión 72)."},
     "herramientas.ejercicios": {
         "tipo": "opciones", "titulo": "¿Con qué herramienta hace el alumno los ejercicios?",
         "opciones": (("ninguna", "Ninguna: el alumno hace la tarea a mano en el archivo de práctica (Excel o Word)"),
