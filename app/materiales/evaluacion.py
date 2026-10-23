@@ -24,7 +24,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from app import agente, entrega, skill, tokens
-from app.fichas import almacen, dependencias, plantillas, verificacion
+from app.fichas import almacen, dependencias, plantillas, referencia, verificacion
 from app.materiales import actividad, comun, docx, ejecucion, estilo, laboratorio, lectura, practica
 from app.materiales.contenido import ESQUEMA_EVALUACION, TAREAS_DE_EVALUACION, ArchivoPractica, Evaluacion, Laboratorio
 from app.validacion import excel, pasada2, revision, revisor, verificador
@@ -334,7 +334,7 @@ def _aprobado(modulo, carpeta_curso: Path, sesion: int) -> dict | None:
     return comun.leer_json(rutas["contenido"])
 
 
-def _contexto(carpeta_curso: Path, sesion: int) -> str:
+def _contexto(carpeta_curso: Path, sesion: int, pasajes: list[str] | None = None) -> str:
     """Las reglas, las fichas, las fuentes y lo ya aprobado de la sesión: la evaluación solo evalúa lo que enseñaron
     la lectura y el laboratorio, y no repite sus ejercicios ni las preguntas de la actividad web."""
     ficha_curso = almacen.texto_para_materiales(carpeta_curso, "curso")
@@ -411,13 +411,13 @@ CÓMO ENTREGAR LA EVALUACIÓN (PLAN.md §0, decisión 64)
 """
 
 
-def pedido_de_redaccion(carpeta_curso: Path, sesion: int) -> str:
+def pedido_de_redaccion(carpeta_curso: Path, sesion: int, pasajes: list[str] | None = None) -> str:
     return "\n".join([
-        _contexto(carpeta_curso, sesion),
+        _contexto(carpeta_curso, sesion, pasajes),
         instrucciones_de_formato(sesion, preguntas_de_la_ficha(carpeta_curso, sesion)),
         "TAREA: prepara la evaluación práctica de la sesión, con su clave. Toma las preguntas de la ficha de la sesión:",
-        "su concepto, la tarea, el archivo con su problema y la respuesta correcta. Si citas una fuente, busca con Grep",
-        "y lee con Read los pasajes antes de escribir. Antes de entregar, resuelve tú cada pregunta como un alumno, con",
+        "su concepto, la tarea, el archivo con su problema y la respuesta correcta. Si citas una fuente, toma el pasaje",
+        "de la lista de pasajes de arriba. Antes de entregar, resuelve tú cada pregunta como un alumno, con",
         "sus archivos: cada paso se puede hacer y la respuesta es una sola, la de la clave.",
     ])
 
@@ -794,8 +794,11 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, ejecutar_, gua
                        "no repito la redacción ni sus correcciones.")
     else:
         trabajo.avance("Leyendo las fichas, la lectura, el laboratorio y las fuentes, y escribiendo la evaluación.")
-        trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion), tarea="redaccion",
-                                               esquema=ESQUEMA_EVALUACION, etapa="redacción", **trabajo.comun)
+        pasajes = referencia.pasajes_elegidos(
+            carpeta_curso, sesion, referencia.textos_de_la_sesion(almacen.cargar(carpeta_curso, "sesion", sesion)))
+        trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion, pasajes), tarea="redaccion",
+                                               esquema=ESQUEMA_EVALUACION, etapa="redacción",
+                                               **{**trabajo.comun, "cwd": None, "herramientas": ()})
     errores: list[revision.Error] = []
     revisados = 0
     ejecuciones: list[ejecucion.Ejecucion] = []

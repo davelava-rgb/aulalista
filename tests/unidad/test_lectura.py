@@ -232,7 +232,7 @@ def test_lectura_limpia_queda_verificada_con_dos_llamadas(sesion):
     assert rutas["word"].exists() and rutas["excel"].exists()
     assert len(consulta.llamadas) == 2   # redacción y revisión del contenido (decisión 22)
     opciones = consulta.llamadas[0]["options"]
-    assert opciones.model == "claude-opus-5-5" and opciones.tools == ["Read", "Grep", "Glob"]
+    assert opciones.model == "claude-opus-5-5" and opciones.tools == []        # decisión 68 c: sin herramientas
     assert "## Material 1 · Lectura" in consulta.llamadas[0]["prompt"]
     assert "FICHA DE LA SESIÓN" in consulta.llamadas[0]["prompt"]
     assert consulta.llamadas[1]["options"].model == "claude-sonnet-5-5"
@@ -671,12 +671,15 @@ def test_con_referencia_las_paginas_van_en_el_pedido_y_la_redaccion_no_busca(ses
     assert "[silabo.pdf · página 1] Scrum Master con IA" in redaccion["prompt"]
     assert "busca con Grep" not in redaccion["prompt"]
     assert redaccion["options"].tools == [] and not redaccion["options"].allowed_tools
-    # Sin referencia, la redacción sigue buscando en las fuentes con herramientas.
+    # Sin referencia, el programa elige los pasajes de las fuentes y la redacción tampoco usa herramientas
+    # (decisión 68 c).
     almacen.aplicar_formulario(ficha, {"sesion.referencia": ""})
     ficha["confirmada"] = True
     almacen.guardar(sesion, "sesion", 1, ficha)
     _, consulta = generar(sesion, LIMPIA)
-    assert "busca con Grep" in consulta.llamadas[0]["prompt"] and "Read" in consulta.llamadas[0]["options"].allowed_tools
+    redaccion = consulta.llamadas[0]
+    assert "PASAJES DE LAS FUENTES DEL CURSO, elegidos por AulaLista" in redaccion["prompt"]
+    assert "Grep" not in redaccion["prompt"] and redaccion["options"].tools == [] and not redaccion["options"].allowed_tools
 
 
 # ---------- Reanudar desde lo guardado (PLAN.md §0, decisión 40) ----------

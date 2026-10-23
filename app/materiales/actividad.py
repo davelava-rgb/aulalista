@@ -127,7 +127,7 @@ def _texto_de_la_lectura(carpeta_curso: Path, sesion: int) -> list[str]:
 
 # ---------- Pedidos al agente ----------
 
-def _contexto(carpeta_curso: Path, sesion: int) -> str:
+def _contexto(carpeta_curso: Path, sesion: int, pasajes: list[str] | None = None) -> str:
     ficha_curso = almacen.texto_para_materiales(carpeta_curso, "curso")
     ficha_sesion = almacen.texto_para_materiales(carpeta_curso, "sesion", sesion)
     fuentes = verificacion.fuentes_utilizables(carpeta_curso)
@@ -148,6 +148,7 @@ def _contexto(carpeta_curso: Path, sesion: int) -> str:
         *([f"- {f}" for f in fuentes] or ["- (ninguna: no cites fuentes)"]),
         *lineas_referencia,
         *_texto_de_la_lectura(carpeta_curso, sesion),
+        *referencia.texto_de_pasajes(pasajes or []),
     ])
 
 
@@ -182,16 +183,16 @@ CÓMO ENTREGAR LA ACTIVIDAD WEB
 """
 
 
-def pedido_de_redaccion(carpeta_curso: Path, sesion: int) -> str:
+def pedido_de_redaccion(carpeta_curso: Path, sesion: int, pasajes: list[str] | None = None) -> str:
     return "\n".join([
-        _contexto(carpeta_curso, sesion),
+        _contexto(carpeta_curso, sesion, pasajes),
         FORMATO,
         "TAREA: redacta el contenido de la actividad web de la sesión. Actúa como diseñador instruccional y editor senior.",
         *(["La actividad refuerza lo que enseñó la lectura."] if usa_lectura(carpeta_curso, sesion) else [
             "ESTA SESIÓN NO TIENE LECTURA: la actividad sale del material de referencia de la sesión (si lo hay), de las "
-            "fuentes del curso y de las fichas. Donde la skill dice «la lectura», entiende esas fuentes. Antes de "
-            "redactar, busca con Grep y lee con Read los pasajes que vas a usar, y anótalos en «pasajes»."]),
-        "Si necesitas un pasaje de una fuente, búscalo con Grep y léelo con Read.",
+            "fuentes del curso y de las fichas. Donde la skill dice «la lectura», entiende esas fuentes. Los pasajes "
+            "de las fuentes están arriba, ya elegidos: toma de ahí los que uses y anótalos en «pasajes»."]),
+        "Si necesitas un pasaje de una fuente, tómalo de la lista de pasajes de arriba.",
         "Antes de entregar, resuelve tú cada pregunta con los datos del caso: si admite dos respuestas, rediséñala.",
     ])
 
@@ -694,8 +695,11 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, disenar=True, 
 
     trabajo.avance("Leyendo " + ("la lectura" if trabajo.lectura is not None else "las fuentes") +
                    " y las fichas, y redactando la actividad web.")
-    trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion), tarea="redaccion",
-                                           esquema=ESQUEMA_ACTIVIDAD, etapa="redacción", **trabajo.comun)
+    pasajes = referencia.pasajes_elegidos(carpeta_curso, sesion,
+                                          referencia.textos_de_la_sesion(almacen.cargar(carpeta_curso, "sesion", sesion)))
+    trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion, pasajes), tarea="redaccion",
+                                           esquema=ESQUEMA_ACTIVIDAD, etapa="redacción",
+                                           **{**trabajo.comun, "cwd": None, "herramientas": ()})
     # Primera pasada: el verificador. La IA solo revisa una actividad sin fallas mecánicas (SPEC §9).
     errores: list[revision.Error] = []
     revisados = 0

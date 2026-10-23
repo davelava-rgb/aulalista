@@ -134,7 +134,8 @@ def test_un_contenido_limpio_queda_verificado_con_dos_llamadas(sesion):  # noqa:
     assert consulta.llamadas[1]["options"].model == "claude-sonnet-5-5"
     assert material["revision"] == {"bloques": 5, "errores": 0, "corregidos": 0, "pendientes": 0, "descartados": 0}
     pedido, opciones = consulta.llamadas[0]["prompt"], consulta.llamadas[0]["options"]
-    assert opciones.model == "claude-opus-5-5" and opciones.tools == ["Read", "Grep", "Glob"]
+    assert opciones.model == "claude-opus-5-5" and opciones.tools == []        # decisión 68 c: sin herramientas
+    assert "PASAJES DE LAS FUENTES DEL CURSO" in pedido and "Grep" not in pedido
     assert "## Actividad web" in pedido and "Única excepción: la actividad web lleva puntos" in pedido
     assert "LECTURA APROBADA DE LA SESIÓN" in pedido and "Los pilares de Scrum son tres." in pedido
     assert opciones.output_format["schema"]["properties"]["pasos"]["items"]["properties"]["preguntas"]

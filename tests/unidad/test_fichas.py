@@ -448,3 +448,32 @@ def test_las_horas_del_curso_no_llegan_al_redactor(curso):
     texto = almacen.texto_para_materiales(curso, "curso")
     assert "Horas del curso" not in texto
     assert "- Nombre del curso:" in texto
+
+
+# ---------- Decisión 68 c: la ficha de la sesión se propone con pasajes elegidos, sin herramientas ----------
+
+def test_proponer_la_sesion_recibe_pasajes_elegidos_y_no_usa_herramientas(entorno, curso):
+    entorno["env"].write_text("ANTHROPIC_API_KEY=sk-ant-de-prueba\n", encoding="utf-8")
+    con_fuente(curso)
+    ficha_curso = almacen.cargar(curso, "curso")
+    ficha_curso["campos"]["curso.sesiones"] = {"valor": "1. Scrum Master: docente y capacitación", "origen": "", "estado": ""}
+    ficha_curso["confirmada"] = True
+    almacen.guardar(curso, "curso", None, ficha_curso)
+    consulta = consulta_simulada(structured_output={"campos": [
+        {"id": "sesion.alcance", "valor": "Docente: jefe de capacitación", "origen": "silabo.pdf", "literal": True}],
+        "conflictos": []})
+    resumen = correr(flujo.proponer(curso, "curso-x", "sesion", 1, consulta=consulta))
+    opciones, pedido = consulta.llamadas[0]["options"], consulta.llamadas[0]["prompt"]
+    assert opciones.tools == [] and not opciones.allowed_tools
+    assert "PASAJES DE LAS FUENTES DEL CURSO" in pedido and "[silabo.pdf · página 1] Docente: jefe de capacitación" in pedido
+    assert "Busca con Grep" not in pedido and "No tienes herramientas" in pedido
+    assert resumen["de_las_fuentes"] == 1
+
+
+def test_la_propuesta_del_curso_sigue_con_herramientas(entorno, curso):
+    entorno["env"].write_text("ANTHROPIC_API_KEY=sk-ant-de-prueba\n", encoding="utf-8")
+    con_fuente(curso)
+    consulta = consulta_simulada(structured_output={"campos": [], "conflictos": []})
+    correr(flujo.proponer(curso, "curso-x", "curso", consulta=consulta))
+    assert consulta.llamadas[0]["options"].tools == ["Read", "Grep", "Glob"]
+    assert "Busca con Grep" in consulta.llamadas[0]["prompt"]

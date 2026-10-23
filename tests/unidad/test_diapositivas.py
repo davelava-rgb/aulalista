@@ -385,7 +385,7 @@ def test_sin_lectura_salen_de_las_fuentes_y_las_fichas(sin_lectura):
     assert material["estado"] == "verificada", material.get("problemas")
     redaccion = consulta.llamadas[0]["prompt"]
     assert "ESTA SESIÓN NO TIENE LECTURA" in redaccion and "LECTURA APROBADA" not in redaccion
-    assert "busca con Grep en las fuentes" in redaccion
+    assert "PASAJES DE LAS FUENTES DEL CURSO" in redaccion and "Grep" not in redaccion   # decisión 68 c
     revision_ = consulta.llamadas[1]["prompt"]
     assert diapositivas.INDICACIONES_SIN_LECTURA in revision_ and diapositivas.FUENTE_LECTURA not in revision_
     entrega = {s["clave"]: s["lineas"] for s in material["entrega"]["secciones"]}
@@ -412,14 +412,20 @@ def test_sin_lectura_las_paginas_de_referencia_van_en_el_pedido_y_la_redaccion_n
     assert all("PÁGINAS DEL MATERIAL DE REFERENCIA" not in c["prompt"] for c in consulta.llamadas[1:])
 
 
-def test_una_referencia_demasiado_larga_se_busca_con_herramientas(sin_lectura, monkeypatch):
-    from app.fichas import almacen
+def test_una_referencia_demasiado_larga_se_recorta_y_no_se_busca_con_herramientas(sin_lectura, monkeypatch):
+    """Decisión 68 c: si las páginas pasan del tope, quedan las que nombran el vocabulario o los temas."""
+    from app.fichas import almacen, referencia
     ficha = almacen.cargar(sin_lectura, "sesion", 1)
-    almacen.aplicar_formulario(ficha, {"sesion.referencia": "silabo.pdf"})
+    almacen.aplicar_formulario(ficha, {"sesion.referencia": "silabo.pdf", "sesion.alcance": "Docente y capacitación"})
+    ficha["confirmada"] = True
     almacen.guardar(sin_lectura, "sesion", 1, ficha)
-    from app.fichas import referencia
-    monkeypatch.setattr(referencia, "CARACTERES_EN_EL_PEDIDO", 10)
-    assert diapositivas.paginas_de_referencia(sin_lectura, 1) is None
+    monkeypatch.setattr(referencia, "CARACTERES_EN_EL_PEDIDO", 60)
+    assert diapositivas.paginas_de_referencia(sin_lectura, 1) == ["[silabo.pdf · página 1] Docente: jefe de capacitación"]
+    _, consulta = generar(sin_lectura, LIMPIAS)
+    redaccion = consulta.llamadas[0]
+    assert "Docente: jefe de capacitación" in redaccion["prompt"] and "Scrum Master con IA" not in redaccion["prompt"].split(
+        "PÁGINAS DEL MATERIAL DE REFERENCIA")[1]
+    assert redaccion["options"].tools == [] and "Grep" not in redaccion["prompt"]
 
 
 def test_sin_lectura_las_diapositivas_de_un_bloque_van_juntas():

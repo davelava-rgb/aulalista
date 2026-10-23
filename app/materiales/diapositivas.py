@@ -175,7 +175,7 @@ def paginas_de_referencia(carpeta_curso: Path, sesion: int) -> list[str] | None:
 
 
 def _contexto(carpeta_curso: Path, sesion: int, contenido_lectura: Lectura | None,
-              paginas: list[str] | None = None) -> str:
+              paginas: list[str] | None = None, pasajes: list[str] | None = None) -> str:
     ficha_curso = almacen.texto_para_materiales(carpeta_curso, "curso")
     ficha_sesion = almacen.texto_para_materiales(carpeta_curso, "sesion", sesion)
     fuentes = verificacion.fuentes_utilizables(carpeta_curso)
@@ -210,10 +210,9 @@ def _contexto(carpeta_curso: Path, sesion: int, contenido_lectura: Lectura | Non
             *referencia.texto_de_paginas(paginas),
         ])
     return "\n".join(partes + [
-        "ESTA SESIÓN NO TIENE LECTURA. Las diapositivas salen del material de referencia y de las fichas.",
-        "FUENTES DEL CURSO que puedes citar (archivos .jsonl de esta carpeta, un pasaje por línea con su ubicación):",
-        *([f"- {f}" for f in fuentes] or ["- (ninguna: no cites fuentes)"]),
+        "ESTA SESIÓN NO TIENE LECTURA. Las diapositivas salen de las fuentes del curso y de las fichas.",
         *referencia_,
+        *referencia.texto_de_pasajes(pasajes or []),
     ])
 
 
@@ -329,7 +328,7 @@ REGLAS_PROPIAS_SIN_LECTURA = """EN LAS DIAPOSITIVAS
 
 
 def pedido_de_redaccion(carpeta_curso: Path, sesion: int, contenido_lectura: Lectura | None,
-                        paginas: list[str] | None = None) -> str:
+                        paginas: list[str] | None = None, pasajes: list[str] | None = None) -> str:
     if contenido_lectura is not None:
         tarea = ["TAREA: prepara las diapositivas de la sesión a partir de la lectura aprobada. Actúa como diseñador",
                  "instruccional y diseñador de materiales. Resume cada parte de la lectura en frases cortas, en su orden."]
@@ -340,13 +339,13 @@ def pedido_de_redaccion(carpeta_curso: Path, sesion: int, contenido_lectura: Lec
                  "con su fuente y su ubicación tal cual. No uses las exclusiones.",
                  "No afirmes sobre el contenido de una fuente nada que no esté en un pasaje copiado."]
     else:
-        tarea = ["TAREA: prepara las diapositivas de la sesión a partir del material de referencia y de las fichas.",
+        tarea = ["TAREA: prepara las diapositivas de la sesión a partir de las fuentes del curso y de las fichas.",
                  "Actúa como diseñador instruccional y diseñador de materiales.",
-                 "Antes de redactar, busca con Grep en las fuentes y lee con Read los pasajes que vas a usar.",
-                 "Si la sesión tiene material de referencia, lee sus páginas y no uses las exclusiones.",
+                 "Los pasajes de las fuentes están arriba, ya elegidos. Toma de ahí los que uses, con su fuente y su",
+                 "ubicación tal cual.",
                  "No afirmes sobre el contenido de una fuente nada que no esté en un pasaje copiado."]
     return "\n".join([
-        _contexto(carpeta_curso, sesion, contenido_lectura, paginas),
+        _contexto(carpeta_curso, sesion, contenido_lectura, paginas, pasajes),
         instrucciones_de_formato(contenido_lectura is not None),
         *tarea,
         "Antes de entregar, revisa cada diapositiva: qué puede hacer el alumno con ella y qué frase tiene dos lecturas.",
@@ -1087,12 +1086,17 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, medir, disenar
                        "no repito la redacción ni sus correcciones.")
     else:
         trabajo.avance("Leyendo la lectura aprobada y preparando las diapositivas.")
-        # Sin lectura, las páginas de la referencia van en el pedido y la redacción no necesita herramientas.
-        paginas = None if trabajo.lectura is not None else paginas_de_referencia(carpeta_curso, sesion)
-        opciones = trabajo.comun if paginas is None else {**trabajo.comun, "cwd": None, "herramientas": ()}
-        trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion, trabajo.lectura, paginas),
+        # Sin lectura, las páginas de la referencia o los pasajes que elige el programa van en el pedido: la
+        # redacción no necesita herramientas (decisión 68 c).
+        paginas = pasajes = None
+        if trabajo.lectura is None:
+            paginas = paginas_de_referencia(carpeta_curso, sesion)
+            if not paginas:
+                ficha = almacen.cargar(carpeta_curso, "sesion", sesion)
+                pasajes = referencia.pasajes_elegidos(carpeta_curso, sesion, referencia.textos_de_la_sesion(ficha))
+        trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion, trabajo.lectura, paginas, pasajes),
                                                tarea="redaccion", esquema=ESQUEMA_DIAPOSITIVAS, etapa="redacción",
-                                               **opciones)
+                                               **{**trabajo.comun, "cwd": None, "herramientas": ()})
 
     errores: list[revision.Error] = []
     revisados = 0

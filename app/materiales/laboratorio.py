@@ -203,7 +203,8 @@ def aviso_de_adjuntos(carpeta_curso: Path) -> str:
 
 # ---------- Pedidos al agente ----------
 
-def _contexto(carpeta_curso: Path, sesion: int, paginas: list[str] | None = None) -> str:
+def _contexto(carpeta_curso: Path, sesion: int, paginas: list[str] | None = None,
+              pasajes: list[str] | None = None) -> str:
     ficha_curso = almacen.texto_para_materiales(carpeta_curso, "curso")
     ficha_sesion = almacen.texto_para_materiales(carpeta_curso, "sesion", sesion)
     fuentes = verificacion.fuentes_utilizables(carpeta_curso)
@@ -221,8 +222,7 @@ def _contexto(carpeta_curso: Path, sesion: int, paginas: list[str] | None = None
     if lectura.estado(carpeta_curso, sesion).get("estado") == "aprobada" and rutas_lectura["contenido"].exists():
         partes += ["", "LECTURA APROBADA DE LA SESIÓN. Usa su vocabulario y no repitas sus ejemplos en los ejercicios:",
                    json.dumps(comun.leer_json(rutas_lectura["contenido"]).get("bloques", []), ensure_ascii=False)]
-    if paginas:
-        partes += referencia.texto_de_paginas(paginas)
+    partes += referencia.texto_de_paginas(paginas) if paginas else referencia.texto_de_pasajes(pasajes or [])
     return "\n".join(partes)
 
 
@@ -343,11 +343,12 @@ CÓMO ENTREGAR EL LABORATORIO (PLAN.md §0, decisión 33)
 """ + (f"- El programa agrega al inicio de la guía: «{aviso}». No lo repitas.\n" if aviso else "")
 
 
-def pedido_de_redaccion(carpeta_curso: Path, sesion: int, paginas: list[str] | None = None) -> str:
+def pedido_de_redaccion(carpeta_curso: Path, sesion: int, paginas: list[str] | None = None,
+                        pasajes: list[str] | None = None) -> str:
     citar = ("Si citas una fuente, toma el pasaje de las páginas del material de referencia, que están arriba." if paginas
-             else "Si citas una fuente, busca con Grep y lee con Read los pasajes antes de escribir.")
+             else "Si citas una fuente, toma el pasaje de la lista de pasajes de arriba.")
     return "\n".join([
-        _contexto(carpeta_curso, sesion, paginas),
+        _contexto(carpeta_curso, sesion, paginas, pasajes),
         instrucciones_de_formato(sesion, aviso_de_adjuntos(carpeta_curso), herramienta(carpeta_curso)),
         "TAREA: prepara el laboratorio de la sesión. Actúa como diseñador instruccional. Toma los ejercicios de la ficha",
         "de la sesión: su área, la acción, el entregable, el archivo de práctica con su problema y la respuesta correcta.",
@@ -780,11 +781,14 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, co
                        "no repito la redacción ni sus correcciones.")
     else:
         trabajo.avance("Leyendo las fichas y las fuentes y escribiendo el laboratorio y sus archivos de práctica.")
-        # Con material de referencia, sus páginas van en el pedido y la redacción no necesita herramientas.
-        paginas = referencia.paginas(carpeta_curso, _ficha_sesion(carpeta_curso, sesion))
-        opciones = trabajo.comun if paginas is None else {**trabajo.comun, "cwd": None, "herramientas": ()}
-        trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion, paginas), tarea="redaccion",
-                                               esquema=ESQUEMA_LABORATORIO, etapa="redacción", **opciones)
+        # Las páginas de la referencia, o los pasajes que elige el programa, van en el pedido: la redacción no
+        # necesita herramientas (decisión 68 c).
+        ficha = _ficha_sesion(carpeta_curso, sesion)
+        paginas = referencia.paginas(carpeta_curso, ficha)
+        pasajes = None if paginas else referencia.pasajes_elegidos(carpeta_curso, sesion, referencia.textos_de_la_sesion(ficha))
+        trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion, paginas, pasajes),
+                                               tarea="redaccion", esquema=ESQUEMA_LABORATORIO, etapa="redacción",
+                                               **{**trabajo.comun, "cwd": None, "herramientas": ()})
     errores: list[revision.Error] = []
     revisados = 0
     ejecuciones: list[ejecucion.Ejecucion] = []

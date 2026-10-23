@@ -14,7 +14,7 @@ import unicodedata
 from pathlib import Path
 
 from app import agente
-from app.fichas import almacen, controles, plantillas, verificacion
+from app.fichas import almacen, controles, plantillas, referencia, verificacion
 from app.fuentes import convertir
 
 ESQUEMA_PROPUESTA = {
@@ -126,15 +126,46 @@ DE_QUE_TRATAN_LOS_EJERCICIOS = {
 }
 
 
-def pedido_de_propuesta(carpeta_curso: Path, tipo: str, sesion: int | None, ficha: dict) -> str:
+def pasajes_de_la_sesion(carpeta_curso: Path, sesion: int) -> list[str]:
+    """Los pasajes de las fuentes que necesita la propuesta de una ficha de sesión, elegidos por el programa
+    (decisión 68 c). Si la ficha del curso tiene la cobertura de las sesiones vigente (decisión 53), son las páginas
+    que le tocan a esta sesión, recortadas al tope; si no, los pasajes que más se parecen al título y el alcance de
+    la sesión en «Sesiones»."""
+    ficha_curso = almacen.cargar(carpeta_curso, "curso")
+    sesiones = {s["numero"]: s["texto"] for s in almacen.sesiones_del_curso(ficha_curso)}
+    texto = sesiones.get(sesion, "")
+    vigente = cobertura_vigente(ficha_curso)
+    tramos = (vigente or {}).get("sesiones", {}).get(str(sesion), []) if vigente and vigente.get("vigente") else []
+    if tramos:
+        ficha_falsa = {"campos": {"sesion.referencia": {"valor": "\n".join(tramos)},
+                                  "sesion.alcance": {"valor": texto}}}
+        paginas = referencia.paginas(carpeta_curso, ficha_falsa)
+        if paginas:
+            return paginas
+    return referencia.pasajes_elegidos(carpeta_curso, sesion, [texto] if texto else [], cantidad=60)
+
+
+def pedido_de_propuesta(carpeta_curso: Path, tipo: str, sesion: int | None, ficha: dict,
+                        pasajes: list[str] | None = None) -> str:
     fuentes = verificacion.fuentes_utilizables(carpeta_curso)
-    lineas = [
-        f"Vas a llenar la {'ficha del curso' if tipo == 'curso' else f'ficha de la sesión {sesion}'}.",
-        "Trabajas solo con los archivos .jsonl de esta carpeta. Cada uno es una fuente del curso convertida "
-        "a texto: una línea por pasaje, con su texto y su ubicación.",
-        "Fuentes que puedes usar (el nombre del .jsonl es el nombre de la fuente más «.jsonl»):",
-        *[f"- {f}" for f in fuentes],
-        "Busca con Grep y lee con Read. Lo que dice la fuente se toma de la fuente, no de tu memoria.",
+    lineas = [f"Vas a llenar la {'ficha del curso' if tipo == 'curso' else f'ficha de la sesión {sesion}'}."]
+    if tipo == "curso":
+        lineas += [
+            "Trabajas solo con los archivos .jsonl de esta carpeta. Cada uno es una fuente del curso convertida "
+            "a texto: una línea por pasaje, con su texto y su ubicación.",
+            "Fuentes que puedes usar (el nombre del .jsonl es el nombre de la fuente más «.jsonl»):",
+            *[f"- {f}" for f in fuentes],
+            "Busca con Grep y lee con Read. Lo que dice la fuente se toma de la fuente, no de tu memoria.",
+        ]
+    else:
+        lineas += [
+            "Trabajas con los pasajes de las fuentes del curso que AulaLista eligió para esta sesión: están al final, "
+            "con la forma «[fuente · ubicación] texto». No tienes herramientas. Lo que dice la fuente se toma de esos "
+            "pasajes, no de tu memoria. El origen de un dato es el nombre de la fuente, tal como va entre corchetes.",
+            "Fuentes del curso:",
+            *[f"- {f}" for f in fuentes],
+        ]
+    lineas += [
         "",
         "Campos vacíos que debes intentar llenar (id: etiqueta):",
         *[f"- {campo_id}: {etiqueta}" + _opciones_del_control(campo_id) for campo_id, etiqueta in campos_vacios(ficha)],
@@ -190,6 +221,7 @@ def pedido_de_propuesta(carpeta_curso: Path, tipo: str, sesion: int | None, fich
             f"Sesión {sesion}: {sesiones.get(sesion, '')}",
             "Ficha del curso confirmada:",
             ficha_curso,
+            *referencia.texto_de_pasajes(pasajes or []),
         ]
     return "\n".join(lineas)
 
@@ -248,11 +280,17 @@ async def proponer(carpeta_curso: Path, curso: str, tipo: str, sesion: int | Non
         almacen.guardar(carpeta_curso, tipo, sesion, ficha, "sin fuentes")
         return {"de_las_fuentes": 0, "propuestos": 0, "conflictos": 0, "descartados": 0, "sin_fuentes": True}
     (carpeta_curso / "fuentes_texto").mkdir(parents=True, exist_ok=True)
+    if tipo == "curso":
+        # La ficha del curso necesita una vista de todas las fuentes: sigue con Grep y Read.
+        herramientas = {"cwd": carpeta_curso / "fuentes_texto", "herramientas": ("Read", "Grep", "Glob")}
+        pasajes = None
+    else:
+        # La de la sesión recibe los pasajes que le tocan, elegidos por el programa (decisión 68 c).
+        herramientas, pasajes = {}, pasajes_de_la_sesion(carpeta_curso, sesion)
     propuesta = await agente.consultar(
-        pedido_de_propuesta(carpeta_curso, tipo, sesion, ficha),
+        pedido_de_propuesta(carpeta_curso, tipo, sesion, ficha, pasajes),
         tarea="fichas", esquema=ESQUEMA_PROPUESTA, curso=curso, etapa=f"propuesta ficha {tipo}",
-        sesion=f"S{sesion}" if sesion else "-", cwd=carpeta_curso / "fuentes_texto",
-        herramientas=("Read", "Grep", "Glob"), consulta=consulta,
+        sesion=f"S{sesion}" if sesion else "-", consulta=consulta, **herramientas,
     )
     resumen = aplicar_propuesta(carpeta_curso, ficha, propuesta)
     almacen.guardar(carpeta_curso, tipo, sesion, ficha, "propuesta desde las fuentes")

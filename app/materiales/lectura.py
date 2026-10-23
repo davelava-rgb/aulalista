@@ -94,7 +94,8 @@ def _referencia(carpeta_curso: Path, sesion: int) -> tuple[list[referencia.Tramo
     return referencia.interpretar(carpeta_curso, ficha)[0], referencia.exclusiones(ficha)
 
 
-def _contexto(carpeta_curso: Path, sesion: int, paginas: list[str] | None = None) -> str:
+def _contexto(carpeta_curso: Path, sesion: int, paginas: list[str] | None = None,
+              pasajes: list[str] | None = None) -> str:
     ficha_curso = almacen.texto_para_materiales(carpeta_curso, "curso")
     ficha_sesion = almacen.texto_para_materiales(carpeta_curso, "sesion", sesion)
     fuentes = verificacion.fuentes_utilizables(carpeta_curso)
@@ -117,7 +118,7 @@ def _contexto(carpeta_curso: Path, sesion: int, paginas: list[str] | None = None
         "FUENTES DEL CURSO que puedes citar (archivos .jsonl de esta carpeta, un pasaje por línea con su ubicación):",
         *([f"- {f}" for f in fuentes] or ["- (ninguna: no cites fuentes)"]),
         *lineas_referencia,
-        *(referencia.texto_de_paginas(paginas) if paginas else []),
+        *(referencia.texto_de_paginas(paginas) if paginas else referencia.texto_de_pasajes(pasajes or [])),
     ])
 
 
@@ -181,13 +182,14 @@ def _formato(carpeta_curso: Path, sesion: int) -> str:
 # Los pedidos empiezan siempre con la misma parte fija (reglas, fichas y formato) y terminan con lo que
 # cambia. Claude guarda unos minutos el comienzo de cada pedido y releerlo cuesta un 10 %.
 
-def pedido_de_redaccion(carpeta_curso: Path, sesion: int, paginas: list[str] | None = None) -> str:
+def pedido_de_redaccion(carpeta_curso: Path, sesion: int, paginas: list[str] | None = None,
+                        pasajes: list[str] | None = None) -> str:
     buscar = (["Las páginas del material de referencia están arriba, ya copiadas. Toma de ahí los pasajes que uses, con",
                "su fuente y su ubicación tal cual. No uses las exclusiones."] if paginas else
-              ["Antes de redactar, busca con Grep en las fuentes y lee con Read los pasajes que vas a usar.",
-               "Si la sesión tiene material de referencia, lee sus páginas y no uses las exclusiones."])
+              ["Los pasajes de las fuentes están arriba, ya elegidos. Toma de ahí los que uses, con su fuente y su",
+               "ubicación tal cual."])
     return "\n".join([
-        _contexto(carpeta_curso, sesion, paginas),
+        _contexto(carpeta_curso, sesion, paginas, pasajes),
         _formato(carpeta_curso, sesion),
         "TAREA: redacta la lectura de la sesión. Actúa como diseñador instruccional y editor senior.",
         *buscar,
@@ -492,11 +494,14 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
                        "no repito la redacción ni sus correcciones.")
     else:
         trabajo.avance("Leyendo las fuentes y redactando la lectura.")
-        # Con material de referencia, sus páginas van en el pedido y la redacción no necesita herramientas.
-        paginas = referencia.paginas(carpeta_curso, almacen.cargar(carpeta_curso, "sesion", sesion))
-        opciones = trabajo.comun if paginas is None else {**trabajo.comun, "cwd": None, "herramientas": ()}
-        trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion, paginas), tarea="redaccion",
-                                               esquema=ESQUEMA_LECTURA, etapa="redacción", **opciones)
+        # Las páginas de la referencia, o los pasajes que elige el programa, van en el pedido: la redacción no
+        # necesita herramientas (decisión 68 c).
+        ficha = almacen.cargar(carpeta_curso, "sesion", sesion)
+        paginas = referencia.paginas(carpeta_curso, ficha)
+        pasajes = None if paginas else referencia.pasajes_elegidos(carpeta_curso, sesion, referencia.textos_de_la_sesion(ficha))
+        trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion, paginas, pasajes),
+                                               tarea="redaccion", esquema=ESQUEMA_LECTURA, etapa="redacción",
+                                               **{**trabajo.comun, "cwd": None, "herramientas": ()})
 
     # Primera pasada: el verificador. La IA solo revisa una lectura sin fallas mecánicas (SPEC §9).
     errores: list[revision.Error] = []
