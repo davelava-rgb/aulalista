@@ -138,7 +138,7 @@ Estas reglas valen para todo ejercicio que el alumno ejecuta en una herramienta:
 
 ## Material 2 · Diapositivas
 
-- PowerPoint 16:9. La cantidad de diapositivas la da el contenido: una por concepto de la lectura, más portada, idea central y cierre. No hay un número fijo.
+- PowerPoint 16:9. La cantidad de diapositivas la da el contenido: una por concepto de la lectura, más portada, idea central y cierre. No hay un número fijo. Orientación: entre 12 y 20 de concepto; dos ideas pequeñas del mismo bloque pueden ir juntas, pero ningún concepto se deja fuera por cumplirla.
 - Portada, idea central, una diapositiva por concepto y cierre con "Aplícalo así" y "Cuidado con".
 - Una idea por diapositiva. Frases cortas, no párrafos.
 - Recursos gráficos cuando ayuden a entender: tablas, columnas comparativas, pasos numerados, procesos, ciclos, organigramas, mapas mentales, matrices, tableros de tarjetas y gráficas de barras con cifras de las fuentes. Al menos la mitad de las diapositivas de concepto lleva uno.

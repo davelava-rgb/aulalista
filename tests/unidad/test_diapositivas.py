@@ -817,3 +817,12 @@ def test_la_revision_visual_no_propone_quitar_texto_ni_pasarlo_a_las_notas():
     """Las notas se copian del contenido sin IA: un texto que el diseño pasara a las notas se perdería."""
     assert "no propongas quitarlo, acortarlo ni pasarlo a las notas" in diapositivas.PEDIDO_VISUAL
     assert "pasar el resto a las notas" not in diapositivas.PEDIDO_VISUAL
+
+
+def test_la_orientacion_de_cantidad_no_es_tope():
+    """Decisión 69: el pedido orienta a entre 12 y 20 de concepto; el programa no da falla por pasarse."""
+    formato = diapositivas.instrucciones_de_formato(True)
+    assert "apunta a entre 12 y 20 de concepto" in formato and "Nunca dejes fuera un concepto" in formato
+    muchas = [dict(d, titulo=f"{d['titulo']} {i}") for i in range(3) for d in LIMPIAS["diapositivas"]]
+    _, problemas = diapositivas._validar(con(diapositivas=muchas), lectura_limpia())
+    assert not any("diapositivas:" in p for p in problemas)

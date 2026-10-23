@@ -42,6 +42,7 @@ MATERIAL = "Diapositivas"
 CLAVE = "diapositivas"
 VUELTAS_DEL_VERIFICADOR = comun.VUELTAS_DEL_VERIFICADOR
 FIJAS = contenido_.FIJAS                    # portada, idea central, «Aplícalo así», «Cuidado con» y cierre
+ORIENTACION = (12, 20)                      # diapositivas de concepto a las que apunta el redactor; no es tope (decisión 69)
 ARREGLOS_DE_DISENO = 4                      # decisión 56: correcciones del diseñador, contando las de la revisión visual
 REVISIONES_VISUALES = 2                     # decisión 56: la primera, sobre el primer diseño que corre, aunque tenga fallas
 FUENTE_LECTURA = "lectura aprobada"        # así se llama la lectura entre las fuentes de la revisión
@@ -223,6 +224,9 @@ CÓMO ENTREGAR LAS DIAPOSITIVAS
   recuadros, los diagramas y la diapositiva de cierre.
 - No hay una cantidad fija de diapositivas: «diapositivas» trae una por concepto, tantas como conceptos haya. El
   programa pone {FIJAS} fijas (portada, idea central, «Aplícalo así», «Cuidado con» y cierre).
+  Orientación, no tope: apunta a entre {ORIENTACION[0]} y {ORIENTACION[1]} de concepto. Si la lectura tiene más
+  conceptos, salen más; si dos ideas pequeñas del mismo bloque caben juntas en {contenido_.MAX_PALABRAS} palabras,
+  júntalas en una. Nunca dejes fuera un concepto para cumplir la orientación.
 {{orden}}
 - tipo y lo que lleva cada uno. Deja vacío lo que el tipo no usa, y «tabla» y «grafico» en null si no los usa:
   - «frases»: de 1 a 3 frases cortas. Con una sola frase, se muestra grande, como idea destacada.
