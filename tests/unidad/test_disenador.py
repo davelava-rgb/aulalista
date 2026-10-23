@@ -104,7 +104,9 @@ COMUN = r"""
 
 
 def respuesta_por_partes(total: int, comun: str = COMUN, notas: str = "Tarjetas y una portada sobre el color principal.") -> dict:
-    return {"comun": comun, "diapositivas": [{"numero": n, "codigo": f"await dibujar({n});"} for n in range(1, total + 1)],
+    """Lo que devuelve el diseñador: solo las diapositivas (decisión 68 d). El código de prueba que comparten va
+    repetido dentro de cada una, porque el esquema ya no tiene «comun»."""
+    return {"diapositivas": [{"numero": n, "codigo": f"{comun}\nawait dibujar({n});"} for n in range(1, total + 1)],
             "notas": notas}
 
 
@@ -176,14 +178,14 @@ def test_el_programa_armado_por_partes_corre_y_cumple_los_controles(tmp_path, co
 
 def test_un_arreglo_cambia_solo_las_diapositivas_que_devuelve():
     partes, _ = disenador.fusionar(None, respuesta_por_partes(5, comun="const a = 1;"), 5)
-    arreglo = {"comun": "", "diapositivas": [{"numero": 3, "codigo": "await otra(3);"},
-                                              {"numero": 9, "codigo": "fuera de rango"}], "notas": ""}
+    arreglo = {"comun": "const b = 2;", "diapositivas": [{"numero": 3, "codigo": "await otra(3);"},
+                                                         {"numero": 9, "codigo": "fuera de rango"}], "notas": ""}
     nuevas, faltan = disenador.fusionar(partes, arreglo, 5)
     assert faltan == []
-    assert nuevas.comun == "const a = 1;"                       # vacío: el común no cambia
+    assert not hasattr(nuevas, "comun")                          # el común es fijo: el diseñador no lo escribe
     assert nuevas.diapositivas[3] == "await otra(3);"
-    assert nuevas.diapositivas[2] == "await dibujar(2);" and 9 not in nuevas.diapositivas
-    assert partes.diapositivas[3] == "await dibujar(3);"        # las partes anteriores no se tocan
+    assert nuevas.diapositivas[2] == "const a = 1;\nawait dibujar(2);" and 9 not in nuevas.diapositivas
+    assert partes.diapositivas[3] == "const a = 1;\nawait dibujar(3);"   # las partes anteriores no se tocan
 
 
 def test_un_diseno_al_que_le_faltan_diapositivas_vuelve_como_problema():
@@ -196,7 +198,8 @@ def test_un_diseno_al_que_le_faltan_diapositivas_vuelve_como_problema():
 def test_el_arreglo_muestra_el_programa_por_partes_y_pide_solo_lo_que_cambia(contenido):
     partes, _ = disenador.fusionar(None, respuesta_por_partes(3, comun="const a = 1;"), 3)
     pedido = disenador.pedido_de_arreglo(partes, ["FALLA · diseño · diapositiva 2: letra de 9 puntos."])
-    assert "// comun\nconst a = 1;" in pedido and "// diapositiva 2\nawait dibujar(2);" in pedido
+    assert "// diapositiva 2\nconst a = 1;\nawait dibujar(2);" in pedido and "// comun" not in pedido
+    assert "el código común «A» de AulaLista no cambia" in pedido
     assert "devuelve SOLO las diapositivas que cambias" in pedido
     assert "- FALLA · diseño · diapositiva 2: letra de 9 puntos." in pedido
 
@@ -324,3 +327,65 @@ def test_diapositivas_de_lee_los_numeros_de_los_problemas():
     assert disenador.diapositivas_de(problemas) == [9, 15]
     assert disenador.diapositivas_de([*problemas, "FALLA · diseño · hay 14 diapositivas; deben ser 15."]) == []
     assert disenador.diapositivas_de([*problemas, "FALLA · diseño · el programa no corrió"], todas=False) == [9, 15]
+
+
+# ---------- Decisión 68 d: el código común es de AulaLista; el diseñador solo escribe las diapositivas ----------
+
+CON_AYUDAS = {
+    1: "const s = h.pres.addSlide(); await A.portada(s);",
+    2: 'const s = h.pres.addSlide(); A.titulo(s, "Idea central", "", 2); A.cita(s, h.contenido.idea_central.frases.join(" "));',
+    "concepto": (
+        "const s = h.pres.addSlide(); const d = h.contenido.diapositivas[{i}];\n"
+        "const y = A.titulo(s, d.titulo, d.bloque, {n});\n"
+        "const partes = [...d.frases, ...d.columnas.flatMap((x) => [x.titulo, ...x.frases]),\n"
+        "  ...(d.tabla ? [] : []), ...(d.grafico ? [d.grafico.centro, ...d.grafico.ejes,\n"
+        "  ...d.grafico.elementos.flatMap((e) => [e.texto, e.detalle, ...e.hijos])] : [])].filter(Boolean);\n"
+        "if (d.tabla) {{ if (partes.length) A.frases(s, partes, y, 0.8, 18); A.tabla(s, d.tabla, y + (partes.length ? 0.9 : 0), 4); }}\n"
+        "else if (d.tipo === 'columnas') A.columnas(s, d.columnas[0], d.columnas[1], y);\n"
+        "else if (d.tipo === 'pasos' || d.tipo === 'proceso') A.pasos(s, partes, y);\n"
+        "else if (d.tipo === 'tarjetas') await A.tarjetas(s, [...d.frases.map((t) => ({{ texto: t }})), "
+        "...d.grafico.elementos.map((e) => ({{ texto: e.texto, detalle: e.detalle }}))], y, 4.4, ['FaDatabase']);\n"
+        "else A.frases(s, partes, y);"),
+    "aplicalo": ('const s = h.pres.addSlide(); const y = A.titulo(s, "Aplícalo así", "", {n}); '
+                 "A.frases(s, [...h.contenido.aplicalo.frases, ...h.contenido.aplicalo.plantilla], y);"),
+    "cuidado": ('const s = h.pres.addSlide(); const y = A.titulo(s, "Cuidado con", "", {n}); '
+                "A.frases(s, h.contenido.cuidado.riesgos, y);"),
+    "cierre": "const s = h.pres.addSlide(); A.cierre(s);",
+}
+
+
+def respuesta_con_ayudas(total: int) -> dict:
+    conceptos = total - 5
+    codigos = {1: CON_AYUDAS[1], 2: CON_AYUDAS[2]}
+    for i in range(conceptos):
+        codigos[i + 3] = CON_AYUDAS["concepto"].format(i=i, n=i + 3)
+    codigos[conceptos + 3] = CON_AYUDAS["aplicalo"].format(n=conceptos + 3)
+    codigos[conceptos + 4] = CON_AYUDAS["cuidado"].format(n=conceptos + 4)
+    codigos[conceptos + 5] = CON_AYUDAS["cierre"]
+    return {"diapositivas": [{"numero": n, "codigo": c} for n, c in codigos.items()], "notas": "Con las ayudas de A."}
+
+
+def test_el_esquema_del_diseno_no_pide_el_codigo_comun():
+    assert "comun" not in disenador.ESQUEMA_DISENO["properties"]
+    assert "A.titulo(" in disenador.GUIA and "No definas funciones comunes" in disenador.GUIA
+    assert disenador.revisar_codigo(disenador.armar(disenador.Partes({1: "// nada"}))) == []   # el común pasa el control
+
+
+def test_las_diapositivas_escritas_con_las_ayudas_corren_y_cumplen_los_controles(tmp_path, contenido):
+    partes, faltan = disenador.fusionar(None, respuesta_con_ayudas(contenido.total), contenido.total)
+    assert faltan == []
+    codigo = disenador.armar(partes)
+    assert "const A = (() => {" in codigo and codigo.index("const A") < codigo.index("// diapositiva 1")
+    corrida, salida = correr(tmp_path, contenido, codigo)
+    assert corrida.ok, corrida.error
+    assert "FaDatabase" in corrida.iconos
+    assert len(Presentation(salida).slides) == contenido.total
+    assert disenador.revisar_pptx(salida, contenido, PORTADA, IDENTIDAD) == []
+
+
+def test_el_disenador_no_puede_redefinir_las_ayudas(tmp_path, contenido):
+    respuesta = respuesta_con_ayudas(contenido.total)
+    respuesta["diapositivas"][0]["codigo"] = "A = null; const s = h.pres.addSlide();"
+    partes, _ = disenador.fusionar(None, respuesta, contenido.total)
+    corrida, _ = correr(tmp_path, contenido, disenador.armar(partes))
+    assert not corrida.ok and "constant" in corrida.error.lower()

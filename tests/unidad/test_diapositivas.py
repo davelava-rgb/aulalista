@@ -615,7 +615,7 @@ def test_con_el_contenido_aprobado_el_disenador_dibuja_y_la_revision_visual_pide
     assert rondas == ["diseño", "revisión visual 1", "arreglo 1", "revisión visual 2"]
     arreglo, imagenes = _textos_del_pedido(consulta.llamadas[4]["prompt"])
     assert "DISEÑO · diapositiva 4 («Qué valora más»): Una tabla con mucho texto. Propuesta: Pasar a tarjetas." in arreglo
-    assert "DISEÑO · diapositiva 1" in arreglo and "PROGRAMA ACTUAL, POR PARTES:" in arreglo   # la portada también
+    assert "DISEÑO · diapositiva 1" in arreglo and "PROGRAMA ACTUAL, POR DIAPOSITIVAS" in arreglo   # la portada también
     assert "Míralas para encontrar la causa" in arreglo
     assert imagenes == ["Diapositiva 1 («Portada»), como se ve ahora", "Diapositiva 4 («Qué valora más»), como se ve ahora"]
     assert material["revision_visual"] == visual["cambios"]
@@ -665,7 +665,8 @@ def test_las_diapositivas_que_siguen_con_fallas_van_en_su_version_base_y_el_rest
 
 
 def test_si_el_diseno_no_queda_bien_se_entrega_la_version_base(con_lectura):
-    roto = {**_con_disenador(), "comun": 'throw new Error("se rompió");'}
+    roto = _con_disenador()
+    roto["diapositivas"][0]["codigo"] = 'throw new Error("se rompió");'       # el común es fijo: el error va en una diapositiva
     material, consulta = generar(con_lectura, LIMPIAS, medir=medir_con_imagenes, disenar=True,
                                  despues=(roto,) * (diapositivas.ARREGLOS_DE_DISENO + 1))
     assert material["estado"] == "con pendientes"
@@ -675,7 +676,8 @@ def test_si_el_diseno_no_queda_bien_se_entrega_la_version_base(con_lectura):
 
 
 def test_un_programa_que_usa_require_no_se_corre(con_lectura):
-    malo = {**_con_disenador(), "comun": 'const fs = require("fs");'}
+    malo = _con_disenador()
+    malo["diapositivas"][0]["codigo"] = 'const fs = require("fs");' 
     material, consulta = generar(con_lectura, LIMPIAS, medir=medir_con_imagenes, disenar=True,
                                  despues=(malo,) * (diapositivas.ARREGLOS_DE_DISENO + 1))
     assert material["diseno"]["estado"] == "base"

@@ -35,18 +35,19 @@ PALABRAS_DE_UNA_ETIQUETA = 8            # «EJEMPLO», «Hoy» frente a «Con ag
 SEGUNDOS_MAXIMOS = 180
 MEDIO_MILIMETRO = 18000                 # EMU: la base mide 33,867 cm y pptxgenjs, 13,333 pulgadas
 EJECUTOR = RAIZ / "app" / "disenador" / "ejecutar.js"
+COMUN_FIJO = RAIZ / "app" / "disenador" / "comun.js"      # las ayudas «A» que escribe AulaLista (decisión 68 d)
 NODE_MODULES = RAIZ / "node_modules"
 PROHIBIDO = re.compile(
     r"\brequire\s*\(|\bimport\b|\bprocess\b|child_process|\beval\s*\(|\bFunction\s*\(|globalThis|__dirname|"
     r"__filename|\bfs\.|\bfetch\s*\(|XMLHttpRequest|WebSocket|\bWorker\b|WebAssembly")
 # Sin require no se puede cargar ningún módulo de red ni de archivos; fetch y WebSocket son globales en Node 22.
 
-# El programa va por partes: el código común y una función por diapositiva. Un arreglo devuelve solo las partes que
-# cambian; reescribir el programa entero en cada arreglo costaba más que el diseño mismo.
+# El programa va por partes: el código común fijo de AulaLista (comun.js, decisión 68 d) y una función por
+# diapositiva, que escribe el diseñador. Un arreglo devuelve solo las diapositivas que cambian; reescribir el
+# programa entero en cada arreglo costaba más que el diseño mismo.
 ESQUEMA_DISENO = {
     "type": "object",
     "properties": {
-        "comun": {"type": "string"},
         "diapositivas": {"type": "array", "items": {
             "type": "object",
             "properties": {"numero": {"type": "integer"}, "codigo": {"type": "string"}},
@@ -54,7 +55,7 @@ ESQUEMA_DISENO = {
         }},
         "notas": {"type": "string"},
     },
-    "required": ["comun", "diapositivas", "notas"],
+    "required": ["diapositivas", "notas"],
     "additionalProperties": False,
 }
 
@@ -65,7 +66,8 @@ class ErrorDeDiseno(RuntimeError):
 
 def disponible() -> bool:
     """Node y los paquetes del diseñador están instalados."""
-    return shutil.which("node") is not None and (NODE_MODULES / "pptxgenjs").is_dir() and EJECUTOR.exists()
+    return (shutil.which("node") is not None and (NODE_MODULES / "pptxgenjs").is_dir() and EJECUTOR.exists()
+            and COMUN_FIJO.exists())
 
 
 # ---------- Datos para el programa ----------
@@ -96,18 +98,36 @@ El contenido ya está escrito y aprobado. Tu trabajo es solo el diseño: escribe
 ese contenido como una presentación profesional, variada y atractiva.
 
 CÓMO ES EL PROGRAMA
-- El programa va por partes. AulaLista las arma así:
+- AulaLista arma el programa así:
     module.exports = async (h) => {
-      [comun]
+      [código común de AulaLista: define «A», las ayudas de diseño]
       [diapositiva 1]   // cada una dentro de su propia función async, en orden
       [diapositiva 2]
       ...
     };
-- En «comun» va el código que comparten todas las diapositivas: constantes y funciones de ayuda (por ejemplo, el
-  pie, la etiqueta del bloque, las tarjetas). Ya tiene «h». No crea diapositivas.
-- En «diapositivas», una entrada por diapositiva con su «numero» (1 es la portada) y su «codigo»: el cuerpo de una
-  función async sin parámetros que crea esa sola diapositiva con h.pres.addSlide() y usa lo definido en «comun».
-- No uses require, import, process, fs, fetch ni nada fuera de «h». Un programa que los use se rechaza.
+- Tú escribes solo «diapositivas»: una entrada por diapositiva con su «numero» (1 es la portada) y su «codigo»: el
+  cuerpo de una función async sin parámetros que crea esa sola diapositiva con h.pres.addSlide() y usa «h» y «A».
+  No definas funciones comunes ni redefinas «A»: lo común ya está escrito.
+- No uses require, import, process, fs, fetch ni nada fuera de «h» y «A». Un programa que los use se rechaza.
+- «A» trae estas ayudas (x, y, w, h en pulgadas; A.W y A.H son el ancho y el alto; A.M, el margen de 0,5):
+  - A.texto(s, texto, x, y, w, h, opciones): addText con la tipografía y la letra mínima ya puestas. «texto» es una
+    cadena o una lista de trozos de pptxgenjs. Las opciones son las de addText (fontSize, bold, color, align…).
+  - A.lineas(textos) y A.vinetas(textos): los trozos para A.texto, una línea por texto; con viñeta, enteras.
+  - A.rect(s, x, y, w, h, color) y A.redondo(s, x, y, w, h, color): un rectángulo liso o redondeado, sin borde.
+  - await A.icono(s, nombre, x, y, tamaño, color): un ícono de react-icons puesto en la diapositiva.
+  - A.pie(s, numero): el pie con el curso, la sesión y el número de la diapositiva.
+  - A.etiqueta(s, texto, x, y, w, color): una píldora con una etiqueta corta.
+  - A.titulo(s, titulo, bloque, numero): la etiqueta del bloque, el título, la línea de acento y el pie.
+    Devuelve la «y» donde empieza el cuerpo. Úsala en toda diapositiva de concepto.
+  - await A.tarjetas(s, [{texto, detalle}], y, h, [iconos]): tarjetas en fila con ícono, título y detalle.
+  - A.columnas(s, {titulo, frases}, {titulo, frases}, y, h, "vs"): dos columnas comparativas.
+  - A.pasos(s, [textos], y, h): pasos numerados en fila.
+  - A.frases(s, [textos], y, h): una frase grande si es una, o viñetas enteras si son varias.
+  - A.cita(s, texto, y, h): una frase destacada sobre el color principal.
+  - A.tabla(s, tabla, y, h): la tabla del contenido con encabezado de color y filas alternas.
+  - await A.portada(s) y A.cierre(s): la portada y el cierre completos, con el docente y el contacto.
+- Usa «A» para lo repetido y pptxgenjs directo (h.pres, s.addShape, s.addText…) para lo que «A» no tiene: ciclos,
+  organigramas, mapas, matrices, gráficas y cualquier composición propia.
 - «h» trae:
   - h.pres: la presentación de pptxgenjs, ya en 16:9 (13,333 × 7,5 pulgadas; h.ancho y h.alto). Crea cada diapositiva con
     h.pres.addSlide() y agrega texto, formas, tablas, gráficas e imágenes con su API.
@@ -189,7 +209,7 @@ def escribir_sistema(datos_: dict, carpeta: Path) -> Path:
 def pedido_de_diseno(total: int) -> str:
     return "\n".join([
         "Diseña la presentación según la guía y los datos de tus instrucciones.",
-        f"Devuelve «comun» y las {total} diapositivas, de la 1 a la {total}.",
+        f"Devuelve las {total} diapositivas, de la 1 a la {total}. El código común «A» ya existe: no lo escribas.",
         "En «notas», resume en una o dos frases las decisiones de diseño.",
     ])
 
@@ -200,8 +220,7 @@ def pedido_de_arreglo(partes: "Partes", problemas: list[str], con_imagenes: bool
         *(["Arriba van las imágenes de las diapositivas con problemas, como se ven ahora. Míralas para encontrar la "
            "causa de cada problema antes de cambiar el código."] if con_imagenes else []),
         "",
-        "PROGRAMA ACTUAL, POR PARTES:",
-        "// comun", partes.comun,
+        "PROGRAMA ACTUAL, POR DIAPOSITIVAS (el código común «A» de AulaLista no cambia):",
         *[f"// diapositiva {n}\n{codigo}" for n, codigo in sorted(partes.diapositivas.items())],
         "",
         "PROBLEMAS QUE ENCONTRÓ AULALISTA AL CORRERLO Y REVISARLO. Corrígelos todos.",
@@ -210,7 +229,6 @@ def pedido_de_arreglo(partes: "Partes", problemas: list[str], con_imagenes: bool
         "CÓMO DEVOLVER EL ARREGLO",
         "- En «diapositivas», devuelve SOLO las diapositivas que cambias, cada una con su número y su código completo.",
         "  Las que no devuelves quedan como están.",
-        "- En «comun», devuelve el código común completo solo si lo cambias. Si no lo cambias, déjalo vacío.",
         "- En «notas», di en una frase qué cambiaste.",
     ])
 
@@ -219,16 +237,14 @@ def pedido_de_arreglo(partes: "Partes", problemas: list[str], con_imagenes: bool
 
 @dataclass
 class Partes:
-    comun: str = ""
+    """Las diapositivas que escribió el diseñador, por número. El código común no está aquí: es fijo (comun.js)."""
     diapositivas: dict[int, str] = field(default_factory=dict)
 
 
 def fusionar(partes: Partes | None, respuesta: dict, total: int) -> tuple[Partes, list[str]]:
-    """Agrega a las partes las que devolvió el diseñador. Las que no devolvió quedan como estaban.
+    """Agrega a las partes las diapositivas que devolvió el diseñador. Las que no devolvió quedan como estaban.
     Devuelve también lo que falta para armar el programa: una diapositiva sin código."""
-    nuevas = Partes(partes.comun, dict(partes.diapositivas)) if partes else Partes()
-    if respuesta.get("comun", "").strip():
-        nuevas.comun = respuesta["comun"]
+    nuevas = Partes(dict(partes.diapositivas)) if partes else Partes()
     for d in respuesta.get("diapositivas", []):
         if 1 <= d["numero"] <= total and d["codigo"].strip():
             nuevas.diapositivas[d["numero"]] = d["codigo"]
@@ -239,10 +255,12 @@ def fusionar(partes: Partes | None, respuesta: dict, total: int) -> tuple[Partes
 
 
 def armar(partes: Partes) -> str:
-    """El módulo que corre Node: el código común y una función por diapositiva, llamadas en orden."""
+    """El módulo que corre Node: el código común fijo de AulaLista y una función por diapositiva, llamadas en
+    orden (decisión 68 d)."""
     funciones = "\n".join(f"  async () => {{ // diapositiva {n}\n{codigo}\n  }},"
                           for n, codigo in sorted(partes.diapositivas.items()))
-    return (f"module.exports = async (h) => {{\n{partes.comun}\n"
+    comun = COMUN_FIJO.read_text(encoding="utf-8")
+    return (f"module.exports = async (h) => {{\n{comun}\n"
             f"const __diapositivas = [\n{funciones}\n];\n"
             "for (const dibujar of __diapositivas) await dibujar();\n};\n")
 
