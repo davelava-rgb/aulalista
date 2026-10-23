@@ -30,11 +30,14 @@ modelo = "claude-sonnet-5-5"
 tope_usd = 0.40
 max_turns = 3
 
-# Redacción de un material a partir de las fichas y de los pasajes de las fuentes.
+# Redacción de un material a partir de las fichas y de los pasajes de las fuentes. Esfuerzo medio (decisión 68 e):
+# con el esfuerzo por defecto, un cuarto de lo que costaba una redacción era razonamiento. Va sin herramientas desde
+# la decisión 68 c, así que no necesita tantos turnos.
 [redaccion]
 modelo = "claude-opus-5-5"
 tope_usd = 3.00
-max_turns = 40
+max_turns = 5
+esfuerzo = "medium"
 
 # Corrección de un material después del verificador: completa o por ejercicio. Solo arregla lo que señala la
 # validación, así que no necesita el modelo de la redacción (decisión del profesor, 15/10/2026).
@@ -99,15 +102,16 @@ tope_usd = 0.30
 max_turns = 1
 esfuerzo = "medium"
 
-# Agente diseñador: escribe el programa pptxgenjs de las diapositivas (decisión 32). Esfuerzo medio: con el
-# esfuerzo por defecto, dos tercios de lo que escribía era razonamiento (decisión 41).
+# Agente diseñador: escribe las diapositivas del programa pptxgenjs (decisión 32); el código común lo pone AulaLista
+# (decisión 68 d). Esfuerzo bajo (decisión 68 e): con esfuerzo medio, todavía el 60 % de lo que escribía era
+# razonamiento. Se mide en una sesión; si las fallas de diseño suben, vuelve a medio.
 # Caché de una hora (decisión 68 b): el diseño dura de 5 a 7 minutos y la caché normal, de 5 minutos, expiraba
 # antes del primer arreglo. Con una hora, los arreglos leen la guía y los datos en vez de escribirlos otra vez.
 [diseno]
 modelo = "claude-opus-5-5"
 tope_usd = 4.00
 max_turns = 3
-esfuerzo = "medium"
+esfuerzo = "low"
 cache = "1h"
 
 # Arreglos del diseñador: corrige solo las diapositivas que nombran los problemas, viendo su imagen. Va con Opus,
@@ -116,14 +120,14 @@ cache = "1h"
 modelo = "claude-opus-5-5"
 tope_usd = 2.00
 max_turns = 3
-esfuerzo = "medium"
+esfuerzo = "low"
 
 # Agente diseñador de la página del alumno de la actividad web: escribe el HTML completo, a medida (decisión 57).
 [diseno_web]
 modelo = "claude-opus-5-5"
 tope_usd = 4.00
 max_turns = 3
-esfuerzo = "medium"
+esfuerzo = "low"
 cache = "1h"
 
 # Arreglos de la página de la actividad: devuelve solo los trozos que cambian (decisión 57 f).
@@ -131,4 +135,4 @@ cache = "1h"
 modelo = "claude-opus-5-5"
 tope_usd = 2.00
 max_turns = 3
-esfuerzo = "medium"
+esfuerzo = "low"

@@ -89,3 +89,13 @@ def test_una_vida_de_cache_desconocida_se_rechaza(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "RUTA_MODELOS", ruta)
     with pytest.raises(ValueError, match="5m"):
         agente.opciones_base("rara", "k")
+
+
+# ---------- Decisión 68 e: esfuerzo bajo en el diseño y medio en la redacción ----------
+
+def test_el_esfuerzo_de_cada_tarea():
+    esperado = {"diseno": "low", "arreglo_diseno": "low", "diseno_web": "low", "arreglo_web": "low",
+                "redaccion": "medium", "revision": "medium"}
+    for tarea, esfuerzo in esperado.items():
+        assert agente.opciones_base(tarea, "k").effort == esfuerzo, tarea
+    assert agente.opciones_base("redaccion", "k").max_turns == 5   # sin herramientas, no hacen falta 40 turnos
