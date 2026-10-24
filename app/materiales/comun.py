@@ -145,14 +145,20 @@ def esquema_de_correcciones(**formas: dict) -> dict:
     }
 
 
-async def consultar_correccion(pedido: str, forma: str, esquema: dict, **opciones) -> dict:
-    """Pide la corrección en una de las formas del esquema común y devuelve solo esa parte."""
-    otras = ", ".join(f"«{f}»" for f in esquema["properties"] if f != forma)
-    pedido = f"{pedido}\nLlena solo «{forma}». Deja en null {otras}."
+async def consultar_parte(pedido: str, parte: str, esquema: dict, **opciones) -> dict:
+    """Pide una sola parte de un esquema común (una forma de corregir, un material de la redacción) y devuelve
+    solo esa parte. Con el mismo esquema en todas las llamadas, el comienzo del pedido se lee de caché."""
+    otras = ", ".join(f"«{f}»" for f in esquema["properties"] if f != parte)
+    pedido = f"{pedido}\nLlena solo «{parte}». Deja en null {otras}."
     respuesta = await agente.consultar(pedido, esquema=esquema, **opciones)
-    if not isinstance(respuesta.get(forma), dict):
-        raise agente.ErrorDeAgente(f"La corrección no devolvió «{forma}».")
-    return respuesta[forma]
+    if not isinstance(respuesta.get(parte), dict):
+        raise agente.ErrorDeAgente(f"La respuesta no devolvió «{parte}».")
+    return respuesta[parte]
+
+
+async def consultar_correccion(pedido: str, forma: str, esquema: dict, **opciones) -> dict:
+    """Pide la corrección en una de las formas del esquema común y devuelve solo esa parte (decisión 51)."""
+    return await consultar_parte(pedido, forma, esquema, **opciones)
 
 
 REGLAS_DE_CORRECCION = """REGLAS DE CORRECCIÓN

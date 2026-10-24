@@ -327,3 +327,24 @@ def test_completar_desde_la_pagina_llena_lo_vacio_con_lo_que_se_escribio(curso, 
                                                   "curso.numero_sesiones": "4"})
     assert "Propuse «Sesiones»." in r.text
     assert vistos == [("sesiones", "4")]   # lo escrito se guarda antes de completar
+
+
+def test_al_abrir_la_ficha_de_la_sesion_se_dice_que_se_llena_sola(curso):
+    cliente.post("/cursos/scrum/ficha", data={"accion": "guardar", **datos.CURSO})
+    pagina = cliente.get("/cursos/scrum/sesiones/2/ficha").text
+    assert ("AulaLista llenó «Número y título», «Alcance» y «Lo que los alumnos ya vieron en sesiones anteriores» "
+            "con la ficha del curso. Revisa esos campos antes de guardar: cámbialos si hace falta.") in pagina
+    assert pagina.count('<span class="marca">Tomado de la ficha del curso</span>') == 3
+    # La segunda vez no hay nada nuevo que llenar: no se repite el aviso.
+    assert "AulaLista llenó" not in cliente.get("/cursos/scrum/sesiones/2/ficha").text
+
+
+def test_las_paginas_escritas_en_la_linea_de_la_sesion_pasan_a_su_ficha(curso):
+    sesiones = datos.CURSO["curso.sesiones"].replace(
+        "2. Roles de Scrum: responsabilidades", "2. Roles de Scrum: responsabilidades (guia.pdf: páginas 4 a 9, 12 y 15)")
+    cliente.post("/cursos/scrum/ficha", data={"accion": "guardar", **datos.CURSO, "curso.sesiones": sesiones})
+    cliente.get("/cursos/scrum/sesiones/2/ficha")
+    ficha = almacen.cargar(curso, "sesion", 2)
+    assert almacen.valor(ficha, "sesion.numero_titulo") == "2. Roles de Scrum"
+    assert almacen.valor(ficha, "sesion.alcance") == "responsabilidades"
+    assert almacen.valor(ficha, "sesion.referencia") == "guia.pdf: páginas 4 a 9, 12 y 15"

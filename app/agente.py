@@ -25,6 +25,7 @@ class ErrorDeAgente(RuntimeError):
 
 
 VIDAS_DE_CACHE = ("5m", "1h")   # lo que admite CLAUDE_CODE_PROMPT_CACHE_TTL
+SIN_CACHE = "no"                # cache = "no": la llamada no escribe caché (PLAN.md §0, decisión 74 a)
 
 # Guarda para desarrollar sin gastar (PLAN.md §0, decisión 68 f): con esta variable de entorno puesta, ninguna
 # llamada real a Claude sale. Las pruebas con una consulta simulada no la miran.
@@ -65,9 +66,15 @@ def opciones_base(tarea: str, clave: str, **extra) -> ClaudeAgentOptions:
         # Cuánto vive la caché del pedido: «5m» (lo normal) o «1h». La de una hora cuesta más al escribirse y sirve
         # cuando la llamada dura más de cinco minutos y otra llamada va a leer su comienzo después (decisión 68 b).
         # Variable documentada del CLI: CLAUDE_CODE_PROMPT_CACHE_TTL (docs/en/agent-sdk/cost-tracking).
-        if datos["cache"] not in VIDAS_DE_CACHE:
-            raise ValueError(f"La tarea «{tarea}» tiene cache = «{datos['cache']}»; vale «5m» o «1h».")
-        valores["env"]["CLAUDE_CODE_PROMPT_CACHE_TTL"] = datos["cache"]
+        # «no»: la llamada no escribe caché. Escribirla cuesta 1,25 veces la entrada y solo paga si otra llamada la
+        # lee después; una tarea de una sola llamada que nadie relee la apaga (decisión 74 a). Variable documentada
+        # del CLI: DISABLE_PROMPT_CACHING (docs/en/prompt-caching, «Disable prompt caching»).
+        if datos["cache"] == SIN_CACHE:
+            valores["env"]["DISABLE_PROMPT_CACHING"] = "1"
+        elif datos["cache"] not in VIDAS_DE_CACHE:
+            raise ValueError(f"La tarea «{tarea}» tiene cache = «{datos['cache']}»; vale «5m», «1h» o «no».")
+        else:
+            valores["env"]["CLAUDE_CODE_PROMPT_CACHE_TTL"] = datos["cache"]
     valores.update(extra)
     return ClaudeAgentOptions(**valores)
 

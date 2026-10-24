@@ -90,6 +90,29 @@ def test_una_vida_de_cache_desconocida_se_rechaza(tmp_path, monkeypatch):
         agente.opciones_base("rara", "k")
 
 
+# ---------- Decisión 74 a: caché apagada en las tareas de una sola llamada que nadie relee ----------
+
+def test_una_tarea_con_cache_no_apaga_la_cache_y_no_pide_vida():
+    env = agente.opciones_base("revision_visual", "k").env
+    assert env["DISABLE_PROMPT_CACHING"] == "1"
+    assert "CLAUDE_CODE_PROMPT_CACHE_TTL" not in env
+
+
+def test_las_tareas_de_una_sola_llamada_apagan_la_cache_y_la_redaccion_pide_una_hora():
+    from app.config import leer_tarea
+    for tarea in ("revision_visual", "ejecucion", "comparacion_ejecucion", "revision_ejercicios", "lectura_imagen", "conexion"):
+        assert leer_tarea(tarea).get("cache") == "no", tarea
+    assert leer_tarea("redaccion").get("cache") == "1h"
+    # Las que otra llamada relee siguen con caché: las correcciones comparten su mensaje de sistema (decisión 43).
+    for tarea in ("correccion", "correccion_oraciones", "revision", "diseno", "arreglo_diseno", "fichas", "completar_ficha"):
+        assert leer_tarea(tarea).get("cache") != "no", tarea
+
+
+def test_una_tarea_con_cache_de_cinco_minutos_no_apaga_la_cache():
+    env = agente.opciones_base("correccion", "k").env
+    assert "DISABLE_PROMPT_CACHING" not in env
+
+
 # ---------- Decisión 68 e: esfuerzo bajo en el diseño y medio en la redacción ----------
 
 def test_el_esfuerzo_de_cada_tarea():

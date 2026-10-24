@@ -477,3 +477,17 @@ def test_la_propuesta_del_curso_sigue_con_herramientas(entorno, curso):
     correr(flujo.proponer(curso, "curso-x", "curso", consulta=consulta))
     assert consulta.llamadas[0]["options"].tools == ["Read", "Grep", "Glob"]
     assert "Busca con Grep" in consulta.llamadas[0]["prompt"]
+
+
+def test_la_linea_de_una_sesion_se_parte_en_titulo_alcance_y_paginas():
+    from app.fichas import referencia
+    partes = almacen.partes_de_sesion("Roles de Scrum: responsabilidades (guia.pdf: páginas 4 a 9, 12 y 15; norma.pdf)")
+    assert partes == {"titulo": "Roles de Scrum", "alcance": "responsabilidades",
+                      "referencia": ["guia.pdf: páginas 4 a 9, 12 y 15", "norma.pdf"]}
+    assert almacen.partes_de_sesion("Roles de Scrum [Manual Scrum.pdf: 3-5]") == {
+        "titulo": "Roles de Scrum", "alcance": "Roles de Scrum", "referencia": ["Manual Scrum.pdf: 3-5"]}
+    # Un paréntesis que no nombra un archivo es parte del alcance.
+    assert almacen.partes_de_sesion("Roles: el equipo (sin el cliente)") == {
+        "titulo": "Roles", "alcance": "el equipo (sin el cliente)", "referencia": []}
+    # Las páginas sueltas y los rangos se leen igual en «Material de referencia».
+    assert referencia._rangos("páginas 4 a 9, 12 y 15") == [(4, 9), (12, 12), (15, 15)]

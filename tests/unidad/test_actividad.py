@@ -12,7 +12,7 @@ from app import servidor
 from app.fichas import almacen, controles
 from app.materiales import actividad, comun, estilo, lectura
 from app.materiales.contenido import Actividad
-from tests.conftest import consulta_en_secuencia
+from tests.conftest import consulta_en_secuencia, texto_del_redactor
 from app.materiales.contenido import repartir
 from tests.sembrados.actividad import CASOS, LIMPIA, PESOS_LIMPIOS, PUNTAJE_LIMPIO, PUNTOS_LIMPIOS
 from tests.unidad.test_lectura import LIMPIA as LECTURA_LIMPIA
@@ -133,12 +133,14 @@ def test_un_contenido_limpio_queda_verificado_con_dos_llamadas(sesion):  # noqa:
     assert len(consulta.llamadas) == 2   # redacción y revisión del contenido (decisión 22)
     assert consulta.llamadas[1]["options"].model == "claude-sonnet-5-5"
     assert material["revision"] == {"bloques": 5, "errores": 0, "corregidos": 0, "pendientes": 0, "descartados": 0}
-    pedido, opciones = consulta.llamadas[0]["prompt"], consulta.llamadas[0]["options"]
+    pedido, opciones = texto_del_redactor(consulta.llamadas[0]), consulta.llamadas[0]["options"]
     assert opciones.model == "claude-opus-5-5" and opciones.tools == []        # decisión 68 c: sin herramientas
     assert "PASAJES DE LAS FUENTES DEL CURSO" in pedido and "Grep" not in pedido
     assert "## Actividad web" in pedido and "Única excepción: la actividad web lleva puntos" in pedido
-    assert "LECTURA APROBADA DE LA SESIÓN" in pedido and "Los pilares de Scrum son tres." in pedido
-    assert opciones.output_format["schema"]["properties"]["pasos"]["items"]["properties"]["preguntas"]
+    assert "LECTURA APROBADA" in pedido and "Los pilares de Scrum son tres." in pedido
+    # Un solo esquema de redacción con una parte por material (decisión 74 b).
+    esquema_actividad = opciones.output_format["schema"]["properties"]["actividad"]["anyOf"][0]
+    assert esquema_actividad["properties"]["pasos"]["items"]["properties"]["preguntas"]
     # Los puntos de esta actividad no son falla en el Excel (decisión 57 c).
     hoja = openpyxl.load_workbook(rutas["excel"])["Hallazgos"]
     assert not [f for f in hoja.iter_rows(min_row=2, values_only=True) if f[0] == "FALLA"]

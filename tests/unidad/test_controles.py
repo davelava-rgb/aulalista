@@ -224,12 +224,12 @@ def test_cada_modelo_se_analiza_una_sola_vez(sesion, tmp_path, monkeypatch):  # 
 
 
 def test_el_redactor_recibe_el_tono_y_el_pasaje_del_modelo(sesion, tmp_path):  # noqa: F811
-    from app.materiales import lectura
+    from app.materiales import lectura, redaccion
     _con_modelo(sesion, tmp_path)
     ficha = almacen.cargar(sesion, "curso")
     almacen.aplicar_formulario(ficha, {"visual.estilo": "cercano"})
     almacen.guardar(sesion, "curso", None, ficha)
-    pedido = lectura.pedido_de_redaccion(sesion, 1)
+    pedido = redaccion.sistema(sesion, 1) + lectura.pedido_de_redaccion(sesion, 1)   # lo que lee el redactor (decisión 74 b)
     assert "TONO DEL MATERIAL (estilo «cercano»)" in pedido
     assert "Trata al alumno de tú" in pedido
     assert "MODELO DE TONO (pasaje de modelo.pdf" in pedido

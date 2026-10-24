@@ -20,7 +20,7 @@ from app.materiales import comun, diapositivas, estilo, lectura
 from app.materiales import pptx as generador
 from app.materiales.contenido import Diapositivas
 from app.materiales.docx import Portada
-from tests.conftest import consulta_en_secuencia
+from tests.conftest import consulta_en_secuencia, texto_del_redactor
 from tests.unidad.test_lectura import LIMPIA, SIN_ERRORES, error, revision, sesion, una_pagina  # noqa: F401
 
 cliente = TestClient(servidor.app)
@@ -94,10 +94,11 @@ def con_lectura(sesion):  # noqa: F811
     return sesion
 
 
-def generar(carpeta, *salidas, medir=medir_sin_desbordes, revisar=True, disenar=False, despues=()):
+def generar(carpeta, *salidas, medir=medir_sin_desbordes, revisar=True, disenar=False, despues=(), revision_visual=None):
     """`despues`: respuestas que llegan después de la revisión del contenido (el diseñador y la revisión visual)."""
     consulta = consulta_en_secuencia(*salidas, *([SIN_ERRORES] if revisar else []), *despues)
-    material = asyncio.run(diapositivas.generar(carpeta, "scrum", 1, consulta=consulta, medir=medir, disenar=disenar))
+    material = asyncio.run(diapositivas.generar(carpeta, "scrum", 1, consulta=consulta, medir=medir, disenar=disenar,
+                                                revision_visual=revision_visual))
     return material, consulta
 
 
@@ -246,9 +247,9 @@ def test_genera_verifica_y_entrega(con_lectura):
     assert material["estado"] == "verificada", material.get("problemas")
     rutas = diapositivas.archivos(con_lectura, 1)
     assert len(Presentation(rutas["pptx"]).slides) == 15
-    redaccion = consulta.llamadas[0]["prompt"]
+    redaccion = texto_del_redactor(consulta.llamadas[0])
     assert "## Material 2 · Diapositivas" in redaccion and "LECTURA APROBADA" in redaccion
-    assert "Los pilares de Scrum son tres." in redaccion         # la lectura va en el pedido
+    assert "Los pilares de Scrum son tres." in redaccion         # la lectura va en la parte común (decisión 74 b)
     revision_ = consulta.llamadas[1]["prompt"]
     assert diapositivas.FUENTE_LECTURA in revision_ and "no agregan contenido" in revision_
     assert "[Diapositivas de «Pilares de Scrum»]" in revision_
@@ -383,7 +384,7 @@ def test_sin_lectura_salen_de_las_fuentes_y_las_fichas(sin_lectura):
     assert diapositivas.faltan(sin_lectura, 1) == {"ficha": [], "otros": []}
     material, consulta = generar(sin_lectura, LIMPIAS)
     assert material["estado"] == "verificada", material.get("problemas")
-    redaccion = consulta.llamadas[0]["prompt"]
+    redaccion = texto_del_redactor(consulta.llamadas[0])
     assert "ESTA SESIÓN NO TIENE LECTURA" in redaccion and "LECTURA APROBADA" not in redaccion
     assert "PASAJES DE LAS FUENTES DEL CURSO" in redaccion and "Grep" not in redaccion   # decisión 68 c
     revision_ = consulta.llamadas[1]["prompt"]
@@ -404,9 +405,9 @@ def test_sin_lectura_las_paginas_de_referencia_van_en_el_pedido_y_la_redaccion_n
         "[silabo.pdf · página 1] Scrum Master con IA", "[silabo.pdf · página 1] Docente: jefe de capacitación"]
     _, consulta = generar(sin_lectura, LIMPIAS)
     redaccion = consulta.llamadas[0]
-    assert "PÁGINAS DEL MATERIAL DE REFERENCIA" in redaccion["prompt"]
-    assert "[silabo.pdf · página 1] Scrum Master con IA" in redaccion["prompt"]
-    assert "busca con Grep" not in redaccion["prompt"]
+    assert "PÁGINAS DEL MATERIAL DE REFERENCIA" in texto_del_redactor(redaccion)
+    assert "[silabo.pdf · página 1] Scrum Master con IA" in texto_del_redactor(redaccion)
+    assert "busca con Grep" not in texto_del_redactor(redaccion)
     assert redaccion["options"].tools == [] and not redaccion["options"].allowed_tools
     # Las correcciones y la revisión siguen sin las páginas: solo la redacción las necesita.
     assert all("PÁGINAS DEL MATERIAL DE REFERENCIA" not in c["prompt"] for c in consulta.llamadas[1:])
@@ -423,9 +424,10 @@ def test_una_referencia_demasiado_larga_se_recorta_y_no_se_busca_con_herramienta
     assert diapositivas.paginas_de_referencia(sin_lectura, 1) == ["[silabo.pdf · página 1] Docente: jefe de capacitación"]
     _, consulta = generar(sin_lectura, LIMPIAS)
     redaccion = consulta.llamadas[0]
-    assert "Docente: jefe de capacitación" in redaccion["prompt"] and "Scrum Master con IA" not in redaccion["prompt"].split(
+    texto = texto_del_redactor(redaccion)
+    assert "Docente: jefe de capacitación" in texto and "Scrum Master con IA" not in texto.split(
         "PÁGINAS DEL MATERIAL DE REFERENCIA")[1]
-    assert redaccion["options"].tools == [] and "Grep" not in redaccion["prompt"]
+    assert redaccion["options"].tools == [] and "Grep" not in texto
 
 
 def test_sin_lectura_las_diapositivas_de_un_bloque_van_juntas():
@@ -602,7 +604,7 @@ def test_con_el_contenido_aprobado_el_disenador_dibuja_y_la_revision_visual_pide
     visual = {"cambios": [{"numero": 4, "problema": "Una tabla con mucho texto.", "propuesta": "Pasar a tarjetas."},
                           {"numero": 1, "problema": "La portada sin fuerza.", "propuesta": "Título más grande."}]}
     material, consulta = generar(con_lectura, LIMPIAS, medir=medir_con_imagenes, disenar=True,
-                                 despues=(diseno, visual, diseno))
+                                 despues=(diseno, visual, diseno), revision_visual=True)
     assert material["estado"] == "verificada", material.get("problemas")
     assert material["diseno"]["estado"] == "diseñada" and material["diseno"]["arreglos"] == 1
     assert consulta.llamadas[2]["options"].output_format["schema"] == disenador_esquema()
@@ -640,7 +642,7 @@ def test_la_revision_visual_corre_aunque_el_primer_diseno_tenga_fallas_y_el_arre
     """Decisión 56: la primera revisión visual no espera un diseño sin fallas, y el arreglo recibe la imagen de cada
     diapositiva con problemas."""
     material, consulta = generar(con_lectura, LIMPIAS, medir=medir_con_imagenes, disenar=True,
-                                 despues=(_diseno_con_texto_ajeno(3), VISUAL_VACIA, _con_disenador()))
+                                 despues=(_diseno_con_texto_ajeno(3), VISUAL_VACIA, _con_disenador()), revision_visual=True)
     assert material["diseno"]["estado"] == "diseñada", material.get("problemas")
     rondas = [r["ronda"] for r in material["diseno"]["rondas"]]
     assert rondas == ["diseño", "revisión visual 1", "arreglo 1"]
@@ -653,7 +655,7 @@ def test_las_diapositivas_que_siguen_con_fallas_van_en_su_version_base_y_el_rest
     """Decisión 56: ya no es todo o nada."""
     malo = _diseno_con_texto_ajeno(3)
     material, consulta = generar(con_lectura, LIMPIAS, medir=medir_con_imagenes, disenar=True,
-                                 despues=(malo, VISUAL_VACIA, *(malo,) * diapositivas.ARREGLOS_DE_DISENO))
+                                 despues=(malo, VISUAL_VACIA, *(malo,) * diapositivas.ARREGLOS_DE_DISENO), revision_visual=True)
     assert material["diseno"]["estado"] == "mixta" and material["diseno"]["base"] == [3]
     assert material["estado"] == "con pendientes"
     assert any("Diseño: FALLA · diseño · diapositiva 3" in p for p in material["problemas"])
@@ -827,3 +829,27 @@ def test_la_orientacion_de_cantidad_no_es_tope():
     muchas = [dict(d, titulo=f"{d['titulo']} {i}") for i in range(3) for d in LIMPIAS["diapositivas"]]
     _, problemas = diapositivas._validar(con(diapositivas=muchas), lectura_limpia())
     assert not any("diapositivas:" in p for p in problemas)
+
+
+# ---------- Decisión 74 c: la revisión visual es opcional ----------
+
+def test_sin_la_casilla_no_hay_revision_visual_y_la_entrega_lo_dice(con_lectura):
+    diseno = _con_disenador()
+    material, consulta = generar(con_lectura, LIMPIAS, medir=medir_con_imagenes, disenar=True, despues=(diseno,))
+    assert material["estado"] == "verificada", material.get("problemas")
+    assert material["diseno"]["estado"] == "diseñada" and material["diseno"]["arreglos"] == 0
+    assert [r["ronda"] for r in material["diseno"]["rondas"]] == ["diseño"]
+    assert len(consulta.llamadas) == 3                      # redacción, revisión del contenido y diseño: sin revisión visual
+    assert material["opciones"] == {"revision_visual": False} and material["revision_visual"] == []
+    entrega = {s["clave"]: s["lineas"] for s in material["entrega"]["secciones"]}
+    assert any("Revisión visual de las imágenes: no la pediste" in l for l in entrega["valide"])
+    # Generar de nuevo sin decir nada repite lo elegido la vez anterior; con la casilla, la revisión visual corre.
+    material, consulta = generar(con_lectura, LIMPIAS, medir=medir_con_imagenes, disenar=True,
+                                 despues=(diseno, VISUAL_VACIA), revision_visual=True)
+    assert [r["ronda"] for r in material["diseno"]["rondas"]] == ["diseño", "revisión visual 1"]
+    assert material["opciones"] == {"revision_visual": True}
+    material, consulta = generar(con_lectura, LIMPIAS, medir=medir_con_imagenes, disenar=True,
+                                 despues=(diseno, VISUAL_VACIA))
+    assert [r["ronda"] for r in material["diseno"]["rondas"]] == ["diseño", "revisión visual 1"]
+    entrega = {s["clave"]: s["lineas"] for s in material["entrega"]["secciones"]}
+    assert any("Revisión visual de las imágenes: sin cambios." in l for l in entrega["valide"])

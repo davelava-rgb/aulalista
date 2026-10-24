@@ -27,7 +27,7 @@ from pydantic import ValidationError
 
 from app import agente, entrega, office, skill, tokens
 from app.fichas import almacen, dependencias, plantillas, referencia, verificacion
-from app.materiales import comun, diapositivas, docx, ejecucion, estilo, figuras, lectura, practica
+from app.materiales import comun, diapositivas, docx, ejecucion, estilo, figuras, lectura, practica, redaccion
 from app.materiales.contenido import ESQUEMA_LABORATORIO, Laboratorio
 from app.validacion import excel, pasada2, revision, revisor, verificador
 from app.validacion.pasajes import Corpus
@@ -345,13 +345,15 @@ CÓMO ENTREGAR EL LABORATORIO (PLAN.md §0, decisión 33)
 
 def pedido_de_redaccion(carpeta_curso: Path, sesion: int, paginas: list[str] | None = None,
                         pasajes: list[str] | None = None) -> str:
-    citar = ("Si citas una fuente, toma el pasaje de las páginas del material de referencia, que están arriba." if paginas
-             else "Si citas una fuente, toma el pasaje de la lista de pasajes de arriba.")
+    """Lo propio del laboratorio. La parte común de la sesión (reglas comunes, fichas, fuentes, pasajes y la lectura
+    aprobada) va en el mensaje de sistema (redaccion.py, decisión 74 b)."""
+    citar = "Si citas una fuente, toma el pasaje de las páginas o de los pasajes que están en tu contexto, ya copiados."
     return "\n".join([
-        _contexto(carpeta_curso, sesion, paginas, pasajes),
+        redaccion.reglas_del_material(SECCIONES_DE_LA_SKILL),
         instrucciones_de_formato(sesion, aviso_de_adjuntos(carpeta_curso), herramienta(carpeta_curso)),
         "TAREA: prepara el laboratorio de la sesión. Actúa como diseñador instruccional. Toma los ejercicios de la ficha",
         "de la sesión: su área, la acción, el entregable, el archivo de práctica con su problema y la respuesta correcta.",
+        "Si la lectura aprobada está en tu contexto, usa su vocabulario y no repitas sus ejemplos en los ejercicios.",
         citar,
         "Antes de entregar, ejecuta mentalmente cada ejercicio como un alumno, con sus archivos: cada paso se puede hacer,",
         "lo que se copia funciona tal cual y el resultado es el entregable de la ficha.",
@@ -739,23 +741,34 @@ def _guardado(carpeta_curso: Path, sesion: int, rutas: dict) -> dict:
             "fecha": _estado(carpeta_curso, sesion).get("fecha", "")}
 
 
+def ejecucion_sugerida(carpeta_curso: Path) -> bool:
+    """La casilla «Ejecutar cada ejercicio» viene marcada solo si la herramienta de los ejercicios es Excel o IA:
+    ahí la ejecución prueba fórmulas y prompts reales. A mano, Claude solo hace el ejercicio (decisión 74 d)."""
+    return bool(herramienta(carpeta_curso))
+
+
 async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.query, recalcular=None,
-                  contar_paginas=None, ejecutar=None, desde_guardado: bool = False) -> dict:
+                  contar_paginas=None, ejecutar=None, desde_guardado: bool = False,
+                  ejecutar_ejercicios: bool | None = None) -> dict:
     """`recalcular` reemplaza a Excel en las pruebas (calcula las fórmulas antes de sacar las figuras); `ejecutar`
-    reemplaza la ejecución de los ejercicios."""
+    reemplaza la ejecución de los ejercicios. `ejecutar_ejercicios`: la ejecución es opcional (decisión 74 d); None
+    repite lo que se eligió la vez anterior, y si no hubo, no se ejecuta."""
     if not almacen.puede_empezar_material(carpeta_curso, sesion):
         raise NoSePuedeEmpezar("Guarda completas la ficha del curso y la ficha de la sesión antes de generar el laboratorio.")
     faltan_ = almacen.faltantes_para(carpeta_curso, sesion, CLAVE)
     if faltan_:
         raise NoSePuedeEmpezar("Completa la ficha de la sesión antes de generar el laboratorio: " + " ".join(faltan_))
     rutas = archivos(carpeta_curso, sesion)
+    if ejecutar_ejercicios is None:
+        ejecutar_ejercicios = bool((_estado(carpeta_curso, sesion).get("opciones") or {}).get("ejecucion", False))
     guardado = _guardado(carpeta_curso, sesion, rutas) if desde_guardado else None
     rutas["contenido"].parent.mkdir(parents=True, exist_ok=True)
     _actualizar(carpeta_curso, sesion, estado="trabajando", previo="", avance=[], error="", desactualizado=False,
-                entrega={}, aprobada="", revisor={}, corrida_desde=tokens.lineas(curso))
+                entrega={}, aprobada="", revisor={}, corrida_desde=tokens.lineas(curso),
+                opciones={"ejecucion": ejecutar_ejercicios})
     try:
         return await _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, contar_paginas, ejecutar,
-                              guardado)
+                              guardado, ejecutar_ejercicios)
     except asyncio.CancelledError:
         marcar_detenida(carpeta_curso, sesion)
         raise
@@ -765,7 +778,7 @@ async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.
 
 
 async def _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, contar_paginas, ejecutar,
-                   guardado=None) -> dict:
+                   guardado=None, ejecutar_ejercicios: bool = False) -> dict:
     inicio = tokens.lineas(curso)
     skill.comprobar(secciones=SECCIONES_DE_LA_SKILL + pasada2.SECCIONES_DE_LA_SKILL + revisor.SECCIONES_DE_LA_SKILL,
                     subsecciones=revisor.SUBSECCIONES_DE_LA_SKILL)
@@ -783,18 +796,16 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, co
         trabajo.avance("Leyendo las fichas y las fuentes y escribiendo el laboratorio y sus archivos de práctica.")
         # Las páginas de la referencia, o los pasajes que elige el programa, van en el pedido: la redacción no
         # necesita herramientas (decisión 68 c).
-        ficha = _ficha_sesion(carpeta_curso, sesion)
-        paginas = referencia.paginas(carpeta_curso, ficha)
-        pasajes = None if paginas else referencia.pasajes_elegidos(carpeta_curso, sesion, referencia.textos_de_la_sesion(ficha))
-        trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion, paginas, pasajes),
-                                               tarea="redaccion", esquema=ESQUEMA_LABORATORIO, etapa="redacción",
-                                               **{**trabajo.comun, "cwd": None, "herramientas": ()})
+        paginas, pasajes = redaccion.fuentes_de_la_sesion(carpeta_curso, sesion)
+        trabajo.datos = await redaccion.redactar(CLAVE, pedido_de_redaccion(carpeta_curso, sesion, paginas, pasajes),
+                                                 carpeta_curso, sesion, paginas=paginas, pasajes=pasajes,
+                                                 etapa="redacción", **{**trabajo.comun, "cwd": None, "herramientas": ()})
     errores: list[revision.Error] = []
     revisados = 0
     ejecuciones: list[ejecucion.Ejecucion] = []
     if await trabajo.verificar():
         errores, revisados = await comun.revisar_y_corregir(trabajo, bloques_de)
-        if not trabajo.fallas:
+        if not trabajo.fallas and ejecutar_ejercicios:     # opcional: lo pide el profesor al generar (decisión 74 d)
             ejecuciones = await trabajo.ejecutar_y_corregir()
     if ejecuciones:
         comun.guardar_json(rutas["ejecucion_json"], [x.a_dict() for x in ejecuciones])
@@ -834,7 +845,7 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, co
         archivos_practica=[{"nombre": a.nombre, "ejercicio": practica.numero_de_ejercicio(a.nombre),
                             "problema": a.problema} for a in (final.archivos if final else [])],
         figuras=len(trabajo.imagenes),
-        ejecucion=_resumen_de_ejecucion(ejecuciones),
+        ejecucion=_resumen_de_ejecucion(ejecuciones, pedida=ejecutar_ejercicios),
         decisiones=[d.model_dump() for d in decisiones],
         archivos={"word": rutas["word"].name, "zip": rutas["zip"].name, "excel": rutas["excel"].name,
                   **({"registro": rutas["registro"].name} if ejecuciones else {})},
@@ -850,8 +861,8 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, recalcular, co
     return _estado(carpeta_curso, sesion)
 
 
-def _resumen_de_ejecucion(ejecuciones: list[ejecucion.Ejecucion]) -> dict:
-    return {"ejercicios": len(ejecuciones), "formulas": sum(len(x.celdas) for x in ejecuciones),
+def _resumen_de_ejecucion(ejecuciones: list[ejecucion.Ejecucion], pedida: bool = True) -> dict:
+    return {"pedida": pedida, "ejercicios": len(ejecuciones), "formulas": sum(len(x.celdas) for x in ejecuciones),
             "conversaciones": sum(x.conversaciones for x in ejecuciones if not x.a_mano),
             "a_mano": [x.numero for x in ejecuciones if x.a_mano],
             "coinciden": [x.numero for x in ejecuciones if x.coincide],
@@ -929,6 +940,9 @@ def _entrega(material: dict) -> dict:
             no_pude.append(f"Los ejercicios a mano los hizo Claude ({ej['modelo']}) con el texto de sus archivos. "
                            "No abrió Excel ni Word: un alumno puede equivocarse en otros lugares.")
         no_pude += ej["no_pude"]
+    elif not ej.get("pedida", True):
+        no_pude = ["No ejecuté los ejercicios: no lo pediste. Es opcional (decisión 74 d): marca «Ejecutar cada ejercicio "
+                   "como un alumno» al generar si quieres que las fórmulas corran en Excel y los prompts en Claude."]
     else:
         no_pude = ["No ejecuté los ejercicios porque quedaron fallas antes de llegar a la ejecución."]
     if material.get("reanudada"):

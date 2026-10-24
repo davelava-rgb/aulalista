@@ -14,7 +14,7 @@ from PIL import Image
 from app import servidor
 from app.materiales import ejecucion, figuras, laboratorio, practica
 from app.materiales.contenido import Laboratorio
-from tests.conftest import consulta_en_secuencia, resultado_simulado
+from tests.conftest import consulta_en_secuencia, resultado_simulado, texto_del_redactor
 from tests.sembrados import laboratorio as sembrados
 from tests.unidad.test_lectura import SIN_ERRORES, sesion, una_pagina  # noqa: F401
 
@@ -42,10 +42,11 @@ async def sin_ejecucion(contenido, **_):
             for e in contenido.ejercicios]
 
 
-def generar(carpeta, *salidas, ejecutar=sin_ejecucion):
+def generar(carpeta, *salidas, ejecutar=sin_ejecucion, ejecutar_ejercicios=True):
     consulta = consulta_en_secuencia(*salidas, SIN_ERRORES)
     material = asyncio.run(laboratorio.generar(carpeta, "scrum", 1, consulta=consulta, recalcular=recalcular_sin_excel,
-                                               contar_paginas=una_pagina, ejecutar=ejecutar))
+                                               contar_paginas=una_pagina, ejecutar=ejecutar,
+                                               ejecutar_ejercicios=ejecutar_ejercicios))
     return material, consulta
 
 
@@ -371,8 +372,8 @@ def test_con_referencia_las_paginas_van_en_el_pedido_y_la_redaccion_no_busca(ses
     almacen.guardar(sesion, "sesion", 1, ficha)
     _, consulta = generar(sesion, sembrados.limpio())
     redaccion = consulta.llamadas[0]
-    assert "[silabo.pdf · página 1] Scrum Master con IA" in redaccion["prompt"]
-    assert "busca con Grep" not in redaccion["prompt"]
+    assert "[silabo.pdf · página 1] Scrum Master con IA" in texto_del_redactor(redaccion)
+    assert "busca con Grep" not in texto_del_redactor(redaccion)
     assert redaccion["options"].tools == [] and not redaccion["options"].allowed_tools
 
 
@@ -706,3 +707,49 @@ def test_pasos_de_una_diapositiva_de_proceso_aprobada_en_otro_orden_son_falla(se
     assert any("son pasos de un proceso" in p for p in problemas), problemas
     monkeypatch.setattr(diapositivas, "estado", lambda *_: {"estado": "verificada"})
     assert laboratorio._validar(sembrados.con_listas_y(sembrados.OTRO_ORDEN), sesion, 1)[1] == []
+
+
+# ---------- Decisión 74 d: la ejecución de los ejercicios es opcional ----------
+
+def test_sin_la_casilla_no_se_ejecutan_los_ejercicios_y_la_entrega_lo_dice(sesion):  # noqa: F811
+    llamadas = []
+
+    async def contar(contenido, **_):
+        llamadas.append(contenido)
+        return []
+
+    material, _ = generar(sesion, sembrados.limpio(), ejecutar=contar, ejecutar_ejercicios=False)
+    assert material["estado"] == "verificada", material.get("problemas")
+    assert llamadas == [] and material["opciones"] == {"ejecucion": False}
+    assert material["ejecucion"]["pedida"] is False and material["ejecucion"]["ejercicios"] == 0
+    assert "registro" not in material["archivos"]
+    entrega = {s["clave"]: s["lineas"] for s in material["entrega"]["secciones"]}
+    assert any("No ejecuté los ejercicios: no lo pediste" in l and "Ejecutar cada ejercicio como un alumno" in l
+               for l in entrega["no_pude"])
+    assert not any("Ejecuté" in l for l in entrega["probe"])
+    # Con la casilla, se ejecuta como antes y la opción queda guardada.
+    material, _ = generar(sesion, sembrados.limpio(), ejecutar=contar, ejecutar_ejercicios=True)
+    assert len(llamadas) == 1 and material["opciones"] == {"ejecucion": True} and material["ejecucion"]["pedida"] is True
+
+
+def test_reanudar_respeta_la_casilla_de_la_vez_anterior(sesion):  # noqa: F811
+    generar(sesion, sembrados.limpio(), ejecutar_ejercicios=False)
+    laboratorio._actualizar(sesion, 1, estado="error", error="se cortó")
+    llamadas = []
+
+    async def contar(contenido, **_):
+        llamadas.append(contenido)
+        return []
+
+    material = asyncio.run(laboratorio.reanudar(sesion, "scrum", 1, consulta=consulta_en_secuencia(SIN_ERRORES),
+                                                recalcular=recalcular_sin_excel, contar_paginas=una_pagina, ejecutar=contar))
+    assert llamadas == [] and material["opciones"] == {"ejecucion": False}
+
+
+def test_la_casilla_viene_marcada_solo_si_el_curso_usa_excel_o_ia(sesion):  # noqa: F811
+    from app.fichas import almacen
+    assert laboratorio.ejecucion_sugerida(sesion) is True      # la ficha de prueba dice «Excel e IA»
+    ficha = almacen.cargar(sesion, "curso")
+    almacen.aplicar_formulario(ficha, {"herramientas.ejercicios": "Ninguna"})
+    almacen.guardar(sesion, "curso", None, ficha)
+    assert laboratorio.ejecucion_sugerida(sesion) is False

@@ -290,6 +290,10 @@ p.origen { margin: -0.5rem 0 0.75rem; font-size: 0.8125rem; }
 .resumen { margin-top: 0; font-weight: bold; }
 .accion { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; margin: 1rem 0; }
 .accion .nota { flex: 1 1 20rem; }
+/* Casillas opcionales junto a Generar (decisión 74): ocupan su propia fila debajo del botón. */
+.accion .opcion { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.5rem; }
+.accion .opcion input { margin: 0; }
+.accion .opcion .nota { flex: 1 1 100%; margin-left: 1.4rem; }
 strong.alerta, span.alerta { color: var(--error); }
 .detalle { margin: 0.75rem 0; padding: 0 0.75rem; border: 1px solid var(--suave); border-radius: 6px; }
 .detalle > summary, .avance-bloque > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: bold; }
@@ -543,6 +547,14 @@ main.hoja .material .cabeza h1 { margin: 0; }
 .prep-ok { flex: none; color: var(--bien); }
 .prep-cuerpo { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 1rem 2rem; padding: 0 1rem 1rem; }
 .prep-cuerpo h2 { margin-top: 0.5rem; font-size: 1rem; }
+/* Zona para arrastrar fuentes: un recuadro punteado que se marca al pasar un archivo por encima. */
+.subir-fuentes { margin: 1rem 0; }
+.zona-arrastre { display: flex; flex-direction: column; gap: 0.5rem; padding: 1rem; border: 2px dashed var(--principal); border-radius: 8px; background: var(--suave); cursor: pointer; }
+.zona-arrastre.sobre { border-style: solid; background: var(--fondo); }
+.zona-arrastre.ocupada { opacity: 0.6; pointer-events: none; }
+.zona-arrastre input { min-height: 0; padding: 0; border: 0; background: transparent; }
+.subir-estado { margin: 0.5rem 0 0; font-weight: bold; }
+.subir-estado:empty { display: none; }
 .fuentes { margin: 0.5rem 0; padding: 0; list-style: none; }
 .fuentes li { display: flex; flex-direction: column; gap: 0.1rem; max-width: none; padding: 0.5rem 0; border-bottom: 1px solid var(--borde); }
 .fuente-nombre { overflow-wrap: anywhere; }

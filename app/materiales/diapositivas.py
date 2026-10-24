@@ -31,7 +31,7 @@ from pydantic import ValidationError
 
 from app import agente, entrega, office, skill, tokens
 from app.fichas import almacen, referencia, verificacion
-from app.materiales import comun, disenador, estilo, lectura
+from app.materiales import comun, disenador, estilo, lectura, redaccion
 from app.materiales import pptx as generador
 from app.materiales import contenido as contenido_
 from app.materiales.contenido import ESQUEMA_DIAPOSITIVAS, Diapositivas, Lectura
@@ -140,16 +140,7 @@ def lectura_aprobada(carpeta_curso: Path, sesion: int) -> Lectura:
 
 # ---------- La lectura como fuente ----------
 
-def partes_de_la_lectura(contenido: Lectura) -> list[tuple[str, list[str]]]:
-    """La lectura por partes, con su nombre: idea central, cada bloque, «Aplícalo así» y «Cuidado con»."""
-    partes = [("Idea central", list(contenido.idea_central))]
-    for b in contenido.bloques:
-        filas = [" | ".join(f) for f in b.tabla.filas] if b.tabla else []
-        tabla = ([b.tabla.titulo, " | ".join(b.tabla.encabezados)] if b.tabla else []) + filas
-        partes.append((b.subtitulo, [*b.parrafos, b.ejemplo.titulo, *b.ejemplo.parrafos, *tabla]))
-    partes.append(("Aplícalo así", [*contenido.aplicalo.parrafos, *contenido.aplicalo.plantilla]))
-    partes.append(("Cuidado con", list(contenido.cuidado)))
-    return partes
+partes_de_la_lectura = redaccion.partes_de_la_lectura   # la lectura por partes, con su nombre (redaccion.py)
 
 
 def fuente_de_la_lectura(contenido: Lectura) -> Fuente:
@@ -333,23 +324,27 @@ REGLAS_PROPIAS_SIN_LECTURA = """EN LAS DIAPOSITIVAS
 
 def pedido_de_redaccion(carpeta_curso: Path, sesion: int, contenido_lectura: Lectura | None,
                         paginas: list[str] | None = None, pasajes: list[str] | None = None) -> str:
+    """Lo propio de las diapositivas. La parte común de la sesión (reglas comunes, fichas, fuentes, pasajes y la
+    lectura aprobada) va en el mensaje de sistema (redaccion.py, decisión 74 b)."""
     if contenido_lectura is not None:
-        tarea = ["TAREA: prepara las diapositivas de la sesión a partir de la lectura aprobada. Actúa como diseñador",
-                 "instruccional y diseñador de materiales. Resume cada parte de la lectura en frases cortas, en su orden."]
+        tarea = ["TAREA: prepara las diapositivas de la sesión a partir de la lectura aprobada, que está en tu contexto:",
+                 "es su fuente, parte por parte y en ese orden. Actúa como diseñador instruccional y diseñador de",
+                 "materiales. Resume cada parte de la lectura en frases cortas, en su orden. Las fuentes del curso",
+                 "sirven solo para copiar el pasaje de una frase que cita una fuente."]
     elif paginas:
-        tarea = ["TAREA: prepara las diapositivas de la sesión a partir del material de referencia y de las fichas.",
+        tarea = ["ESTA SESIÓN NO TIENE LECTURA. Las diapositivas salen del material de referencia y de las fichas.",
+                 "TAREA: prepara las diapositivas de la sesión a partir del material de referencia y de las fichas.",
                  "Actúa como diseñador instruccional y diseñador de materiales.",
-                 "Las páginas del material de referencia están arriba, ya copiadas. Toma de ahí los pasajes que uses,",
-                 "con su fuente y su ubicación tal cual. No uses las exclusiones.",
+                 redaccion.DONDE_ESTAN_LAS_FUENTES, "No uses las exclusiones.",
                  "No afirmes sobre el contenido de una fuente nada que no esté en un pasaje copiado."]
     else:
-        tarea = ["TAREA: prepara las diapositivas de la sesión a partir de las fuentes del curso y de las fichas.",
+        tarea = ["ESTA SESIÓN NO TIENE LECTURA. Las diapositivas salen de las fuentes del curso y de las fichas.",
+                 "TAREA: prepara las diapositivas de la sesión a partir de las fuentes del curso y de las fichas.",
                  "Actúa como diseñador instruccional y diseñador de materiales.",
-                 "Los pasajes de las fuentes están arriba, ya elegidos. Toma de ahí los que uses, con su fuente y su",
-                 "ubicación tal cual.",
+                 redaccion.DONDE_ESTAN_LAS_FUENTES,
                  "No afirmes sobre el contenido de una fuente nada que no esté en un pasaje copiado."]
     return "\n".join([
-        _contexto(carpeta_curso, sesion, contenido_lectura, paginas, pasajes),
+        redaccion.reglas_del_material(SECCIONES_DE_LA_SKILL),
         instrucciones_de_formato(contenido_lectura is not None),
         *tarea,
         "Antes de entregar, revisa cada diapositiva: qué puede hacer el alumno con ella y qué frase tiene dos lecturas.",
@@ -688,6 +683,7 @@ class _Trabajo:
         self.revision_visual: list[dict] = []
         self.diseno: dict = {}
         self.diseno_corrio = False       # el último programa del diseñador corrió y se midió (decisión 56)
+        self.con_revision_visual = False  # la revisión visual es opcional: la pide el profesor al generar (decisión 74 c)
         self.ajustes: list[str] = []     # recuadros con el margen recortado en el PowerPoint actual (decisión 39)
         self.usar_disenador = False
         self.vuelta = 0
@@ -818,7 +814,8 @@ class _Trabajo:
                 ajustes_bueno = list(self.ajustes)
                 (carpeta / "aprobado.js").write_text(codigo, encoding="utf-8")
             propuestas = []
-            if self.diseno_corrio and visuales < REVISIONES_VISUALES and (not tecnicos or visuales == 0):
+            if (self.con_revision_visual and self.diseno_corrio and visuales < REVISIONES_VISUALES
+                    and (not tecnicos or visuales == 0)):
                 visuales += 1
                 propuestas = await revision_visual(self)
                 self._registrar_ronda(f"revisión visual {visuales}", propuestas)
@@ -1046,15 +1043,19 @@ async def reanudar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente
 
 
 async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.query, medir=None,
-                  disenar: bool | None = None, desde_guardado: bool = False) -> dict:
+                  disenar: bool | None = None, desde_guardado: bool = False, revision_visual: bool | None = None) -> dict:
     """`medir` reemplaza a PowerPoint en las pruebas: recibe el .pptx y la carpeta de imágenes.
     `disenar`: None usa el agente diseñador si Node y sus paquetes están instalados (decisión 32).
-    `desde_guardado`: toma el contenido de la corrida anterior en lugar de redactarlo (decisión 40)."""
+    `desde_guardado`: toma el contenido de la corrida anterior en lugar de redactarlo (decisión 40).
+    `revision_visual`: la revisión visual del diseño es opcional (decisión 74 c); None repite lo que se eligió la
+    vez anterior, y si no hubo, no corre."""
     pendiente = faltan(carpeta_curso, sesion)
     if pendiente["ficha"] or pendiente["otros"]:
         raise NoSePuedeEmpezar("No se pueden generar las diapositivas. "
                                + " ".join(pendiente["ficha"] + pendiente["otros"]))
     rutas = archivos(carpeta_curso, sesion)
+    if revision_visual is None:
+        revision_visual = bool((_estado(carpeta_curso, sesion).get("opciones") or {}).get("revision_visual", False))
     guardado = None
     if desde_guardado:
         guardado = {"datos": comun.leer_json(rutas["contenido"]),
@@ -1063,9 +1064,10 @@ async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.
     rutas["contenido"].parent.mkdir(parents=True, exist_ok=True)
     _actualizar(carpeta_curso, sesion, estado="trabajando", previo="", avance=[], error="", desactualizado=False,
                 entrega={}, aprobada="", revisor={}, corrida_desde=tokens.lineas(curso),
+                opciones={"revision_visual": revision_visual},
                 lectura_fecha=lectura.estado(carpeta_curso, sesion).get("fecha", "") if usa_lectura(carpeta_curso, sesion) else "")
     try:
-        return await _generar(carpeta_curso, curso, sesion, rutas, consulta, medir, disenar, guardado)
+        return await _generar(carpeta_curso, curso, sesion, rutas, consulta, medir, disenar, guardado, revision_visual)
     except asyncio.CancelledError:
         marcar_detenida(carpeta_curso, sesion)
         raise
@@ -1074,12 +1076,14 @@ async def generar(carpeta_curso: Path, curso: str, sesion: int, consulta=agente.
         raise
 
 
-async def _generar(carpeta_curso, curso, sesion, rutas, consulta, medir, disenar=None, guardado=None) -> dict:
+async def _generar(carpeta_curso, curso, sesion, rutas, consulta, medir, disenar=None, guardado=None,
+                   revision_visual: bool = False) -> dict:
     inicio = tokens.lineas(curso)
     # Antes de gastar tokens: la skill tiene todo lo que se usará y la configuración del verificador se lee.
     skill.comprobar(secciones=SECCIONES_DE_LA_SKILL + pasada2.SECCIONES_DE_LA_SKILL + revisor.SECCIONES_DE_LA_SKILL,
                     subsecciones=revisor.SUBSECCIONES_DE_LA_SKILL)
     trabajo = _Trabajo(carpeta_curso, curso, sesion, rutas, consulta, medir)
+    trabajo.con_revision_visual = revision_visual
     verificador.verificar.leer_configuracion(verificador.configuracion_del_material(trabajo.carpeta_sesion, MATERIAL))
     _limpiar(rutas)
 
@@ -1092,15 +1096,10 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, medir, disenar
         trabajo.avance("Leyendo la lectura aprobada y preparando las diapositivas.")
         # Sin lectura, las páginas de la referencia o los pasajes que elige el programa van en el pedido: la
         # redacción no necesita herramientas (decisión 68 c).
-        paginas = pasajes = None
-        if trabajo.lectura is None:
-            paginas = paginas_de_referencia(carpeta_curso, sesion)
-            if not paginas:
-                ficha = almacen.cargar(carpeta_curso, "sesion", sesion)
-                pasajes = referencia.pasajes_elegidos(carpeta_curso, sesion, referencia.textos_de_la_sesion(ficha))
-        trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion, trabajo.lectura, paginas, pasajes),
-                                               tarea="redaccion", esquema=ESQUEMA_DIAPOSITIVAS, etapa="redacción",
-                                               **{**trabajo.comun, "cwd": None, "herramientas": ()})
+        paginas, pasajes = redaccion.fuentes_de_la_sesion(carpeta_curso, sesion)
+        trabajo.datos = await redaccion.redactar(
+            CLAVE, pedido_de_redaccion(carpeta_curso, sesion, trabajo.lectura, paginas, pasajes), carpeta_curso, sesion,
+            paginas=paginas, pasajes=pasajes, etapa="redacción", **{**trabajo.comun, "cwd": None, "herramientas": ()})
 
     errores: list[revision.Error] = []
     revisados = 0
@@ -1243,10 +1242,14 @@ def _entrega(material: dict) -> dict:
         valide.append(f"Diseño (decisión 32): lo dibujó el agente diseñador con {comun.cuantos(diseno.get('iconos', 0), 'ícono')}"
                       f" y {comun.cuantos(diseno.get('arreglos', 0), 'arreglo')}. Todo su texto sale tal cual del contenido "
                       "aprobado, con letra de 12 puntos o más y solo los colores de la ficha.")
-        valide.append("Revisión visual de las imágenes: " + (
-            f"{comun.cuantos(len(visual), 'cambio')} de diseño, que el diseñador aplicó: "
-            + "; ".join(f"diapositiva {v['numero']}, {v['propuesta'].rstrip('.')}" for v in visual) + "."
-            if visual else "sin cambios."))
+        if (material.get("opciones") or {}).get("revision_visual"):
+            valide.append("Revisión visual de las imágenes: " + (
+                f"{comun.cuantos(len(visual), 'cambio')} de diseño, que el diseñador aplicó: "
+                + "; ".join(f"diapositiva {v['numero']}, {v['propuesta'].rstrip('.')}" for v in visual) + "."
+                if visual else "sin cambios."))
+        else:
+            valide.append("Revisión visual de las imágenes: no la pediste. Es opcional (decisión 74 c): márcala al "
+                          "generar si quieres que Claude mire las diapositivas y proponga cambios de diseño.")
     elif diseno.get("estado") == "mixta":
         valide.append(f"Diseño (decisión 56): lo dibujó el agente diseñador, salvo las diapositivas "
                       f"{', '.join(map(str, diseno.get('base', [])))}, que siguieron con fallas y van en su versión "

@@ -629,20 +629,24 @@ def datos_desde_el_curso(ficha_curso: dict, sesion: int) -> dict[str, str]:
     """Lo que la ficha de la sesión toma de la del curso, sin IA: número y título, alcance, lo ya visto, lo que no se
     adelanta y, si la cobertura de «Repartir las sesiones» sigue valiendo, las páginas de referencia."""
     sesiones = almacen.sesiones_del_curso(ficha_curso)
-    titulos = {s["numero"]: s["texto"].partition(":")[0].strip(" .") for s in sesiones}
+    titulos = {s["numero"]: almacen.partes_de_sesion(s["texto"])["titulo"] for s in sesiones}
     actual = next((s for s in sesiones if s["numero"] == sesion), None)
     if actual is None:
         return {}
-    titulo, separador, alcance = actual["texto"].partition(":")
+    partes = almacen.partes_de_sesion(actual["texto"])
     datos = {
-        "sesion.numero_titulo": f"{sesion}. {titulo.strip(' .')}",
-        "sesion.alcance": (alcance if separador else actual["texto"]).strip(),
+        "sesion.numero_titulo": f"{sesion}. {partes['titulo']}",
+        "sesion.alcance": partes["alcance"],
         "sesion.ya_vieron": "; ".join(t for n, t in sorted(titulos.items()) if n < sesion),
         "sesion.no_adelantar": "; ".join(t for n, t in sorted(titulos.items()) if n > sesion),
     }
-    cobertura_curso = cobertura_vigente(ficha_curso)
-    if cobertura_curso and cobertura_curso["vigente"]:
-        datos["sesion.referencia"] = "\n".join(cobertura_curso["sesiones"].get(str(sesion), []))
+    # Las páginas escritas en la línea de la sesión mandan sobre las que repartió la IA (decisión 53).
+    if partes["referencia"]:
+        datos["sesion.referencia"] = "\n".join(partes["referencia"])
+    else:
+        cobertura_curso = cobertura_vigente(ficha_curso)
+        if cobertura_curso and cobertura_curso["vigente"]:
+            datos["sesion.referencia"] = "\n".join(cobertura_curso["sesiones"].get(str(sesion), []))
     return {campo: texto for campo, texto in datos.items() if texto}
 
 

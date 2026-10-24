@@ -1,6 +1,5 @@
 {% extends "_entorno.html" %}
-{% from "_estado.html" import indicador, costo, usd, gasta %}
-{% set terminos = namespace(tokens=false) %}
+{% from "_estado.html" import indicador, usd %}
 
 {% block titulo %}{{ m.titulo }}, sesión {{ sesion }} | AulaLista{% endblock %}
 
@@ -172,14 +171,10 @@
 {%- if m.gasto_corrida and m.gasto_corrida.llamadas %} La última generación gastó {{ usd(m.gasto_corrida.costo_usd) }} estimados en {{ m.gasto_corrida.llamadas }} {{ "llamada" if m.gasto_corrida.llamadas == 1 else "llamadas" }}.{% elif m.costo_ref %} La última vez, en la sesión {{ m.costo_ref.sesion }}, gastó {{ usd(m.costo_ref.costo_usd) }} estimados.{% endif -%}
 {%- endmacro %}
     {% if listo %}<details class="otras-acciones"><summary>Otras acciones</summary>{% endif %}
-    {% if m.gasto_corrida %}
-    {# Mientras trabaja, el gasto va en vivo; después, es lo que gastó la última generación. #}
-    <p class="nota" id="gasto-generacion">{{ "Desde que pulsaste Generar:" if e.estado == "trabajando" else "La última generación:" }} {{ m.gasto_corrida.llamadas }} {{ "llamada" if m.gasto_corrida.llamadas == 1 else "llamadas" }}, {{ usd(m.gasto_corrida.costo_usd) }} estimados.{% if e.revisor %} Incluye el revisor independiente.{% endif %}</p>
-    {% endif %}
     {% if m.reanudable %}
     <form method="post" action="{{ base }}/reanudar" class="accion">
       <button type="submit" aria-describedby="reanudar-{{ m.clave }}">Reanudar desde lo guardado</button>
-      <span class="nota" id="reanudar-{{ m.clave }}">Usa el texto ya redactado y corregido la vez anterior: no repite la redacción y gasta menos. Tarda unos minutos.</span>
+      <span class="nota" id="reanudar-{{ m.clave }}">Usa el texto ya redactado y corregido la vez anterior: no repite la redacción. Tarda unos minutos.</span>
     </form>
     {% endif %}
     {% set bloqueado = not puede_empezar or m.faltan.ficha or m.faltan.otros or e.estado == "trabajando" %}
@@ -192,24 +187,27 @@
       </button>
       <span class="nota" id="motivo-{{ m.clave }}">
         {% if not puede_empezar %}Espera a que la ficha del curso esté confirmada.
-        {% elif ficha_por_preparar and e.estado != "trabajando" %}Antes de generar, AulaLista prepara el plan de la sesión, revisa sus ejercicios y confirma su ficha. {{ gasta(terminos) }} y tarda unos minutos más.
+        {% elif ficha_por_preparar and e.estado != "trabajando" %}Antes de generar, AulaLista prepara el plan de la sesión, revisa sus ejercicios y confirma su ficha. Tarda unos minutos más.
         {% elif m.faltan.ficha or m.faltan.otros %}Espera a que se complete lo de arriba.
         {% elif e.estado == "trabajando" %}Ya está en curso.
-        {% elif m.gasto_corrida and m.costo_ref and m.costo_ref.sesion == sesion %}{{ gasta(terminos) }}, como la última generación. Tarda unos minutos.
-        {% else %}{{ gasta(terminos) }}. {{ costo(m.costo_ref, "La última vez" ~ ("" if not m.costo_ref or m.costo_ref.sesion == sesion else " (sesión " ~ m.costo_ref.sesion ~ ")")) }} Tarda unos minutos.{% endif %}
+        {% else %}Usa IA. Tarda unos minutos.{% endif %}
       </span>
+      {# Casillas opcionales de este material (PLAN.md §0, decisión 74 c y d). Vienen como se eligieron la última vez. #}
+      {% for o in opciones %}
+      <label class="opcion"><input type="checkbox" name="{{ o.nombre }}" value="1"{% if o.marcada %} checked{% endif %}{% if bloqueado %} disabled{% endif %}> {{ o.etiqueta }} <span class="nota">{{ o.nota }}</span></label>
+      {% endfor %}
     </form>
     {% if generado and m.revisor is not false %}
     <form method="post" action="{{ base }}/revisor" class="accion">
       <button type="submit" class="secundario" aria-describedby="revisor-{{ m.clave }}">Pedir revisor independiente</button>
-      <span class="nota" id="revisor-{{ m.clave }}">Opcional. Otra sesión de Claude lee {{ m.el }} sin ver los borradores ni las correcciones. No corrige: lo que encuentre queda pendiente. {{ gasta(terminos) }}. Tope: 2 USD. {{ costo(costo_revisor) }}</span>
+      <span class="nota" id="revisor-{{ m.clave }}">Opcional. Otra sesión de Claude lee {{ m.el }} sin ver los borradores ni las correcciones. No corrige: lo que encuentre queda pendiente.</span>
     </form>
     {% endif %}
     {% if listo %}</details>{% endif %}
     {% if e.estado == "trabajando" %}
     <form method="post" action="{{ base }}/detener" class="accion">
       <button type="submit" class="secundario">Detener</button>
-      <span class="nota">Corta el trabajo en curso. Lo que ya se gastó no se recupera.</span>
+      <span class="nota">Corta el trabajo en curso.</span>
     </form>
     {% endif %}
   </div>
@@ -248,8 +246,6 @@
           const lista = actual.querySelector("ol.avance"), nuevos = otra.querySelectorAll("ol.avance li");
           if (lista) for (let i = lista.children.length; i < nuevos.length; i++) lista.append(nuevos[i].cloneNode(true));
           actual.dataset.avance = otra.dataset.avance;
-          const nota = otra.querySelector("#gasto-generacion"), notaActual = actual.querySelector("#gasto-generacion");
-          if (nota && notaActual) notaActual.textContent = nota.textContent;
         } else {
           actual.replaceWith(otra);
           const indicador = otra.querySelector(".indicador"), anuncio = document.getElementById("anuncio");

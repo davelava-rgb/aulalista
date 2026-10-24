@@ -46,10 +46,10 @@ def test_la_ficha_del_curso_tiene_horas_y_numero_de_sesiones():
 
 
 def test_las_horas_no_llegan_al_redactor(sesion):  # noqa: F811
-    from app.materiales import lectura
+    from app.materiales import lectura, redaccion
     _ficha(sesion, {"curso.horas": "24", "curso.numero_sesiones": "2"})
     assert "Horas del curso" in almacen.ruta_ficha(sesion, "curso", extension=".md").read_text(encoding="utf-8")
-    pedido = lectura.pedido_de_redaccion(sesion, 1)
+    pedido = redaccion.sistema(sesion, 1) + lectura.pedido_de_redaccion(sesion, 1)   # lo que lee el redactor (decisión 74 b)
     assert "Horas del curso" not in pedido and "24" not in pedido
     assert "Número de sesiones: 2" in pedido
 

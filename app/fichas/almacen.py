@@ -451,6 +451,27 @@ def sesiones_del_curso(ficha_curso: dict) -> list[dict]:
     return resultado
 
 
+# Las páginas de las fuentes que cubre una sesión, escritas en su misma línea, entre paréntesis o corchetes:
+# «3. Roles: responsabilidades (guia.pdf: páginas 4 a 9, 12 y 15; norma.pdf: 2)». Cada tramo nombra un archivo
+# de las fuentes y sus páginas: rangos («4 a 9», «4-9») o páginas sueltas («12, 15»). Sin páginas, el archivo entero.
+_PAGINAS_EN_LA_LINEA = re.compile(r"\s*[(\[]\s*([^()\[\]]*?\.(?:pdf|docx?|pptx|xlsx?|png|jpe?g|gif|webp)\s*(?::[^()\[\]]*)?)\s*[)\]]\s*$", re.I)
+
+
+def partes_de_sesion(texto: str) -> dict:
+    """«Título: alcance (archivo: páginas …)» → título, alcance y las líneas de «Material de referencia».
+    Lo que sigue a «:» es el alcance. Si no hay «:», el alcance es el texto entero. Las páginas van al final,
+    entre paréntesis, y no forman parte del alcance que ven el tablero ni los materiales."""
+    referencia = []
+    coincidencia = _PAGINAS_EN_LA_LINEA.search(texto)
+    if coincidencia:
+        texto = texto[:coincidencia.start()].strip()
+        referencia = [t.strip() for t in coincidencia.group(1).split(";") if t.strip()]
+    titulo, separador, alcance = texto.partition(":")
+    return {"titulo": titulo.strip(" .") if separador else texto.strip(" ."),
+            "alcance": alcance.strip() if separador else texto.strip(),
+            "referencia": referencia}
+
+
 def vocabulario(ficha_sesion: dict) -> list[dict]:
     """Conceptos clave en su orden. Las variantes prohibidas se escriben así:
     «Manifiesto Ágil (no usar: Agile, manifiesto agile)». Un concepto que es paso de un proceso lleva «(proceso)»

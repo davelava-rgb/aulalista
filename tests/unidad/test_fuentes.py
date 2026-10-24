@@ -205,3 +205,30 @@ def test_el_profesor_marca_la_fuente_como_revisada(curso):
 def test_temporales_de_office_se_ignoran(curso):
     (curso / "fuentes" / "~$silabo.docx").write_bytes(b"temporal")
     assert correr(convertir.convertir_curso(curso, None)) == {}
+
+
+def test_imagen_sin_lector_espera_la_lectura_con_ia_y_se_lee_despues(curso):
+    fuentes.imagen(curso / "fuentes" / "foto.png")
+    indice = correr(convertir.convertir_curso(curso, None))
+    assert indice["foto.png"]["estado"] == convertir.ESPERA_IA
+    assert indice["foto.png"]["falta_ia"] == 1 and indice["foto.png"]["pasajes"] == 0
+    assert indice["foto.png"]["avisos"] == ["Es una imagen: se lee con IA."]
+    # Sin lector, una segunda conversión no cambia nada.
+    assert correr(convertir.convertir_curso(curso, None)) == indice
+    lector = LectorSimulado()
+    indice = correr(convertir.convertir_curso(curso, lector))
+    assert indice["foto.png"]["estado"] == convertir.CONVERTIDA and indice["foto.png"]["falta_ia"] == 0
+    assert len(lector.llamadas) == 1
+    correr(convertir.convertir_curso(curso, lector))
+    assert len(lector.llamadas) == 1
+
+
+def test_pdf_escaneado_sin_lector_queda_convertido_y_anota_las_paginas_que_faltan(curso):
+    fuentes.pdf_escaneado(curso / "fuentes" / "e.pdf")
+    indice = correr(convertir.convertir_curso(curso, None))
+    assert indice["e.pdf"]["estado"] == convertir.CONVERTIDA
+    assert indice["e.pdf"]["pasajes"] == 1 and indice["e.pdf"]["falta_ia"] == 1
+    lector = LectorSimulado(["Texto escaneado"])
+    indice = correr(convertir.convertir_curso(curso, lector))
+    assert indice["e.pdf"]["pasajes"] == 2 and indice["e.pdf"]["falta_ia"] == 0 and indice["e.pdf"]["revisar"]
+    assert len(lector.llamadas) == 1

@@ -23,7 +23,7 @@ from pydantic import ValidationError
 
 from app import agente, entrega, skill, tokens
 from app.fichas import almacen, referencia, verificacion
-from app.materiales import comun, docx, estilo
+from app.materiales import comun, docx, estilo, redaccion
 from app.materiales.contenido import ESQUEMA_LECTURA, Lectura
 from app.validacion import excel, pasada2, revision, revisor, verificador
 from app.validacion.pasajes import FICHA_DE_LA_SESION, FICHA_DEL_CURSO, Corpus
@@ -179,17 +179,15 @@ def _formato(carpeta_curso: Path, sesion: int) -> str:
     return instrucciones_de_formato(bool(_referencia(carpeta_curso, sesion)[0]))
 
 
-# Los pedidos empiezan siempre con la misma parte fija (reglas, fichas y formato) y terminan con lo que
-# cambia. Claude guarda unos minutos el comienzo de cada pedido y releerlo cuesta un 10 %.
+# La parte común de la sesión (reglas comunes, fichas, fuentes, pasajes) va en el mensaje de sistema, igual para los
+# cinco materiales (redaccion.py, decisión 74 b). El pedido lleva solo lo propio de la lectura.
 
 def pedido_de_redaccion(carpeta_curso: Path, sesion: int, paginas: list[str] | None = None,
                         pasajes: list[str] | None = None) -> str:
-    buscar = (["Las páginas del material de referencia están arriba, ya copiadas. Toma de ahí los pasajes que uses, con",
-               "su fuente y su ubicación tal cual. No uses las exclusiones."] if paginas else
-              ["Los pasajes de las fuentes están arriba, ya elegidos. Toma de ahí los que uses, con su fuente y su",
-               "ubicación tal cual."])
+    buscar = ([redaccion.DONDE_ESTAN_LAS_FUENTES, "No uses las exclusiones."] if paginas
+              else [redaccion.DONDE_ESTAN_LAS_FUENTES])
     return "\n".join([
-        _contexto(carpeta_curso, sesion, paginas, pasajes),
+        redaccion.reglas_del_material(SECCIONES_DE_LA_SKILL),
         _formato(carpeta_curso, sesion),
         "TAREA: redacta la lectura de la sesión. Actúa como diseñador instruccional y editor senior.",
         *buscar,
@@ -496,12 +494,11 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, contar_paginas
         trabajo.avance("Leyendo las fuentes y redactando la lectura.")
         # Las páginas de la referencia, o los pasajes que elige el programa, van en el pedido: la redacción no
         # necesita herramientas (decisión 68 c).
-        ficha = almacen.cargar(carpeta_curso, "sesion", sesion)
-        paginas = referencia.paginas(carpeta_curso, ficha)
-        pasajes = None if paginas else referencia.pasajes_elegidos(carpeta_curso, sesion, referencia.textos_de_la_sesion(ficha))
-        trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion, paginas, pasajes),
-                                               tarea="redaccion", esquema=ESQUEMA_LECTURA, etapa="redacción",
-                                               **{**trabajo.comun, "cwd": None, "herramientas": ()})
+        paginas, pasajes = redaccion.fuentes_de_la_sesion(carpeta_curso, sesion)
+        # La lectura no recibe la lectura anterior (decisión 74 b).
+        trabajo.datos = await redaccion.redactar(CLAVE, pedido_de_redaccion(carpeta_curso, sesion, paginas, pasajes),
+                                                 carpeta_curso, sesion, paginas=paginas, pasajes=pasajes, con_lectura=False,
+                                                 etapa="redacción", **{**trabajo.comun, "cwd": None, "herramientas": ()})
 
     # Primera pasada: el verificador. La IA solo revisa una lectura sin fallas mecánicas (SPEC §9).
     errores: list[revision.Error] = []

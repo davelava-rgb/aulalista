@@ -1,6 +1,5 @@
 {% extends "_entorno.html" %}
-{% from "_estado.html" import indicador, costo, usd, gasta %}
-{% set terminos = namespace(tokens=false) %}
+{% from "_estado.html" import indicador %}
 
 {% block titulo %}{{ nombre }} | AulaLista{% endblock %}
 
@@ -11,20 +10,21 @@
   <summary>
     {% if tablero.preparacion_lista %}<svg class="prep-ok" width="22" height="22" aria-hidden="true"><use href="#i-ok"/></svg>
     <span><b>Preparación lista.</b> {{ fuentes | length }} {{ "fuente convertida" if fuentes | length == 1 else "fuentes convertidas" }} y la ficha del curso confirmada.</span>
-    {% else %}<span><b>Preparación del curso.</b> Sube y convierte las fuentes, y confirma la ficha del curso. Después aparecen las sesiones.</span>{% endif %}
+    {% else %}<span><b>Preparación del curso.</b> Sube las fuentes y confirma la ficha del curso. Después aparecen las sesiones.</span>{% endif %}
     <em>{{ "Ver o cambiar" if tablero.preparacion_lista else "Abrir" }}</em>
   </summary>
   <div class="prep-cuerpo">
     <section aria-labelledby="t-fuentes">
       <h2 id="t-fuentes">1. Fuentes del curso</h2>
-      <p class="nota">Sílabos, guías, libros, manuales, normas, programas y materiales anteriores. Formatos: PDF, Word, PowerPoint (.pptx), Excel (.xlsx) e imágenes. Al convertirla, AulaLista divide cada fuente en pasajes: trozos cortos de texto, cada uno con su página, que los materiales citan como prueba.</p>
+      <p class="nota">Sílabos, guías, libros, manuales, normas, programas y materiales anteriores. Formatos: PDF, Word, PowerPoint (.pptx), Excel (.xlsx) e imágenes. Al subirla, AulaLista divide cada fuente en pasajes: trozos cortos de texto, cada uno con su página, que los materiales citan como prueba.</p>
       {% if fuentes %}
       <ul class="fuentes">
         {% for f in fuentes %}
         <li>
           <span class="fuente-nombre">{% if f.estado == "convertida" %}<a href="/cursos/{{ curso }}/fuentes/{{ f.archivo | urlencode }}">{{ f.archivo }}</a>{% else %}{{ f.archivo }}{% endif %}</span>
           <span class="fuente-estado">
-            {{ f.estado | capitalize }}{% if f.pasajes is defined %}: {{ "{:,}".format(f.pasajes).replace(",", " ") }} pasajes{% endif %}.
+            {{ f.estado[:1] | upper }}{{ f.estado[1:] }}{% if f.pasajes %}: {{ "{:,}".format(f.pasajes).replace(",", " ") }} pasajes{% endif %}.
+            {% if f.falta_ia %}<strong class="alerta">{{ "Una página o imagen" if f.falta_ia == 1 else f.falta_ia ~ " páginas o imágenes" }} por leer con IA.</strong>{% endif %}
             {% if f.revisar and not f.revisada %}<strong class="alerta">Revisa el texto leído por IA.</strong>{% elif f.revisar %}Revisada.{% endif %}
             {% if f.motivo %}<span class="nota">{{ f.motivo }}</span>{% endif %}
             {% for a in f.avisos or [] %}<span class="nota">{{ a }}</span>{% endfor %}
@@ -33,15 +33,20 @@
         {% endfor %}
       </ul>
       {% endif %}
-      <form method="post" action="/cursos/{{ curso }}/fuentes" enctype="multipart/form-data" class="fila">
-        <label for="archivos">{{ "Subir otra fuente" if fuentes else "Archivos" }}</label>
-        <input id="archivos" name="archivos" type="file" multiple required>
-        <button type="submit" class="secundario">Subir</button>
+      {# Subir convierte enseguida, sin IA. Con JavaScript, la zona recibe archivos arrastrados y el formulario se
+         envía solo al elegirlos; sin JavaScript queda el botón «Subir». #}
+      <form method="post" action="/cursos/{{ curso }}/fuentes" enctype="multipart/form-data" class="subir-fuentes" id="form-fuentes">
+        <label class="zona-arrastre" id="zona-arrastre" for="archivos">
+          <span class="zona-texto"><b>{{ "Arrastra otra fuente aquí" if fuentes else "Arrastra las fuentes aquí" }}</b> o elige los archivos.</span>
+          <input id="archivos" name="archivos" type="file" multiple required>
+        </label>
+        <button type="submit" class="secundario" id="subir">Subir</button>
+        <p class="nota subir-estado" id="subir-estado" role="status"></p>
       </form>
       {% if pendientes %}
       <form method="post" action="/cursos/{{ curso }}/convertir" id="form-convertir" class="accion">
-        <button type="submit" id="convertir">Convertir fuentes a texto</button>
-        <span class="nota">{{ pendientes }} sin convertir. Solo se convierte lo nuevo o reemplazado. Las imágenes y las páginas escaneadas las lee Claude y {{ gasta(terminos, "gastan") }}. {{ costo(costo_convertir, "La última lectura de imágenes") }}</span>
+        <button type="submit" id="convertir">Leer con IA lo que falta</button>
+        <span class="nota">{% if imagenes_por_leer %}{{ imagenes_por_leer }} sin texto: las lee Claude{% else %}{{ pendientes }} sin convertir{% endif %}. Usa IA y tarda unos minutos.</span>
       </form>
       {% endif %}
     </section>
@@ -49,7 +54,7 @@
       <h2 id="t-ficha">2. Ficha del curso</h2>
       <p>{{ indicador(panel.ficha_curso) }}</p>
       <p><a href="/cursos/{{ curso }}/ficha">{% if ficha_curso.confirmada %}Ver la ficha del curso{% elif ficha_curso_existe %}Terminar la ficha del curso{% else %}Llenar la ficha del curso{% endif %}</a></p>
-      <p class="nota">{% if ficha_curso.confirmada %}Si la cambias, los materiales aprobados quedan desactualizados.{% else %}Con las fuentes convertidas, AulaLista la propone sola al abrirla.{% endif %}</p>
+      <p class="nota">{% if ficha_curso.confirmada %}Si la cambias, los materiales aprobados quedan desactualizados.{% else %}Con las fuentes convertidas, el botón «Proponer desde las fuentes» la llena por ti.{% endif %}</p>
     </section>
   </div>
 </details>
@@ -79,7 +84,7 @@
   <div>
     <p class="sigue-etiqueta" id="t-sigue">Lo que sigue</p>
     <p class="sigue-paso">{{ s.texto }}</p>
-    <p class="sigue-motivo">{{ s.motivo }}{% if s.costo %} {{ s.costo }}{% endif %}</p>
+    <p class="sigue-motivo">{{ s.motivo }}</p>
   </div>
   <a class="boton" href="{{ s.url }}" data-atajo="s" aria-keyshortcuts="S">{{ s.boton }}</a>
 </section>
@@ -140,8 +145,36 @@
     formulario.addEventListener("submit", () => {
       const boton = document.getElementById("convertir");
       boton.disabled = true;
-      boton.textContent = "Convirtiendo… puede tardar";
+      boton.textContent = "Leyendo con IA… puede tardar";
     });
   }
+  // Fuentes: se arrastran a la zona o se eligen, y se suben solas. El botón «Subir» queda para quien no tiene JavaScript.
+  (function () {
+    const form = document.getElementById("form-fuentes"), zona = document.getElementById("zona-arrastre");
+    const entrada = document.getElementById("archivos"), estado = document.getElementById("subir-estado");
+    if (!form || !zona || !entrada) return;
+    document.getElementById("subir").hidden = true;
+    const enviar = () => {
+      if (!entrada.files.length) return;
+      const n = entrada.files.length;
+      estado.textContent = (n === 1 ? "Subiendo y convirtiendo " + entrada.files[0].name : "Subiendo y convirtiendo " + n + " archivos") + "… puede tardar.";
+      zona.classList.add("ocupada");
+      form.submit();
+    };
+    entrada.addEventListener("change", enviar);
+    ["dragenter", "dragover"].forEach((tipo) => zona.addEventListener(tipo, (evento) => {
+      evento.preventDefault(); zona.classList.add("sobre");
+    }));
+    ["dragleave", "drop"].forEach((tipo) => zona.addEventListener(tipo, () => zona.classList.remove("sobre")));
+    zona.addEventListener("drop", (evento) => {
+      evento.preventDefault();
+      if (!evento.dataTransfer || !evento.dataTransfer.files.length) return;
+      entrada.files = evento.dataTransfer.files;
+      enviar();
+    });
+    // Soltar un archivo fuera de la zona no debe abrirlo en el navegador.
+    window.addEventListener("dragover", (evento) => evento.preventDefault());
+    window.addEventListener("drop", (evento) => evento.preventDefault());
+  })();
 </script>
 {% endblock %}

@@ -1,6 +1,5 @@
 {% extends "_entorno.html" %}
-{% from "_estado.html" import costo, icono, gasta %}
-{% set terminos = namespace(tokens=false) %}
+{% from "_estado.html" import icono %}
 
 {% block titulo %}{{ titulo }} | AulaLista{% endblock %}
 
@@ -86,6 +85,7 @@
   {% endif %}
   <p class="marcas">
     {% if c.estado == "propuesto" %}<span class="marca">Propuesto</span>{% endif %}
+    {% if c.origen == "ficha del curso" and not ficha.confirmada %}<span class="marca">Tomado de la ficha del curso</span>{% endif %}
     {% if c.estado == "falta definir" %}<span class="marca alerta">Falta definir</span>{% endif %}
     {% if c.estado == "conflicto" %}<span class="marca alerta">Dos versiones</span>{% endif %}
     {% if c.origen_visible %}<span class="origen">Fuente: {{ c.origen_visible }}</span>{% endif %}
@@ -98,6 +98,8 @@
     {% endfor %}
   </fieldset>
   {% endif %}
+  {% if c.id == "curso.sesiones" %}<p class="ayuda">Si quieres, al final de la línea y entre paréntesis, las páginas de las fuentes que cubre la sesión: «3. Roles: responsabilidades (guia.pdf: páginas 4 a 9, 12 y 15)». Pasan solas a la ficha de la sesión.</p>
+  {% elif c.id == "sesion.referencia" %}<p class="ayuda">Las páginas pueden ir en rangos o sueltas: «manual.pdf: páginas 5 a 20, 33 y 40».</p>{% endif %}
   {% if c.control %}
   {{ control(c) }}
   {% elif c.multilinea %}
@@ -165,7 +167,7 @@
   <div class="completar">
     <button type="submit" form="form-ficha" name="accion" value="corregir_ejercicios">Corregir los ejercicios</button>
     <p class="ayuda">AulaLista corrige los ejercicios marcados, los revisa de nuevo y, si cumplen, confirma la ficha.
-      Lo cambiado queda marcado «Propuesto». {{ gasta(terminos) }}. {{ costo(costos.corregir) }}</p>
+      Lo cambiado queda marcado «Propuesto». Usa IA.</p>
   </div>
   {% else %}
   <p>Corrige esos campos y guarda de nuevo. Puedes salir de la ficha cuando quieras: lo guardado no se pierde.</p>
@@ -264,7 +266,7 @@
         y pulsa «Marcar como revisada». Mientras tanto, las sesiones no pueden usar esa fuente.</p>
       {% endif %}
       <button type="submit" name="accion" value="completar.{{ extra.clave }}" class="secundario">{{ extra.boton }}</button>
-      <p class="ayuda">{{ extra.ayuda }} {{ gasta(terminos) }}. {{ costo(costos["completar." ~ extra.clave]) }}</p>
+      <p class="ayuda">{{ extra.ayuda }} Usa IA.</p>
     </div>
     {% endif %}
     </div>
@@ -291,14 +293,14 @@
     <button type="submit" name="accion" value="guardar" id="guardar-ficha" {% if aceptar_aparte %}class="secundario"{% endif %}
             {% if sesion %}data-ocupado="Preparando el plan… puede tardar unos minutos"{% endif %}
             data-texto="{{ guardar_texto }}" data-texto-seccion="{{ 'Guardar esta sección y revisar con IA' if sesion else 'Guardar esta sección' }}"
-            {% if ficha.confirmada and generados %}data-confirmar="Esta ficha está confirmada. Si guardas el cambio, hay que generar de nuevo {{ generados_texto }}, con gasto de tokens. ¿Guardar?"{% endif %}>{{ guardar_texto }}</button>
+            {% if ficha.confirmada and generados %}data-confirmar="Esta ficha está confirmada. Si guardas el cambio, hay que generar de nuevo {{ generados_texto }}. ¿Guardar?"{% endif %}>{{ guardar_texto }}</button>
     {% if modo_lectura %}<button type="button" class="secundario" id="cancelar-seccion">Cancelar</button>{% endif %}
     {% if not sesion %}
     <button type="submit" name="accion" value="proponer" class="secundario">Proponer desde las fuentes</button>
     {% endif %}
-    {# El costo, pegado al botón que gasta: la barra queda fija y la nota de abajo puede no verse. #}
-    {% if sesion %}<p class="nota costo-guardar">{{ gasta(terminos) }}. {{ costo(costos.proponer, "La última propuesta") }}</p>
-    {% else %}<p class="nota costo-guardar">«Proponer desde las fuentes» {{ gasta(terminos, "gasta") }}. {{ costo(costos.proponer, "La última propuesta") }}</p>{% endif %}
+    {# Qué botón usa IA va pegado al botón: la barra queda fija y la nota de abajo puede no verse. En la sesión lo
+       dice el botón mismo («… con IA»). #}
+    {% if not sesion %}<p class="nota costo-guardar">«Proponer desde las fuentes» usa IA.</p>{% endif %}
     <p class="sin-guardar" id="sin-guardar" role="status" hidden>Hay cambios sin guardar.</p>
     {% if ficha.confirmada and generados %}
     {# Cada ficha dice lo suyo: «Materiales de esta sesión» solo existe en la de la sesión (crítica de la interfaz). #}

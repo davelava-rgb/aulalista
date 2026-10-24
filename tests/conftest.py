@@ -61,12 +61,20 @@ _FORMA = re.compile(r"Llena solo «(\w+)»")
 
 
 def en_forma(salida, prompt, options):
-    """Una corrección pide una sola parte del esquema común (decisión 51). Si la prueba da solo esa parte, se pone
-    en su lugar y las demás quedan en null, como las devuelve Claude."""
+    """Una corrección o una redacción pide una sola parte del esquema común (decisiones 51 y 74). Si la prueba da
+    solo esa parte, se pone en su lugar y las demás quedan en null, como las devuelve Claude. Las diapositivas traen
+    una lista «diapositivas», que no es la parte: también se envuelven."""
     forma = _FORMA.search(prompt) if isinstance(prompt, str) else None
-    if forma is None or not isinstance(salida, dict) or forma[1] in salida:
+    if forma is None or not isinstance(salida, dict) or isinstance(salida.get(forma[1]), dict):
         return salida
     return {f: salida if f == forma[1] else None for f in options.output_format["schema"]["properties"]}
+
+
+def texto_del_redactor(llamada) -> str:
+    """Todo lo que lee el redactor: el mensaje de sistema (la parte común de la sesión, decisión 74 b) y el pedido."""
+    sistema = llamada["options"].system_prompt
+    comun = Path(sistema["path"]).read_text(encoding="utf-8") if isinstance(sistema, dict) else (sistema or "")
+    return comun + "\n" + llamada["prompt"]
 
 
 def consulta_en_secuencia(*salidas):

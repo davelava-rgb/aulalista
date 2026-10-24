@@ -19,7 +19,7 @@ from app.fichas import almacen, flujo
 from app.materiales import docx as generador
 from app.materiales import estilo, lectura
 from app.materiales.contenido import Lectura
-from tests.conftest import consulta_en_secuencia, consulta_simulada
+from tests.conftest import consulta_en_secuencia, consulta_simulada, texto_del_redactor
 from tests.fixtures import fichas as datos
 from tests.unidad.test_fichas import con_fuente
 
@@ -234,7 +234,8 @@ def test_lectura_limpia_queda_verificada_con_dos_llamadas(sesion):
     opciones = consulta.llamadas[0]["options"]
     assert opciones.model == "claude-opus-5-5" and opciones.tools == []        # decisión 68 c: sin herramientas
     assert "## Material 1 · Lectura" in consulta.llamadas[0]["prompt"]
-    assert "FICHA DE LA SESIÓN" in consulta.llamadas[0]["prompt"]
+    # La parte común de la sesión va en el mensaje de sistema (decisión 74 b).
+    assert "FICHA DE LA SESIÓN" in texto_del_redactor(consulta.llamadas[0]) and "FICHA DE LA SESIÓN" not in consulta.llamadas[0]["prompt"]
     assert consulta.llamadas[1]["options"].model == "claude-sonnet-5-5"
     assert material["decisiones"] == [{"texto": "Usé una tienda como ejemplo.", "tipo": "decisión"}]
     assert material["revision"] == {"bloques": 5, "errores": 0, "corregidos": 0, "pendientes": 0, "descartados": 0}
@@ -363,13 +364,15 @@ def test_la_pagina_muestra_el_gasto_de_la_ultima_corrida_aunque_falle(sesion):
     gasto = lectura.gasto_de_la_corrida(sesion, "scrum", 1)
     assert gasto["llamadas"] == tokens.total("scrum")["llamadas"] - antes == 1
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
-    assert "La última generación: 1 llamada," in pagina
+    # El gasto de la corrida va solo en la confirmación de «Generar de nuevo» (decisiones 68 f y 73).
+    assert "La última generación gastó" in pagina.split("data-confirmar=")[1].split('"')[1]
+    assert "gasto-generacion" not in pagina
     assert "Gasto del curso <b>" in pagina   # el total va una sola vez, en el panel
 
 
 def test_sin_generar_no_muestra_gasto_de_corrida(sesion):
     assert lectura.gasto_de_la_corrida(sesion, "scrum", 1) is None
-    assert "La última generación:" not in cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    assert "La última generación gastó" not in cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
 
 
 def test_el_word_real_cuenta_sus_paginas_con_word(sesion):
@@ -589,7 +592,7 @@ def test_con_referencia_no_hacen_falta_bloques_ni_hay_maximo_de_paginas(sesion):
     larga["bloques"] += copy.deepcopy(LIMPIA["bloques"]) + [copy.deepcopy(LIMPIA["bloques"][0])]   # 5 bloques
     material, consulta = generar(sesion, larga, contar_paginas=lambda _ruta: 9)
     assert material["estado"] == "verificada" and material["bloques"] == 5
-    pedido = consulta.llamadas[0]["prompt"]
+    pedido = texto_del_redactor(consulta.llamadas[0])
     assert "MATERIAL DE REFERENCIA DE LA SESIÓN" in pedido and "- manual.pdf: páginas 2 a 4 (3 páginas)" in pedido
     assert "- Tema 3 del manual" in pedido and "No hay un máximo de páginas" in pedido
     assert f"Unas {lectura.PALABRAS_MAX} palabras" not in pedido
@@ -668,8 +671,8 @@ def test_con_referencia_las_paginas_van_en_el_pedido_y_la_redaccion_no_busca(ses
     almacen.guardar(sesion, "sesion", 1, ficha)
     _, consulta = generar(sesion, LIMPIA)
     redaccion = consulta.llamadas[0]
-    assert "[silabo.pdf · página 1] Scrum Master con IA" in redaccion["prompt"]
-    assert "busca con Grep" not in redaccion["prompt"]
+    assert "[silabo.pdf · página 1] Scrum Master con IA" in texto_del_redactor(redaccion)
+    assert "busca con Grep" not in texto_del_redactor(redaccion)
     assert redaccion["options"].tools == [] and not redaccion["options"].allowed_tools
     # Sin referencia, el programa elige los pasajes de las fuentes y la redacción tampoco usa herramientas
     # (decisión 68 c).
@@ -678,8 +681,8 @@ def test_con_referencia_las_paginas_van_en_el_pedido_y_la_redaccion_no_busca(ses
     almacen.guardar(sesion, "sesion", 1, ficha)
     _, consulta = generar(sesion, LIMPIA)
     redaccion = consulta.llamadas[0]
-    assert "PASAJES DE LAS FUENTES DEL CURSO, elegidos por AulaLista" in redaccion["prompt"]
-    assert "Grep" not in redaccion["prompt"] and redaccion["options"].tools == [] and not redaccion["options"].allowed_tools
+    assert "PASAJES DE LAS FUENTES DEL CURSO, elegidos por AulaLista" in texto_del_redactor(redaccion)
+    assert "Grep" not in texto_del_redactor(redaccion) and redaccion["options"].tools == [] and not redaccion["options"].allowed_tools
 
 
 # ---------- Reanudar desde lo guardado (PLAN.md §0, decisión 40) ----------

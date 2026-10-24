@@ -1,6 +1,7 @@
 """Servidor local. Responde solo a esta computadora (127.0.0.1)."""
 
 import asyncio
+from datetime import datetime
 import json
 import re
 import threading
@@ -18,7 +19,7 @@ from app.config import RAIZ, FaltaClave
 from app.fichas import almacen, controles, dependencias, flujo
 from app.fichas import plantillas as plantillas_fichas
 from app.fuentes import convertir
-from app.materiales import actividad, diapositivas, evaluacion, laboratorio, lectura
+from app.materiales import actividad, comun, diapositivas, evaluacion, laboratorio, lectura
 
 app = FastAPI(title="AulaLista")
 app.mount("/estaticos", StaticFiles(directory=RAIZ / "web" / "estaticos"), name="estaticos")
@@ -160,8 +161,9 @@ def ver_curso(request: Request, curso: str, mensaje: str = ""):
             "ficha_curso": ficha_curso,
             "ficha_curso_existe": almacen.ruta_ficha(carpeta, "curso").exists(),
             "fuentes": fuentes,
-            "pendientes": sum(1 for f in fuentes if f["estado"] != convertir.CONVERTIDA),
-            "costo_convertir": tokens.ultima_corrida(curso, "lectura_imagen"),
+            # Lo que falta leer con IA: fuentes sin convertir, imágenes sueltas y páginas o láminas escaneadas.
+            "pendientes": sum(1 for f in fuentes if f["estado"] != convertir.CONVERTIDA or f.get("falta_ia")),
+            "imagenes_por_leer": _imagenes(n) if (n := sum(f.get("falta_ia", 0) for f in fuentes)) else "",
             "mensaje": mensaje,
             "panel": (panel := _panel(carpeta, curso, "curso")),
             "tablero": _tablero(carpeta, curso, panel),
@@ -169,9 +171,42 @@ def ver_curso(request: Request, curso: str, mensaje: str = ""):
     )
 
 
+def _convertir(carpeta, lector) -> tuple[dict, list[str]]:
+    """Convierte lo nuevo o cambiado y devuelve el índice y las fuentes que cambiaron. Corre en un hilo aparte:
+    Office y la IA pueden tardar sin trabar el servidor."""
+    antes = convertir.leer_indice(carpeta)
+    indice = asyncio.run(convertir.convertir_curso(carpeta, lector))
+    cambiadas = [n for n, e in indice.items() if antes.get(n) != e]
+    if cambiadas:
+        # Una fuente con otro contenido desactualiza los materiales de las sesiones que la usan (decisión 62).
+        for numero in almacen.sesiones_confirmadas(carpeta):
+            dependencias.revisar(carpeta, numero)
+    return indice, cambiadas
+
+
+def _imagenes(n: int) -> str:
+    return "Una imagen o página escaneada" if n == 1 else f"{n} imágenes o páginas escaneadas"
+
+
+def _resumen_de_conversion(indice: dict, cambiadas: list[str], con_ia: bool) -> str:
+    fallidas = [n for n in cambiadas if indice[n]["estado"] == convertir.NO_SE_PUEDE_LEER]
+    esperan = [n for n in cambiadas if indice[n]["estado"] == convertir.ESPERA_IA]
+    hechas = len(cambiadas) - len(fallidas) - len(esperan)
+    if not cambiadas:
+        mensaje = "No había nada nuevo que convertir."
+    else:
+        mensaje = f"Fuentes {'leídas con IA' if con_ia else 'convertidas'}: {hechas}."
+    if fallidas:
+        mensaje += f" No se pudieron leer: {', '.join(fallidas)}."
+    paginas = sum(e.get("falta_ia", 0) for e in indice.values())
+    if paginas:
+        mensaje += f" {_imagenes(paginas)} se {'lee' if paginas == 1 else 'leen'} con IA cuando pulses «Leer con IA lo que falta»."
+    return mensaje
+
+
 @app.post("/cursos/{curso}/fuentes")
 async def subir_fuentes(curso: str, archivos: list[UploadFile]):
-    _carpeta(curso)
+    carpeta = _carpeta(curso)
     guardados, rechazos = [], []
     for archivo in archivos:
         if not archivo.filename:
@@ -183,25 +218,20 @@ async def subir_fuentes(curso: str, archivos: list[UploadFile]):
     mensaje = f"Archivos guardados: {len(guardados)}."
     if rechazos:
         mensaje += " " + " ".join(rechazos)
+    if guardados:
+        # Se convierte enseguida lo que no necesita IA (texto de PDF, Word, PowerPoint y Excel): no gasta.
+        # Las imágenes y las páginas escaneadas quedan anotadas y se leen con IA solo si el profesor lo pide.
+        indice, cambiadas = await asyncio.to_thread(_convertir, carpeta, None)
+        mensaje += " " + _resumen_de_conversion(indice, cambiadas, con_ia=False)
     return _ir_al_curso(curso, mensaje)
 
 
 @app.post("/cursos/{curso}/convertir")
 def convertir_fuentes(curso: str):
-    # Función sin async: corre en un hilo aparte, donde Office y la IA pueden tardar sin trabar el servidor.
+    """Lee con IA las imágenes y las páginas escaneadas pendientes, y convierte lo que falte."""
     carpeta = _carpeta(curso)
-    antes = convertir.leer_indice(carpeta)
-    indice = asyncio.run(convertir.convertir_curso(carpeta, lector_de_imagenes(curso)))
-    cambiadas = [n for n, e in indice.items() if antes.get(n, {}).get("fecha") != e["fecha"]]
-    if cambiadas:
-        # Una fuente con otro contenido desactualiza los materiales de las sesiones que la usan (decisión 62).
-        for numero in almacen.sesiones_confirmadas(carpeta):
-            dependencias.revisar(carpeta, numero)
-    fallidas = [n for n in cambiadas if indice[n]["estado"] == convertir.NO_SE_PUEDE_LEER]
-    mensaje = f"Fuentes convertidas ahora: {len(cambiadas) - len(fallidas)}. Sin cambios: {len(indice) - len(cambiadas)}."
-    if fallidas:
-        mensaje += f" No se pudieron leer: {', '.join(fallidas)}."
-    return _ir_al_curso(curso, mensaje)
+    indice, cambiadas = _convertir(carpeta, lector_de_imagenes(curso))
+    return _ir_al_curso(curso, _resumen_de_conversion(indice, cambiadas, con_ia=True))
 
 
 PASAJES_POR_TRAMO = 100
@@ -309,13 +339,10 @@ def _pagina_ficha(request: Request, curso: str, tipo: str, sesion: int | None, m
     else:
         generados = [d["el"] for c, d in MATERIALES.items()
                      if almacen.cargar_estado(carpeta, sesion)["materiales"].get(c, {}).get("estado")]
-    costos = {"proponer": tokens.ultima_corrida(curso, f"propuesta ficha {tipo}"),
-              "corregir": tokens.ultima_corrida(curso, "corrección de ejercicios"),
-              **{f"completar.{c}": tokens.ultima_corrida(curso, f"completar ficha: {c}") for c in flujo.COMPLETAR}}
     return plantillas.TemplateResponse(request, "ficha.html", {
         "curso": curso, "nombre": _nombre(curso), "titulo": titulo, "sesion": sesion, "ficha": ficha,
         "hay_propuestos": any((d or {}).get("estado") == almacen.PROPUESTO for d in ficha["campos"].values()),
-        "secciones": secciones, "modo_lectura": ficha["confirmada"], "generados": generados, "generados_texto": _y(generados), "costos": costos,
+        "secciones": secciones, "modo_lectura": ficha["confirmada"], "generados": generados, "generados_texto": _y(generados),
         # En la sesión, Guardar llama a la IA (decisión 54): el botón lo dice, no solo la nota de abajo.
         "guardar_texto": ("Guardar" if not sesion else "Guardar y preparar el plan con IA"
                           if flujo.plan_por_preparar(ficha) else "Guardar y revisar con IA"),
@@ -510,8 +537,14 @@ def ver_ficha_de_la_sesion(request: Request, curso: str, sesion: int):
     _exigir_ficha_del_curso(_carpeta(curso), curso)
     # Lo que la ficha corta toma de la del curso, sin IA (decisión 54). La ficha ya no se propone sola al abrirla:
     # el plan lo prepara «Guardar», así abrir una ficha nunca gasta.
-    flujo.llenar_desde_el_curso(_carpeta(curso), sesion)
-    return _pagina_ficha(request, curso, "sesion", sesion, *_AVISOS_FICHA.pop(_url_ficha(curso, sesion), ("", None)))
+    llenados = flujo.llenar_desde_el_curso(_carpeta(curso), sesion)
+    mensaje, errores = _AVISOS_FICHA.pop(_url_ficha(curso, sesion), ("", None))
+    if llenados and not mensaje:
+        # Se dice qué se llenó solo: si no, el profesor no nota que la ficha se completó sola (pedido del 2026-10-23).
+        nombres = [plantillas_fichas.etiqueta_corta("sesion", c) for c in llenados]
+        mensaje = (f"AulaLista llenó {_y(['«' + n + '»' for n in nombres])} con la ficha del curso. "
+                   "Revisa esos campos antes de guardar: cámbialos si hace falta.")
+    return _pagina_ficha(request, curso, "sesion", sesion, mensaje, errores)
 
 
 @app.post("/cursos/{curso}/sesiones/{sesion}/ficha")
@@ -545,15 +578,16 @@ _TRABAJOS: dict[tuple, tuple[asyncio.AbstractEventLoop, asyncio.Task]] = {}
 _CANDADO = threading.Lock()
 
 
-def _trabajo_en_segundo_plano(funcion, *argumentos, clave: tuple | None = None) -> threading.Thread:
+def _trabajo_en_segundo_plano(funcion, *argumentos, clave: tuple | None = None, **opciones) -> threading.Thread:
     """Corre un material en otro hilo. La página consulta el avance en estado.json.
-    Con `clave`, el trabajo queda registrado para que el botón Detener lo pueda cancelar."""
+    Con `clave`, el trabajo queda registrado para que el botón Detener lo pueda cancelar. `opciones` van a la función
+    por nombre (las casillas de Generar, decisión 74)."""
     async def principal():
         if clave:
             with _CANDADO:
                 _TRABAJOS[clave] = (asyncio.get_running_loop(), asyncio.current_task())
         try:
-            await funcion(*argumentos)
+            await funcion(*argumentos, **opciones)
         finally:
             if clave:
                 with _CANDADO:
@@ -576,12 +610,22 @@ MATERIALES = {
     lectura.CLAVE: {"modulo": lectura, "numero": 1, "titulo": "Lectura", "corto": "Lectura", "el": "la lectura",
                     "plural": False, "o": "a", "lo": "la",
                     "aprobado": "Lectura aprobada.", "generar": "Generar lectura"},
+    # «opciones»: casillas junto a Generar (decisión 74 c y d). «nombre» es el campo del formulario y «parametro» el
+    # argumento de `generar` del módulo. Van apagadas salvo que el módulo sugiera otra cosa (`ejecucion_sugerida`).
     diapositivas.CLAVE: {"modulo": diapositivas, "numero": 2, "titulo": "Diapositivas", "corto": "Diapositivas",
                          "el": "las diapositivas", "plural": True, "o": "a", "lo": "las",
-                         "aprobado": "Diapositivas aprobadas.", "generar": "Generar diapositivas"},
+                         "aprobado": "Diapositivas aprobadas.", "generar": "Generar diapositivas",
+                         "opciones": [{"nombre": "revision_visual", "parametro": "revision_visual",
+                                       "etiqueta": "Revisión visual del diseño",
+                                       "nota": "Opcional. Claude mira la imagen de cada diapositiva diseñada y propone "
+                                               "cambios de composición; el diseñador los aplica. Usa IA."}]},
     laboratorio.CLAVE: {"modulo": laboratorio, "numero": 3, "titulo": "Laboratorio y archivos de práctica",
                         "corto": "Laboratorio", "el": "el laboratorio", "plural": False, "o": "o", "lo": "lo",
-                        "aprobado": "Laboratorio aprobado.", "generar": "Generar laboratorio"},
+                        "aprobado": "Laboratorio aprobado.", "generar": "Generar laboratorio",
+                        "opciones": [{"nombre": "ejecucion", "parametro": "ejecutar_ejercicios",
+                                      "etiqueta": "Ejecutar cada ejercicio como un alumno",
+                                      "nota": "Opcional. Las fórmulas corren en Excel y los prompts en Claude; lo que "
+                                              "sale se compara con la respuesta de la ficha. Usa IA."}]},
     # Decisión 57: el contenido validado y su vista (fases 8a y 8b). La página del alumno llega en la fase 8c.
     actividad.CLAVE: {"modulo": actividad, "numero": 4, "titulo": "Actividad web", "corto": "Actividad",
                       "el": "la actividad web", "plural": False, "o": "a", "lo": "la",
@@ -655,17 +699,6 @@ def _situacion(datos: dict, estado: dict, incluido: bool) -> dict:
     return {"clase": clase, "texto": texto}
 
 
-def _costo_de_referencia(carpeta, curso: str, sesion: int, clave: str, sesiones: list[int]) -> dict | None:
-    """Lo que gastó la última corrida de este material: en esta sesión o, si nunca se generó aquí, en la sesión
-    más reciente que lo tenga. Se muestra junto al botón Generar antes de pulsarlo."""
-    modulo = MATERIALES[clave]["modulo"]
-    for numero in [sesion] + sorted((n for n in sesiones if n != sesion), reverse=True):
-        gasto = modulo.gasto_de_la_corrida(carpeta, curso, numero)
-        if gasto and gasto["llamadas"]:
-            return {**gasto, "sesion": numero}
-    return None
-
-
 def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False) -> dict:
     """Los materiales de una sesión con su indicador, y el siguiente paso. Con `detalle`, también lo que les
     falta y el costo de la última corrida (la página de la sesión)."""
@@ -676,7 +709,6 @@ def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False
     if puede_empezar and dependencias.por_migrar(almacen.cargar_estado(carpeta, sesion)):
         # Materiales generados antes de la decisión 62: se busca una vez qué usaron y se revisan con la regla nueva.
         dependencias.revisar(carpeta, sesion)
-    numeros = [s["numero"] for s in almacen.sesiones_del_curso(almacen.cargar(carpeta, "curso"))] if detalle else []
     materiales, siguiente, viejos = [], None, []
     for clave, datos in MATERIALES.items():
         modulo = datos["modulo"]
@@ -695,9 +727,9 @@ def _vista_de_materiales(carpeta, curso: str, sesion: int, detalle: bool = False
                         for c in (_material_nombrado([t], clave) for t in faltan["otros"])]
         if detalle:
             reanudable = hasattr(modulo, "se_puede_reanudar") and modulo.se_puede_reanudar(carpeta, sesion)
+            # El gasto de la última corrida va solo en la confirmación antes de generar de nuevo (decisión 68 f).
             m |= {"faltan": faltan, "reanudable": reanudable,
-                  "gasto_corrida": modulo.gasto_de_la_corrida(carpeta, curso, sesion),
-                  "costo_ref": _costo_de_referencia(carpeta, curso, sesion, clave, numeros)}
+                  "gasto_corrida": modulo.gasto_de_la_corrida(carpeta, curso, sesion)}
         materiales.append(m)
         if siguiente or not incluido:
             continue
@@ -764,9 +796,14 @@ def _estado_de_fuentes(carpeta) -> dict:
     archivos = [r.name for r in (carpeta / "fuentes").glob("*") if r.is_file()]
     if not archivos:
         return {"clase": "neutro", "texto": "Sin subir"}
-    sin_convertir = sum(1 for a in archivos if indice.get(a, {}).get("estado") != convertir.CONVERTIDA)
+    estados = [indice.get(a, {}).get("estado") for a in archivos]
+    sin_convertir = sum(1 for e in estados if e not in (convertir.CONVERTIDA, convertir.ESPERA_IA))
     if sin_convertir:
         return {"clase": "espera", "texto": f"{sin_convertir} sin convertir"}
+    # Una imagen suelta no tiene texto hasta que la IA la lea: esa fuente no se puede usar todavía.
+    por_leer = sum(1 for e in estados if e == convertir.ESPERA_IA)
+    if por_leer:
+        return {"clase": "espera", "texto": f"{por_leer} por leer con IA"}
     if any(indice[a].get("revisar") and not indice[a].get("revisada") for a in archivos):
         return {"clase": "espera", "texto": "Por revisar"}
     return {"clase": "bien", "texto": "1 lista" if len(archivos) == 1 else f"{len(archivos)} listas"}
@@ -782,12 +819,12 @@ def _panel(carpeta, curso: str, actual: str) -> dict:
             n = s["numero"]
             vista = _vista_de_materiales(carpeta, curso, n)
             incluidos = [m for m in vista["materiales"] if m["incluido"]]
-            # La línea de la sesión es «título: alcance» (como la corta flujo al llenar la ficha): el título va en el
-            # encabezado y el alcance aparte, para que un alcance largo no se vuelva un título de tres líneas.
-            titulo, separador, alcance = s["texto"].partition(":")
-            alcance = alcance.strip() if separador else ""
+            # La línea de la sesión es «título: alcance (páginas)» (como la parte flujo al llenar la ficha): el título
+            # va en el encabezado y el alcance aparte, para que un alcance largo no se vuelva un título de tres líneas.
+            partes = almacen.partes_de_sesion(s["texto"])
+            alcance = partes["alcance"] if ":" in s["texto"] else ""
             sesiones.append({
-                "numero": n, "texto": s["texto"], "titulo": titulo.strip(" .") if separador else s["texto"],
+                "numero": n, "texto": s["texto"], "titulo": partes["titulo"],
                 "alcance": alcance[:1].upper() + alcance[1:],
                 "abierta": actual in [f"ficha-{n}"] + [f"{c}-{n}" for c in MATERIALES],
                 "ficha": _estado_de_ficha(almacen.cargar(carpeta, "sesion", n)["confirmada"],
@@ -854,6 +891,9 @@ def _que_sigue(curso: str, panel: dict) -> dict | None:
     if fuentes.endswith("sin convertir"):
         return {"texto": "Convierte las fuentes a texto.", "url": base + "#fuentes", "boton": "Ir a las fuentes",
                 "motivo": f"Hay {fuentes}. AulaLista solo lee fuentes convertidas."}
+    if fuentes.endswith("por leer con IA"):
+        return {"texto": "Lee con IA las imágenes que subiste, o quítalas.", "url": base + "#fuentes",
+                "boton": "Ir a las fuentes", "motivo": f"Hay {fuentes}: una imagen no tiene texto hasta que la IA la lea."}
     if fuentes == "Por revisar":
         return {"texto": "Revisa el texto que la IA leyó de las imágenes.", "url": base + "#fuentes",
                 "boton": "Ir a las fuentes", "motivo": "Antes de usarlo, compáralo con el original."}
@@ -908,13 +948,9 @@ def _frase_de_sesion(s: dict) -> str:
 
 
 def _tablero(carpeta, curso: str, panel: dict) -> dict:
-    """Lo que muestra el tablero del curso (decisión 44): lo que sigue con su costo, una fila por sesión y la
-    preparación, que va plegada si está lista."""
+    """Lo que muestra el tablero del curso (decisión 44): lo que sigue, una fila por sesión y la preparación, que
+    va plegada si está lista. Sin costos: el gasto del curso va solo en el panel (decisión 73)."""
     sigue = _que_sigue(curso, panel)
-    if sigue and sigue.get("material"):
-        gasto = MATERIALES[sigue["material"]]["modulo"].gasto_de_la_corrida(carpeta, curso, sigue["sesion"])
-        if gasto and gasto["llamadas"]:
-            sigue["costo"] = f"La última vez gastó {gasto['costo_usd']:.2f} USD estimados."
     sesiones = [{**s, "frase": _frase_de_sesion(s),
                  "materiales": [{**m, "fecha": _fecha(m["aprobada"])} for m in s["materiales"]]}
                 for s in panel["sesiones"]]
@@ -1043,20 +1079,41 @@ def ver_material(request: Request, curso: str, sesion: int, material: str, mensa
         "curso": curso, "nombre": _nombre(curso), "sesion": sesion, "mensaje": mensaje,
         # «Material 2 de 3» cuenta solo los materiales que van en la sesión.
         "m": m, "recorrido": _recorrido(m, m["estado"]), "incluidos": [x["clave"] for x in vista["materiales"] if x["incluido"]],
+        "opciones": _opciones_de_generar(carpeta, sesion, material, m["estado"]),
         "listos": _listos(carpeta, sesion, m, vista["puede_empezar"], vista["ficha_por_preparar"]),
         "que_cambio": _que_cambio(carpeta, sesion, m),
         "puede_empezar": vista["puede_empezar"], "ficha_por_preparar": vista["ficha_por_preparar"],
         "siguiente": vista["siguiente"], "sigue_curso": sigue_curso,
-        "costo_revisor": tokens.ultima_corrida(curso, "revisor independiente"),
         "panel": panel,
     })
 
 
+def _opciones_elegidas(material: str, formulario: dict[str, str | None]) -> dict[str, bool]:
+    """Las casillas de Generar que tiene el material, como argumentos de su `generar` (decisión 74 c y d).
+    Una casilla sin marcar no llega en el formulario: vale False."""
+    return {o["parametro"]: bool(formulario.get(o["nombre"])) for o in _material(material).get("opciones", [])}
+
+
+def _opciones_de_generar(carpeta, sesion: int, material: str, estado: dict) -> list[dict]:
+    """Las casillas para la página, con su estado inicial: lo elegido la última vez o lo que sugiere el módulo."""
+    anteriores = estado.get("opciones") or {}
+    casillas = []
+    for o in _material(material).get("opciones", []):
+        if o["nombre"] in anteriores:
+            marcada = bool(anteriores[o["nombre"]])
+        else:
+            marcada = laboratorio.ejecucion_sugerida(carpeta) if o["nombre"] == "ejecucion" else False
+        casillas.append({**o, "marcada": marcada})
+    return casillas
+
+
 @app.post("/cursos/{curso}/sesiones/{sesion}/materiales/{material}")
-def generar_material(curso: str, sesion: int, material: str):
+def generar_material(curso: str, sesion: int, material: str, revision_visual: str | None = Form(None),
+                     ejecucion: str | None = Form(None)):
     modulo = _material(material)["modulo"]
     carpeta = _carpeta(curso)
     destino = _url_material(curso, sesion, material)
+    opciones = _opciones_elegidas(material, {"revision_visual": revision_visual, "ejecucion": ejecucion})
     if not almacen.cargar(carpeta, "curso")["confirmada"]:
         return RedirectResponse(destino + "?mensaje=" + quote("Guarda completa la ficha del curso antes de generar: así queda confirmada."), status_code=303)
     if not almacen.cargar(carpeta, "sesion", sesion)["confirmada"]:
@@ -1079,8 +1136,17 @@ def generar_material(curso: str, sesion: int, material: str):
         return RedirectResponse(destino + "?mensaje=" + quote(" ".join(faltan["otros"])), status_code=303)
     if modulo.estado(carpeta, sesion).get("estado") == "trabajando":
         return RedirectResponse(destino, status_code=303)
-    _trabajo_en_segundo_plano(modulo.generar, carpeta, curso, sesion, clave=(curso, sesion, material))
+    _marcar_trabajando(carpeta, sesion, material, "Empezando…")
+    _trabajo_en_segundo_plano(modulo.generar, carpeta, curso, sesion, clave=(curso, sesion, material), **opciones)
     return RedirectResponse(destino, status_code=303)
+
+
+def _marcar_trabajando(carpeta, sesion: int, material: str, paso: str) -> None:
+    """Deja el material en «trabajando» antes de redirigir. Si no, la página vuelve antes de que el hilo escriba
+    el estado, muestra el botón como si nada y el profesor tiene que pulsar Generar dos veces. Solo para Generar:
+    Reanudar y el revisor leen el estado anterior al empezar y lo necesitan intacto."""
+    comun.actualizar(carpeta, sesion, material, estado="trabajando", previo="",
+                     avance=[f"{datetime.now():%H:%M:%S} · {paso}"], error="")
 
 
 @app.post("/cursos/{curso}/sesiones/{sesion}/materiales/{material}/reanudar")

@@ -12,7 +12,6 @@
   <li class="curso">
     <div class="curso-cabeza">
       <h2><a href="/cursos/{{ c.curso }}">{{ c.nombre }}</a></h2>
-      <span class="nota">{{ usd(c.gasto.costo_usd) }} estimados</span>
     </div>
     {% if c.materiales %}
     <p class="curso-avance">{{ c.aprobados }} de {{ c.materiales }} {{ "material aprobado" if c.materiales == 1 else "materiales aprobados" }} en {{ c.sesiones }} {{ "sesión" if c.sesiones == 1 else "sesiones" }}.</p>
@@ -40,7 +39,5 @@
   <button type="submit">Crear curso</button>
 </form>
 
-<p class="nota">Gasto total: {{ total.llamadas }} {{ "llamada" if total.llamadas == 1 else "llamadas" }} a Claude, {{ usd(total.costo_usd) }} estimados.
-  {% if gasto.llamadas %}Incluye {{ usd(gasto.costo_usd) }} de las pruebas de conexión.{% endif %}
-  Es una estimación, no la factura.</p>
+<p class="nota">Gasto total estimado: {{ usd(total.costo_usd) }}. El de cada curso está al pie de su panel.</p>
 {% endblock %}

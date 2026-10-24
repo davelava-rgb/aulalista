@@ -1,16 +1,20 @@
 # Modelo y tope de gasto por tarea.
 # tope_usd es el máximo en dólares para una sola llamada al SDK.
 # cache = "1h" pide la caché de una hora para esa llamada (decisión 68 b). Sin cache, dura 5 minutos.
+# cache = "no" apaga la caché en esa llamada (decisión 74 a): escribirla cuesta 1,25 veces la entrada y solo paga si otra
+# llamada la lee después. La apagan las tareas de una sola llamada que nadie relee.
 
 [conexion]
 modelo = "claude-haiku-4-5-20251001"
 tope_usd = 0.05
+cache = "no"
 
 # Texto de imágenes y de páginas escaneadas. El profesor revisa el resultado.
 [lectura_imagen]
 modelo = "claude-sonnet-5-5"
 tope_usd = 0.20
 max_turns = 3
+cache = "no"
 
 # Propuesta de las fichas desde las fuentes del curso (botón «Proponer desde las fuentes»).
 [fichas]
@@ -23,6 +27,7 @@ max_turns = 30
 modelo = "claude-sonnet-5-5"
 tope_usd = 0.30
 max_turns = 3
+cache = "no"
 
 # Botón «Corregir los ejercicios»: corrige los ejercicios que marcó la revisión anterior.
 [correccion_ejercicios]
@@ -31,6 +36,8 @@ tope_usd = 0.40
 max_turns = 3
 
 # Redacción de un material a partir de las fichas y de los pasajes de las fuentes. Esfuerzo medio (decisión 68 e):
+# Caché de una hora (decisión 74 b): la parte común de la sesión va en el mensaje de sistema, igual para los cinco
+# materiales; la segunda redacción de la sesión la lee en vez de escribirla si llega dentro de la hora.
 # con el esfuerzo por defecto, un cuarto de lo que costaba una redacción era razonamiento. Va sin herramientas desde
 # la decisión 68 c, así que no necesita tantos turnos.
 [redaccion]
@@ -38,6 +45,7 @@ modelo = "claude-opus-5-5"
 tope_usd = 3.00
 max_turns = 5
 esfuerzo = "medium"
+cache = "1h"
 
 # Corrección de un material después del verificador: completa o por ejercicio. Solo arregla lo que señala la
 # validación, así que no necesita el modelo de la redacción (decisión del profesor, 15/10/2026).
@@ -79,6 +87,7 @@ max_turns = 15
 modelo = "claude-opus-5-5"
 tope_usd = 1.50
 max_turns = 3
+cache = "no"
 
 # Corrección de las diapositivas que nombran los problemas (desborde, palabras, diseño): devuelve solo esas
 # diapositivas, no el documento entero (PLAN.md §0, decisión 31).
@@ -94,6 +103,7 @@ esfuerzo = "medium"
 modelo = "claude-sonnet-5-5"
 tope_usd = 0.40
 max_turns = 1
+cache = "no"
 
 # Comparación de lo que salió al ejecutar un ejercicio con la respuesta correcta de la ficha (decisión 35).
 [comparacion_ejecucion]
@@ -101,6 +111,7 @@ modelo = "claude-sonnet-5-5"
 tope_usd = 0.30
 max_turns = 1
 esfuerzo = "medium"
+cache = "no"
 
 # Agente diseñador: escribe las diapositivas del programa pptxgenjs (decisión 32); el código común lo pone AulaLista
 # (decisión 68 d). Esfuerzo bajo (decisión 68 e): con esfuerzo medio, todavía el 60 % de lo que escribía era

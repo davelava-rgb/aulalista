@@ -24,8 +24,8 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from app import agente, entrega, skill, tokens
-from app.fichas import almacen, dependencias, plantillas, referencia, verificacion
-from app.materiales import actividad, comun, docx, ejecucion, estilo, laboratorio, lectura, practica
+from app.fichas import almacen, dependencias, plantillas, verificacion
+from app.materiales import actividad, comun, docx, ejecucion, estilo, laboratorio, lectura, practica, redaccion
 from app.materiales.contenido import ESQUEMA_EVALUACION, TAREAS_DE_EVALUACION, ArchivoPractica, Evaluacion, Laboratorio
 from app.validacion import excel, pasada2, revision, revisor, verificador
 from app.validacion.pasajes import Corpus
@@ -411,14 +411,37 @@ CÓMO ENTREGAR LA EVALUACIÓN (PLAN.md §0, decisión 64)
 """
 
 
+def _aprobados_para_el_pedido(carpeta_curso: Path, sesion: int) -> list[str]:
+    """El laboratorio y la actividad aprobados, resumidos: la evaluación no repite sus ejercicios ni sus preguntas.
+    La lectura aprobada ya va en la parte común del mensaje de sistema (redaccion.py)."""
+    partes = []
+    lab = _aprobado(laboratorio, carpeta_curso, sesion)
+    if lab:
+        resumen = [{"numero": e.get("numero"), "titulo": e.get("titulo"), "situacion": e.get("situacion"),
+                    "archivos": e.get("archivos")} for e in lab.get("ejercicios", [])]
+        partes += ["", "LABORATORIO APROBADO. Ninguna pregunta repite un ejercicio, sus archivos ni sus datos:",
+                   json.dumps(resumen, ensure_ascii=False)]
+    act = _aprobado(actividad, carpeta_curso, sesion)
+    if act:
+        enunciados = [p.get("enunciado") for paso in act.get("pasos", []) for p in paso.get("preguntas", [])]
+        partes += ["", "ACTIVIDAD WEB APROBADA. Ninguna pregunta repite estas preguntas:",
+                   json.dumps(enunciados, ensure_ascii=False)]
+    return partes
+
+
 def pedido_de_redaccion(carpeta_curso: Path, sesion: int, pasajes: list[str] | None = None) -> str:
+    """Lo propio de la evaluación. La parte común de la sesión (reglas comunes, fichas, fuentes, pasajes y la lectura
+    aprobada) va en el mensaje de sistema (redaccion.py, decisión 74 b)."""
     return "\n".join([
-        _contexto(carpeta_curso, sesion, pasajes),
+        redaccion.reglas_del_material(SECCIONES_DE_LA_SKILL),
+        *_aprobados_para_el_pedido(carpeta_curso, sesion),
         instrucciones_de_formato(sesion, preguntas_de_la_ficha(carpeta_curso, sesion)),
         "TAREA: prepara la evaluación práctica de la sesión, con su clave. Toma las preguntas de la ficha de la sesión:",
-        "su concepto, la tarea, el archivo con su problema y la respuesta correcta. Si citas una fuente, toma el pasaje",
-        "de la lista de pasajes de arriba. Antes de entregar, resuelve tú cada pregunta como un alumno, con",
-        "sus archivos: cada paso se puede hacer y la respuesta es una sola, la de la clave.",
+        "su concepto, la tarea, el archivo con su problema y la respuesta correcta. La evaluación no evalúa nada que",
+        "no esté en la lectura aprobada de tu contexto o en el laboratorio.",
+        redaccion.DONDE_ESTAN_LAS_FUENTES,
+        "Antes de entregar, resuelve tú cada pregunta como un alumno, con sus archivos: cada paso se puede hacer y la",
+        "respuesta es una sola, la de la clave.",
     ])
 
 
@@ -794,11 +817,10 @@ async def _generar(carpeta_curso, curso, sesion, rutas, consulta, ejecutar_, gua
                        "no repito la redacción ni sus correcciones.")
     else:
         trabajo.avance("Leyendo las fichas, la lectura, el laboratorio y las fuentes, y escribiendo la evaluación.")
-        pasajes = referencia.pasajes_elegidos(
-            carpeta_curso, sesion, referencia.textos_de_la_sesion(almacen.cargar(carpeta_curso, "sesion", sesion)))
-        trabajo.datos = await agente.consultar(pedido_de_redaccion(carpeta_curso, sesion, pasajes), tarea="redaccion",
-                                               esquema=ESQUEMA_EVALUACION, etapa="redacción",
-                                               **{**trabajo.comun, "cwd": None, "herramientas": ()})
+        paginas, pasajes = redaccion.fuentes_de_la_sesion(carpeta_curso, sesion)
+        trabajo.datos = await redaccion.redactar(CLAVE, pedido_de_redaccion(carpeta_curso, sesion, pasajes),
+                                                 carpeta_curso, sesion, paginas=paginas, pasajes=pasajes,
+                                                 etapa="redacción", **{**trabajo.comun, "cwd": None, "herramientas": ()})
     errores: list[revision.Error] = []
     revisados = 0
     ejecuciones: list[ejecucion.Ejecucion] = []

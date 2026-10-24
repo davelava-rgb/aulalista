@@ -153,18 +153,20 @@ def test_generar_de_nuevo_un_material_aprobado_pide_confirmacion(sesion):  # noq
     assert "data-confirmar=\"La lectura ya está aprobada." in cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
 
 
-def test_el_boton_generar_dice_lo_que_gasto_la_ultima_corrida(sesion):  # noqa: F811
+def test_el_boton_generar_dice_que_usa_ia_y_la_hoja_no_habla_de_costos(sesion):  # noqa: F811
+    # Decisión 73: el gasto va en un solo lugar, el panel. La hoja de trabajo no repite cifras ni «gasta tokens».
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
-    assert "Es la primera vez: todavía no hay con qué estimar el costo." in pagina
+    hoja = pagina.split('<main class="hoja" id="principal" tabindex="-1">')[1]
+    assert "Usa IA. Tarda unos minutos." in hoja
+    assert "USD" not in hoja and "tokens" not in hoja and "estimar el costo" not in hoja
     _poner(sesion, "lectura", estado="verificada", corrida_desde=tokens.lineas("scrum"))
     with open(sesion / "tokens.jsonl", "a", encoding="utf-8") as archivo:
         archivo.write(json.dumps({"fecha": "x", "curso": "scrum", "sesion": "S1", "material": "lectura",
                                   "etapa": "redacción", "tokens_entrada": 1, "tokens_salida": 1, "costo_usd": 0.42}) + "\n")
-    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
-    # El costo se dice una sola vez: en «La última generación» y el botón remite a esa línea, sin decir dónde está.
-    assert "La última generación: 1 llamada, 0.42 USD estimados." in pagina
-    assert "Gasta tokens (la unidad con que se paga el uso de Claude), como la última generación." in pagina
-    assert "(arriba)" not in pagina
+    hoja = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text.split('id="principal" tabindex="-1">')[1]
+    # Ya generada: la cifra aparece solo dentro de la confirmación de «Generar de nuevo» (decisión 68 f).
+    assert "La última generación:" not in hoja and "gasto-generacion" not in hoja
+    assert hoja.count("USD") == 1 and "data-confirmar=" in hoja
 
 
 def test_la_pagina_del_curso_es_un_tablero_con_lo_que_sigue_las_sesiones_y_la_preparacion(sesion):  # noqa: F811
@@ -181,7 +183,7 @@ def test_la_pagina_del_curso_es_un_tablero_con_lo_que_sigue_las_sesiones_y_la_pr
     # Preparación lista: va plegada, al final, y sin el botón de convertir porque no hay nada sin convertir.
     assert '<details class="prep" id="fuentes" >' in hoja and "<b>Preparación lista.</b>" in hoja
     assert hoja.index("sesiones-tablero") < hoja.index('class="prep"')
-    assert "Convertir fuentes a texto" not in hoja
+    assert "Leer con IA lo que falta" not in hoja
     assert '<span class="indicador bien"><svg' in hoja and "Confirmada</span>" in hoja   # estado de la ficha del curso
 
 
@@ -314,9 +316,10 @@ def test_los_bloques_llenos_se_pliegan_y_los_con_alertas_quedan_abiertos():
     assert vista[0]["alertas"] == 1 and vista[0]["ancla"] == "seccion-1"
 
 
-def test_el_inicio_muestra_el_gasto(entorno):
+def test_el_inicio_muestra_el_gasto_una_sola_vez(entorno):
     pagina = cliente.get("/").text
-    assert "Gasto total: 0 llamadas a Claude" in pagina
+    assert "Gasto total estimado: menos de 0.01 USD." in pagina
+    assert pagina.count("USD") == 1
 
 
 def test_todas_las_paginas_tienen_el_alternador_de_modo_claro_u_oscuro(entorno):
@@ -423,7 +426,8 @@ def test_el_curso_se_llama_igual_en_todas_partes_y_los_terminos_se_definen(sesio
     for url in ("/", "/cursos/scrum", "/cursos/scrum/sesiones/1/materiales/lectura"):
         assert nombre in cliente.get(url).text, url
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
-    assert pagina.count("(la unidad con que se paga el uso de Claude)") == 1   # se define una sola vez por página
+    assert "tokens" not in pagina.split('id="principal"')[1]   # el término ya no se usa en la hoja (decisión 73)
+    assert "(la unidad con que se paga su uso)" not in pagina and "la unidad con que se paga" in cliente.get("/ayuda").text
     _poner(sesion, "lectura", estado="error", error="Traceback: algo falló")
     pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
     assert "Se detuvo por un error antes de terminar." in pagina
@@ -595,14 +599,14 @@ def test_guardar_la_ficha_de_la_sesion_dice_que_usa_ia_y_lleva_su_costo_al_lado(
     pagina = cliente.get("/cursos/scrum/sesiones/1/ficha").text
     assert re.search(r'id="guardar-ficha"[^>]*>Guardar y (preparar el plan|revisar) con IA</button>', pagina)
     assert 'data-texto-seccion="Guardar esta sección y revisar con IA"' in pagina
-    assert '<p class="nota costo-guardar">Gasta tokens' in pagina
+    assert "costo-guardar" not in pagina            # el botón ya dice «con IA»: no hace falta una nota de costo
     assert "guardar.textContent = guardar.dataset.texto;" in pagina          # al cerrar una sección no vuelve a «Guardar»
     curso = cliente.get("/cursos/scrum/ficha").text                         # en el curso, Guardar no llama a la IA
     assert re.search(r'id="guardar-ficha"[^>]*>Guardar</button>', curso)
     # En el curso gasta «Proponer desde las fuentes»: su costo va en la barra, junto al botón (crítica de la interfaz).
     acciones = curso.split('<div class="acciones">')[1].split("</div>")[0]
     assert "Proponer desde las fuentes</button>" in acciones
-    assert '<p class="nota costo-guardar">«Proponer desde las fuentes» gasta tokens' in acciones
+    assert '<p class="nota costo-guardar">«Proponer desde las fuentes» usa IA.</p>' in acciones
 
 
 def test_el_aviso_de_la_ficha_del_curso_no_nombra_una_seccion_de_la_sesion(sesion):  # noqa: F811
@@ -703,7 +707,7 @@ def test_la_ayuda_explica_el_flujo_y_se_enlaza_desde_todas_las_paginas(sesion): 
         assert '<a class="ayuda-enlace" href="/ayuda">Cómo funciona</a>' in cliente.get(url).text, url
     pagina = cliente.get("/ayuda").text
     pasos = pagina.split('<ol class="flujo">')[1].split("</ol>")[0]
-    assert pasos.count("<h2>") == 5 and "Convierte las fuentes a texto" in pasos
+    assert pasos.count("<h2>") == 5 and "Las fuentes se convierten solas" in pasos
     assert "<strong>pasajes</strong>: trozos cortos de texto" in pagina and "<strong>tokens</strong>" in pagina
     for situacion in ("Desactualizado", "Con fallas", "revisor independiente", "iniciar.cmd"):
         assert situacion in pagina
@@ -1065,3 +1069,63 @@ def test_generar_de_nuevo_pide_confirmacion_con_el_costo(sesion):  # noqa: F811
     assert "La lectura ya está aprobada." in pagina and "La última generación gastó 0.42 USD estimados" in pagina
     # Sin generar nunca, no hay confirmación.
     assert "data-confirmar=" not in cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
+
+
+def test_generar_deja_el_material_trabajando_antes_de_volver_a_la_pagina(sesion, monkeypatch):  # noqa: F811
+    # Antes, la página volvía antes de que el hilo escribiera «trabajando» y el botón seguía activo: había que
+    # pulsar Generar dos veces. Ahora el estado se escribe antes de redirigir.
+    lanzados = []
+    monkeypatch.setattr(servidor, "_trabajo_en_segundo_plano", lambda *a, **k: lanzados.append(a))
+    r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura", follow_redirects=False)
+    assert r.headers["location"] == "/cursos/scrum/sesiones/1/materiales/lectura" and len(lanzados) == 1
+    estado = comun.estado(sesion, 1, "lectura")
+    assert estado["estado"] == "trabajando" and estado["previo"] == "" and estado["avance"][0].endswith("Empezando…")
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    assert 'data-estado="trabajando"' in pagina and "Ya está en curso." in pagina
+    # Un segundo envío no lanza otro trabajo.
+    cliente.post("/cursos/scrum/sesiones/1/materiales/lectura", follow_redirects=False)
+    assert len(lanzados) == 1
+
+
+def test_las_fuentes_se_arrastran_y_se_suben_solas(sesion):  # noqa: F811
+    hoja = cliente.get("/cursos/scrum").text.split('<main class="hoja" id="principal" tabindex="-1">')[1]
+    assert 'class="zona-arrastre" id="zona-arrastre" for="archivos"' in hoja
+    assert "Arrastra otra fuente aquí" in hoja
+    assert 'entrada.addEventListener("change", enviar);' in hoja          # elegir archivos ya los sube
+    assert 'zona.addEventListener("drop"' in hoja
+    assert 'name="archivos" type="file" multiple required' in hoja          # sin JavaScript queda el formulario
+
+
+def test_el_tablero_separa_las_paginas_de_la_sesion_de_su_alcance(sesion):  # noqa: F811
+    curso = almacen.cargar(sesion, "curso")
+    lineas = almacen.valor(curso, "curso.sesiones").split("\n")
+    lineas[0] = "1. Fundamentos de Scrum: los roles y los eventos (guia.pdf: páginas 4 a 9, 12 y 15)"
+    curso["campos"]["curso.sesiones"] = {**curso["campos"]["curso.sesiones"], "valor": "\n".join(lineas)}
+    almacen.guardar(sesion, "curso", None, curso, "editada por el profesor")
+    s = servidor._panel(sesion, "scrum", "curso")["sesiones"][0]
+    assert s["titulo"] == "Fundamentos de Scrum" and s["alcance"] == "Los roles y los eventos"
+    hoja = cliente.get("/cursos/scrum").text
+    assert '<p class="sesion-alcance">Los roles y los eventos</p>' in hoja and "guia.pdf" not in hoja.split("sesiones-tablero")[1].split("</ol>")[0]
+
+
+# ---------- Decisión 74 c y d: casillas opcionales junto a Generar ----------
+
+def test_las_casillas_de_generar_se_muestran_y_llegan_al_material(sesion, monkeypatch):  # noqa: F811
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/laboratorio").text
+    assert "Ejecutar cada ejercicio como un alumno" in pagina and 'name="ejecucion" value="1" checked' in pagina   # Excel e IA
+    pagina = cliente.get("/cursos/scrum/sesiones/1/materiales/diapositivas").text
+    assert "Revisión visual del diseño" in pagina and 'name="revision_visual" value="1"' in pagina
+    assert 'name="revision_visual" value="1" checked' not in pagina
+    assert 'name="ejecucion"' not in cliente.get("/cursos/scrum/sesiones/1/materiales/lectura").text
+    # Una casilla sin marcar no viaja en el formulario: vale False. Cada material recibe solo las suyas.
+    assert servidor._opciones_elegidas("laboratorio", {"ejecucion": "1", "revision_visual": None}) == {"ejecutar_ejercicios": True}
+    assert servidor._opciones_elegidas("laboratorio", {"ejecucion": None, "revision_visual": "1"}) == {"ejecutar_ejercicios": False}
+    assert servidor._opciones_elegidas("diapositivas", {"ejecucion": "1", "revision_visual": "1"}) == {"revision_visual": True}
+    assert servidor._opciones_elegidas("lectura", {"ejecucion": "1", "revision_visual": "1"}) == {}
+    lanzados = []
+    monkeypatch.setattr(servidor, "_trabajo_en_segundo_plano", lambda *a, **k: lanzados.append((a, k)))
+    r = cliente.post("/cursos/scrum/sesiones/1/materiales/laboratorio", data={"ejecucion": "1"}, follow_redirects=False)
+    assert r.headers["location"] == "/cursos/scrum/sesiones/1/materiales/laboratorio"
+    assert lanzados[-1][1] == {"clave": ("scrum", 1, "laboratorio"), "ejecutar_ejercicios": True}
+    r = cliente.post("/cursos/scrum/sesiones/1/materiales/lectura", follow_redirects=False)
+    assert lanzados[-1][1] == {"clave": ("scrum", 1, "lectura")}

@@ -44,6 +44,8 @@ FORMATOS = {
 }
 CONVERTIDA = "convertida"
 NO_SE_PUEDE_LEER = "no se puede leer"
+# Una imagen suelta sin lector: queda a la espera de que el profesor pida la lectura con IA.
+ESPERA_IA = "espera la lectura con IA"
 DPI_PAGINA_ESCANEADA = 150
 
 
@@ -57,6 +59,7 @@ class Conversion:
     revisar: bool = False  # tiene texto leído por IA que el profesor debe revisar
     avisos: list[str] = field(default_factory=list)
     metodo: str = ""
+    falta_ia: int = 0  # páginas, láminas o imágenes que se saltaron por no tener lector: se leen con IA después
 
     def agregar(self, texto: str, ubicacion: str, *, origen: str = "texto", **extra) -> None:
         texto = " ".join(str(texto).split())
@@ -114,6 +117,7 @@ async def extraer_pdf(ruta: Path, lector: LectorImagen | None, conversion: Conve
 async def _leer_pagina_escaneada(pagina, indice, nombre, lector, conversion) -> None:
     if lector is None:
         conversion.avisos.append(f"Página {indice}: es una imagen y no se leyó.")
+        conversion.falta_ia += 1
         return
     imagen = pagina.get_pixmap(dpi=DPI_PAGINA_ESCANEADA).tobytes("png")
     try:
@@ -197,6 +201,7 @@ async def extraer_pptx(ruta: Path, lector: LectorImagen | None) -> Conversion:
 async def _leer_imagenes_de_lamina(imagenes, numero, nombre, lector, conversion) -> None:
     if lector is None:
         conversion.avisos.append(f"Lámina {numero}: solo tiene imágenes y no se leyeron.")
+        conversion.falta_ia += 1
         return
     for imagen in imagenes:
         try:
@@ -255,7 +260,7 @@ async def extraer_xlsx(ruta: Path, lector: LectorImagen | None) -> Conversion:
 
 async def extraer_imagen(ruta: Path, lector: LectorImagen | None) -> Conversion:
     if lector is None:
-        raise ErrorDeLectura("Es una imagen y no hay lector de imágenes.")
+        return Conversion(metodo="", falta_ia=1, avisos=["Es una imagen: se lee con IA."])
     conversion = Conversion(metodo="leída por IA", revisar=True)
     tipo = TIPOS_IMAGEN[ruta.suffix.lower()]
     try:
@@ -307,7 +312,11 @@ async def _convertir_archivo(ruta: Path, lector: LectorImagen | None, carpeta_pd
 
 
 async def convertir_curso(carpeta_curso: Path, lector: LectorImagen | None) -> dict:
-    """Convierte las fuentes nuevas o cambiadas y devuelve el índice actualizado."""
+    """Convierte las fuentes nuevas o cambiadas y devuelve el índice actualizado.
+
+    Sin lector, convierte solo lo que no necesita IA: el texto de PDF, Word, PowerPoint y Excel. Lo que es imagen
+    (una imagen suelta, una página escaneada, una lámina solo con imágenes) queda anotado en `falta_ia`.
+    Con lector, además lee con IA lo que quedó pendiente de esa manera."""
     fuentes, salida, _ = _carpetas(carpeta_curso)
     indice = leer_indice(carpeta_curso)
     presentes = {
@@ -322,8 +331,9 @@ async def convertir_curso(carpeta_curso: Path, lector: LectorImagen | None) -> d
     for nombre, ruta in presentes.items():
         actual = huella(ruta)
         anterior = indice.get(nombre)
-        if anterior and anterior["huella"] == actual and anterior["estado"] == CONVERTIDA:
-            continue
+        if anterior and anterior["huella"] == actual and anterior["estado"] in (CONVERTIDA, ESPERA_IA):
+            if not (lector and anterior.get("falta_ia")):
+                continue
         destino = _ruta_pasajes(carpeta_curso, nombre)
         entrada = {
             "huella": actual,
@@ -335,15 +345,18 @@ async def convertir_curso(carpeta_curso: Path, lector: LectorImagen | None) -> d
         except ErrorDeLectura as error:
             destino.unlink(missing_ok=True)
             entrada.update(estado=NO_SE_PUEDE_LEER, motivo=str(error), pasajes=0,
-                           revisar=False, revisada=False, avisos=[], metodo="")
+                           revisar=False, revisada=False, avisos=[], metodo="", falta_ia=0)
         else:
             salida.mkdir(parents=True, exist_ok=True)
             with open(destino, "w", encoding="utf-8") as archivo:
                 for numero, pasaje in enumerate(conversion.pasajes, start=1):
                     archivo.write(json.dumps({"n": numero, **pasaje}, ensure_ascii=False) + "\n")
-            entrada.update(estado=CONVERTIDA, motivo="", pasajes=len(conversion.pasajes),
+            # Una imagen suelta sin lector no tiene pasajes: espera la lectura con IA. Un PDF con páginas
+            # escaneadas sí queda convertido, con lo que tiene, y anota cuántas páginas faltan.
+            estado = ESPERA_IA if conversion.falta_ia and not conversion.pasajes else CONVERTIDA
+            entrada.update(estado=estado, motivo="", pasajes=len(conversion.pasajes),
                            revisar=conversion.revisar, revisada=False,
-                           avisos=conversion.avisos, metodo=conversion.metodo)
+                           avisos=conversion.avisos, metodo=conversion.metodo, falta_ia=conversion.falta_ia)
         indice[nombre] = entrada
 
     _guardar_indice(carpeta_curso, indice)

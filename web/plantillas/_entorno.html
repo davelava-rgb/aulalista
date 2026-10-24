@@ -67,7 +67,6 @@
     </ul>
 
     <p class="panel-gasto">Gasto del curso <b>{{ usd(panel.gasto.costo_usd) }}</b>
-      {{ panel.gasto.llamadas }} {{ "llamada" if panel.gasto.llamadas == 1 else "llamadas" }} a Claude.
       {% if panel.gasto_total %}<span class="panel-total">Gasto total de AulaLista: {{ usd(panel.gasto_total.costo_usd) }}.</span>{% endif %}
       Es una estimación, no la factura.</p>
     </div>
